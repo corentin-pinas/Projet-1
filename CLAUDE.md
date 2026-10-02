@@ -148,3 +148,12 @@ Points ouverts :
 ## Lecture des bilans manuscrits
 
 Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; « + » entouré = test positif ; « − » entouré = négatif ; rond barré = non fait ; grande croix ou rond barré sur une partie (ex. EVA) = non évalué car non pertinent. Devant une abréviation inconnue, proposer une interprétation et la signaler dans « à vérifier ».
+
+## Code (version autonome)
+
+- Plan validé : `PLAN.md`. Étape en cours suivie dans ce fichier et sur la carte du projet (https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb).
+- Appli web installable (PWA) : Vite + TypeScript, sans framework. `vite-plugin-pwa` pour le hors-connexion. Police Atkinson Hyperlegible hébergée avec l'appli.
+- Couleurs uniquement via les variables CSS de `src/styles.css` (palettes et thème à venir).
+- Commandes : `npm run dev` (développement), `npm test` (règles métier, Vitest), `npm run test:e2e` (écrans en largeur tablette, Playwright ; Chromium dans `/opt/pw-browsers/chromium` en session cloud), `npm run build` (vérifie les types puis construit `dist/`), `npm run icons` (régénère les icônes PNG depuis `public/icons/icon.svg`).
+- Mise en ligne : Cloudflare Pages, commande `npm run build`, dossier `dist`. Chaque branche a sa propre adresse d'essai.
+- Avant chaque envoi : `npm test` et `npm run test:e2e` doivent passer.

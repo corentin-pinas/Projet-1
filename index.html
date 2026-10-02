@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#23705F">
+<title>Mes patients</title>
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+<div class="app">
+  <div class="side">
+    <h1>Mes patients</h1>
+    <button class="primary" id="add" disabled title="Arrive à l'étape 2">Ajouter des bilans</button>
+    <input type="search" id="q" placeholder="Rechercher un patient" aria-label="Rechercher un patient" disabled>
+    <div class="panel list" id="list"><div class="note">Aucun bilan pour l'instant.</div></div>
+  </div>
+  <main class="panel main" id="main">
+    <div class="head">
+      <div>
+        <h2>Bienvenue</h2>
+        <div class="meta">Version <span id="version"></span> · étape 1 : le socle</div>
+      </div>
+    </div>
+    <p class="glance">L'appli est prête à être installée. Les bilans et les séances arriveront à l'étape suivante. Vérifiez ci-dessous que tout est au vert.</p>
+    <ul class="checks" id="checks" aria-live="polite"></ul>
+    <div class="actions">
+      <button class="primary" id="persist" hidden>Protéger mes données</button>
+      <button id="refresh">Vérifier à nouveau</button>
+    </div>
+    <p class="note">Rien n'est envoyé sur internet : les données de l'appli restent dans cette tablette.</p>
+  </main>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
