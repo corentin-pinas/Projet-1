@@ -10,6 +10,8 @@ Reproduire à l'identique la version d'essai de claude.ai (`reference/bilans-sea
 1. le résumé du bilan se fait tout seul au dépôt du PDF ou des photos ;
 2. les données sont sauvegardées (automatiquement dans la tablette, et une copie chiffrée à sortir chaque semaine).
 
+Ajoutée à la demande de Corentin : la **dictée groupée** (plusieurs patients en une dictée).
+
 Hors V1 : téléphone, tout ce qui figure dans « Idées pour la suite » du CLAUDE.md.
 
 ## 2. Décisions validées
@@ -51,7 +53,25 @@ Repris de la version d'essai (voir CLAUDE.md), avec trois ajustements :
 | Patients du jour | Liste classée Aujourd'hui / Demain / jours suivants / sans rendez-vous, recherche, badge « ? » homonymes |
 | Fiche patient | Résumé coup d'œil, chiffres, rubriques, « à vérifier », « À venir », rendez-vous, visionneuse, séances |
 | Dicter une séance | Date, zone de dictée (micro du clavier), aperçu « À venir », enregistrement puis mise au propre |
-| Paramètres | Clé IA, sauvegarde et restauration, affichage (taille du texte, thème) |
+| Dictée groupée | Bouton micro sur la liste : plusieurs patients dictés à la suite, l'IA répartit par patient, Corentin vérifie puis enregistre |
+| Paramètres | Clé IA, sauvegarde et restauration, affichage (taille du texte, thème, palettes de couleurs) |
+
+### Dictée groupée (ajoutée le 2 octobre 2026)
+
+- Bouton micro en haut de la liste des patients, qui ouvre une grande zone de dictée (micro du clavier).
+- Corentin dicte toute sa matinée : « Avec Marc D., on a fait… Ensuite Lucie B.… ».
+- L'IA découpe le texte par patient et le rattache aux dossiers existants, en s'aidant des rendez-vous du jour. Elle ne range rien : elle propose.
+- Écran de vérification : une ligne par patient avec le texte qui lui est attribué. Un patient inconnu ou ambigu (homonymes) est signalé et Corentin choisit. Rien n'est enregistré sans son accord.
+- Une fois validé, chaque morceau devient une séance normale (mise au propre, « À venir », rendez-vous dicté).
+- Confidentialité : si un nom complet est dicté, il est réduit à l'initiale avant enregistrement.
+- Limite connue : Brave ne propose pas de reconnaissance vocale intégrée aux pages ; on garde le micro du clavier, qui peut s'arrêter après un long silence (il suffit de le relancer).
+- Piste plus tard : enregistrer l'audio et le faire transcrire par un service spécialisé. Cela ajoute un compte et un service tiers qui reçoit la voix ; à décider seulement si le clavier ne suffit pas.
+
+### Couleurs (ajouté le 2 octobre 2026)
+
+- L'appli est construite dès le départ avec des couleurs modifiables.
+- Étape 4 : quelques palettes prêtes (dont une à contraste fort) en plus de la taille du texte et du thème clair / sombre.
+- Plus tard : couleur du texte et couleur principale au choix (charte graphique personnelle).
 
 ## 6. Étapes
 
@@ -60,9 +80,10 @@ Chaque étape se termine par une version que Corentin ouvre sur la tablette. La 
 1. **Socle** : appli vide installable, en ligne, qui marche hors connexion. Validation : icône sur la tablette.
 2. **Reproduction** : liste, fiche, séances, rendez-vous, homonymes, visionneuse, avec données locales. Règles métier couvertes par des tests automatiques (nom depuis le fichier, « À venir », âges compatibles, classement). Validation : ajouter un bilan de test, dicter une séance (sans IA).
 3. **IA** : création du compte API (guidée), résumé automatique des bilans, mise au propre des séances, rendez-vous dicté. Garde-fous repris (35 %, calendrier fourni, rien d'inventé). Validation : 3 vrais bilans pseudonymisés, coût mesuré.
-4. **Sauvegarde et paramètres** : copies automatiques, fichier chiffré hebdomadaire, restauration testée sur une tablette vierge, réglages d'affichage.
-5. **Usage réel** : quelques jours au cabinet, liste des retours, corrections.
-6. **Idées, une par une** : EVA et observance, exercices à domicile, clôture, schéma corporel, lecture d'un dossier de bilans, propositions de séance.
+4. **Dictée groupée** : bouton micro, répartition par patient, écran de vérification. Validation : une vraie matinée dictée d'un bloc.
+5. **Sauvegarde et paramètres** : copies automatiques, fichier chiffré hebdomadaire, restauration testée sur une tablette vierge, réglages d'affichage et palettes de couleurs.
+6. **Usage réel** : quelques jours au cabinet, liste des retours, corrections.
+7. **Idées, une par une** : EVA et observance, exercices à domicile, clôture, schéma corporel, lecture d'un dossier de bilans, propositions de séance.
 
 ## 7. Risques et parades
 
