@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mes bilans et séances, version d'essai</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<style>
+:root{
+  --bg:#E9EEEC; --panel:#FFFFFF; --ink:#1C2A2E; --soft:#5B6B6F; --line:#CCD6D3;
+  --accent:#23705F; --accent-ink:#FFFFFF; --accent-bg:#E3F1EC; --warn:#A8591B; --warn-bg:#FBEFE3;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#141B1C; --panel:#1E2729; --ink:#E6EDEB; --soft:#9AAAA8; --line:#33413F;
+  --accent:#5BB79F; --accent-ink:#0E1716; --accent-bg:#1F332D; --warn:#E9A46A; --warn-bg:#3A2A1D; } }
+:root[data-theme="dark"]{
+  --bg:#141B1C; --panel:#1E2729; --ink:#E6EDEB; --soft:#9AAAA8; --line:#33413F;
+  --accent:#5BB79F; --accent-ink:#0E1716; --accent-bg:#1F332D; --warn:#E9A46A; --warn-bg:#3A2A1D; }
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:17px;line-height:1.5}
+.app{max-width:1280px;margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:18px;height:100%}
+@media (max-width:820px){.app{grid-template-columns:1fr;height:auto}}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0}
+h1{font-size:1.45rem;margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+button,.btn{font:inherit;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 16px;cursor:pointer;min-height:44px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+input[type=search]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;min-height:44px}
+input[type=file]{display:none}
+[hidden]{display:none!important}
+.list{overflow-y:auto;flex:1;min-height:120px;padding:6px}
+.item{display:block;width:100%;text-align:left;border:0;border-radius:10px;background:transparent;padding:10px 12px;min-height:0}
+.item+.item{margin-top:2px}
+.item:hover{background:var(--bg)}
+.item[aria-current="true"]{background:var(--accent-bg)}
+.item b{display:block}
+.item span{color:var(--soft);font-size:.88rem}
+.pending{color:var(--warn)!important}
+.grp{font-size:.8rem;font-weight:700;color:var(--soft);text-transform:uppercase;letter-spacing:.04em;padding:12px 12px 4px}
+.grp:first-child{padding-top:6px}
+.grp.now{color:var(--accent)}
+.item.now{border-left:4px solid var(--accent);border-radius:4px 10px 10px 4px}
+.item.now+.item.now{margin-top:6px}
+.item .hr{float:right;font-style:normal;color:var(--accent);font-variant-numeric:tabular-nums;margin-left:8px}
+.ask{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--warn-bg);color:var(--warn);font-style:normal;font-size:.85rem;margin-left:6px;vertical-align:middle;border:1px solid var(--warn)}
+.bils{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.bils button{min-height:40px;padding:6px 14px;font-size:.92rem}
+.bils button[aria-pressed="true"]{background:var(--accent-bg);border-color:var(--accent);font-weight:700}
+.rdv{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.rdv button{min-height:36px;padding:4px 12px;font-size:.9rem}
+.main{padding:22px 26px;overflow-y:auto;min-height:0}
+.empty{color:var(--soft);text-align:center;padding:70px 20px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.head h2{margin:0;font-size:1.5rem}
+.meta{color:var(--soft)}
+.avenir{background:var(--accent-bg);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin-top:12px;max-width:70ch}
+.avenir b{color:var(--accent)}
+.avenir .clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.avmeta{color:var(--soft);font-size:.85rem;margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.avmeta button{min-height:34px;padding:3px 12px;font-size:.85rem}
+.glance{font-size:1.12rem;line-height:1.55;margin:16px 0 14px;max-width:70ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.chip{background:var(--bg);border-radius:10px;padding:8px 12px;min-width:92px}
+.chip small{display:block;color:var(--soft);font-size:.8rem}
+.chip strong{font-size:1.1rem}
+details.sec{border-top:1px solid var(--line);padding:4px 0}
+details.sec summary{cursor:pointer;padding:10px 0;font-weight:700;color:var(--accent);list-style:none;display:flex;justify-content:space-between}
+details.sec summary::after{content:"▾";color:var(--soft)}
+details.sec:not([open]) summary::after{content:"▸"}
+details.sec ul{margin:0 0 10px;padding-left:20px}
+.check{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:12px 14px;margin-top:14px}
+.check ul{margin:6px 0 0;padding-left:20px}
+.vlist{list-style:none;margin:8px 0 0;padding:0}
+.vitem{padding:10px 0;border-top:1px solid color-mix(in srgb,var(--warn) 25%,transparent)}
+.vitem:first-child{border-top:0}
+.vitem p{margin:0 0 8px;color:var(--ink)}
+.vbtns{display:flex;gap:8px;flex-wrap:wrap}
+.vbtns button{min-height:40px;padding:6px 14px}
+.vbtns .ok{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.vedit{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.vedit input{flex:1;min-width:200px;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px}
+.fixed{background:var(--accent-bg);border-radius:10px;padding:12px 14px;margin-top:14px}
+.fixed ul{margin:6px 0 0;padding-left:20px}
+.fixed s{color:var(--soft)}
+.seances{margin-top:26px;border-top:2px solid var(--line);padding-top:16px}
+.seances h3{margin:0 0 12px;font-size:1.2rem;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sform{background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;display:grid;gap:10px}
+.sform label{font-size:.9rem;color:var(--soft)}
+.sform input[type=date],.sform input[type=time],.sform textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-height:44px;width:100%}
+.sform input[type=date],.sform input[type=time]{max-width:220px}
+.sform textarea{min-height:140px;resize:vertical}
+.sform .row{display:flex;gap:10px;flex-wrap:wrap}
+.seance{border-left:3px solid var(--accent);padding:4px 0 4px 14px;margin:0 0 16px}
+.seance .sd{font-weight:700}
+.seance .sc{white-space:pre-wrap;margin:4px 0 6px}
+.seance .sa{display:flex;gap:8px;flex-wrap:wrap}
+.seance .sc b{color:var(--accent)}
+details.orig{margin:2px 0 8px}
+details.orig summary{cursor:pointer;color:var(--soft);font-size:.88rem;padding:4px 0}
+details.orig .sc{color:var(--soft);font-size:.93rem}
+.head .dict{min-height:48px;padding:10px 20px;font-size:1.05rem}
+.seance .sa button{min-height:36px;padding:4px 12px;font-size:.9rem}
+.wait{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:14px;margin-top:16px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.note{color:var(--soft);font-size:.88rem}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:.95rem}
+.viewer{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+.viewer .bar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;color:#fff;gap:10px}
+.viewer .pages{flex:1;overflow:auto;padding:0 16px 24px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.viewer canvas,.viewer img{max-width:min(100%,1000px);height:auto;background:#fff;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="side">
+    <h1>Mes patients</h1>
+    <button class="primary" id="add" disabled>Ajouter des bilans</button>
+    <input type="file" id="file" accept="application/pdf,image/*" multiple>
+    <input type="search" id="q" placeholder="Rechercher un patient" aria-label="Rechercher un patient">
+    <div class="panel list" id="list"><div class="note" style="padding:10px">Chargement…</div></div>
+  </div>
+  <div class="panel main" id="main">
+    <div class="empty">Choisissez un bilan dans la liste, ou ajoutez-en un.</div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let db = null, assets = null, col = null, scol = null, bilans = [], seances = [], selected = null, editing = null, formOpen = false, sample = null, sampleOff = false, rdvOpen = false, homoOpen = false;
+const busy = () => formOpen || !!editing || rdvOpen || homoOpen;
+const summing = new Set();
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+function toast(t){ document.querySelectorAll(".toast").forEach(x => x.remove()); const d = document.createElement("div"); d.className = "toast"; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3200); }
+
+/* "Fiche Bilan ÉPAULE - Sylvie F" -> "Sylvie F." ; "… - Sylvie Fr" -> "Sylvie Fr." */
+function patientFrom(name){
+  name = name.replace(/\.[^.]+$/, "").replace(/_/g, " ").trim();
+  const part = name.includes(" - ") ? name.split(" - ").pop() : name;
+  const w = part.trim().split(/\s+/);
+  if (w.length >= 2){
+    const up = w.filter(x => x === x.toUpperCase() && /[A-ZÀ-Ý]/.test(x));
+    const nom = (up[0] || w[w.length-1]), prenom = w.find(x => x !== nom) || w[0];
+    const n = nom.replace(/\.$/, "");
+    /* un nom entier (en majuscules, ou long) est réduit à son initiale ; une abréviation de 1 à 3 lettres est conservée */
+    const abrege = n.length === 1 || (n.length <= 3 && n !== n.toUpperCase());
+    const fin = abrege ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : n.charAt(0).toUpperCase();
+    return prenom.charAt(0).toUpperCase() + prenom.slice(1).toLowerCase() + " " + fin + ".";
+  }
+  return part;
+}
+
+/* ---- dossiers : un dossier = une personne, avec un ou plusieurs bilans ---- */
+const dk = b => b.dossier || b.patient;          // clé du dossier (les séances y sont rattachées)
+function ageOf(b){
+  const r = b.resume || {};
+  let v = b.age ?? r.age;
+  if (v == null && Array.isArray(r.chiffres)){ const c = r.chiffres.find(c => /^[âa]ge\b/i.test(String(c.label || ""))); if (c) v = c.valeur; }
+  const m = /\d{1,3}/.exec(String(v ?? "")); return m ? +m[0] : null;
+}
+function dossiers(){
+  const m = new Map();
+  for (const b of bilans){ const k = dk(b); if (!m.has(k)) m.set(k, {key: k, bilans: []}); m.get(k).bilans.push(b); }
+  for (const d of m.values()){
+    d.bilans.sort((a, b) => String(b.ajoute).localeCompare(String(a.ajoute)));
+    d.label = d.bilans[0].patient;
+    const a = d.bilans.map(ageOf).find(x => x != null); d.age = a == null ? null : a;
+  }
+  return [...m.values()];
+}
+/* deux dossiers au même prénom + initiale sont distingués par l'âge à l'affichage */
+const nomDe = (d, all) => d.label + (d.age != null && all.some(o => o !== d && o.label === d.label) ? ", " + d.age + " ans" : "");
+/* âges compatibles = même âge, à un an près par année écoulée entre les deux bilans ; un âge inconnu ne permet pas de trancher */
+function agesCompatibles(a, b){
+  const x = ageOf(a), y = ageOf(b); if (x == null || y == null) return true;
+  /* temps écoulé entre les deux bilans : date écrite sur le bilan si on l'a, sinon date d'ajout dans l'app */
+  const ans = Math.abs(quandBilan(a) - quandBilan(b)) / 31557600000;
+  return Math.abs(x - y) <= Math.floor(ans || 0) + 1;
+}
+function quandBilan(b){
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(b.resume && b.resume.date_bilan || "").trim());
+  return m ? new Date(+m[3], +m[2] - 1, +m[1], 12) : new Date(b.ajoute);
+}
+/* la question « même personne ? » : renvoie l'autre dossier concerné, ou null */
+function questionHomonyme(b, all){
+  if (!b.homonyme || !b.resume) return null;      // on attend le résumé pour connaître l'âge
+  for (const d of all) if (d.key !== dk(b) && d.label === b.patient && d.bilans.some(x => x.resume)){
+    const ref = d.bilans.find(x => ageOf(x) != null) || d.bilans[0];
+    if (agesCompatibles(b, ref)) return d;
+  }
+  return null;
+}
+
+/* ---- « à venir » : ce qui suit « pour la prochaine séance » dans le texte d'une séance ---- */
+function avenirFrom(txt){
+  const t = String(txt || "");
+  const pats = [
+    /(?:^|\n)[ \t]*[àa]\s+venir\s*:/i,
+    /pour\s+la\s+(?:prochaine|s[ée]ance\s+suivante)(?:\s+(?:s[ée]ance|fois))?/i,
+    /(?:la\s+)?prochaine\s+(?:s[ée]ance|fois)|s[ée]ance\s+suivante/i,
+    /[.!?]\s*[àa]\s+venir\s*:/i
+  ];
+  for (const re of pats){
+    const m = re.exec(t);
+    if (m){
+      const out = t.slice(m.index + m[0].length).replace(/^[\s:,;.\-–—]+/, "").trim();
+      if (out) return out.charAt(0).toUpperCase() + out.slice(1);
+    }
+  }
+  return "";
+}
+const seancesOf = patient => seances.filter(s => s.patient === patient)
+  .sort((x, y) => String(y.date).localeCompare(String(x.date)) || String(y.cree).localeCompare(String(x.cree)));
+/* le « à venir » affiché est celui de la séance la plus récente */
+function avenirFor(b){
+  const s = seancesOf(dk(b))[0]; if (!s) return null;
+  const brut = avenirFrom(s.contenu); if (!brut) return null;
+  const ok = !!s.avenir_resume && s.avenir_source === brut;
+  return {s, brut, texte: ok ? s.avenir_resume : brut, resume: ok};
+}
+const IA_OFF = ["not_granted","sampling_disabled","not_declared","capability_disabled","capability_removed"];
+const okDate = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
+const okHeure = v => { const m = typeof v === "string" && /^(\d{1,2})[:hH](\d{2})$/.exec(v.trim()); return m && +m[1] < 24 && +m[2] < 60 ? m[1].padStart(2, "0") + ":" + m[2] : ""; };
+/* repère de dates donné à l'IA pour qu'elle n'ait aucun calcul à faire */
+function calendrier(depuis, avant, apres){
+  const [y, m, d] = depuis.split("-").map(Number), out = [];
+  for (let i = -avant; i <= apres; i++){
+    const x = new Date(y, m - 1, d + i, 12);
+    out.push((i === 0 ? "J" : i > 0 ? "J+" + i : "J" + i) + " : " + x.toLocaleDateString("fr-FR", {weekday: "long", day: "numeric", month: "long", year: "numeric"}) + " = " + isoDay(x));
+  }
+  return out.join("\n");
+}
+const parleRdv = t => /rendez[- ]?vous|\brdv\b|prochain|revoi|suivante/i.test(t);
+/* texte mis au propre par l'IA, valable tant que la note d'origine n'a pas changé */
+const propreOk = s => !!s.propre && s.propre_source === s.contenu;
+const texteDe = s => propreOk(s) ? s.propre : s.contenu;
+const RUBRIQUES = ["État du patient", "Fait en séance", "À faire à la maison", "Autres notes", "À venir"];
+const fmtSeance = t => esc(t).replace(new RegExp("^(" + RUBRIQUES.join("|") + ") ?:", "gm"), "<b>$1 :</b>");
+/* après l'enregistrement d'une séance : mise au propre de la dictée, résumé du « à venir » et, si la note le dit, date du prochain rendez-vous.
+   sansPropre = le texte a été corrigé à la main, on n'y retouche pas */
+async function analyseSeance(se, manuel, sansPropre){
+  if (!sample || sampleOff || summing.has(se.id)) return;
+  const brut = avenirFrom(se.contenu);
+  if (sansPropre && !brut && !parleRdv(se.contenu)) return;
+  summing.add(se.id);
+  if (selected && !busy()) renderMain();
+  try{
+    const res = await sample.json(
+      "Tu aides un kinésithérapeute. Voici sa note, souvent dictée à voix haute, pour la séance du " + se.date + " (J) avec un patient. " +
+      "Une dictée peut contenir des mots mal reconnus, peu de ponctuation, des hésitations et des répétitions.\n\n" +
+      "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(se.date, 0, 70) + "\n\n" +
+      "Réponds uniquement par un objet JSON à quatre champs :\n" +
+      '- "propre" : ' + (sansPropre ? "null" :
+        "la note remise au propre. Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. " +
+        "Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : " +
+        "« État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). " +
+        "Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ».") + "\n" +
+      '- "resume" : ' + (brut ? "résumé très court (25 mots maximum, français correct, style télégraphique) de ce qui est prévu pour la prochaine séance, d'après le passage « Prévu » ci-dessous. N'ajoute rien, n'interprète pas, ne retire rien d'important. N'y mets ni la date ni l'heure du rendez-vous. null s'il n'y a rien d'autre que la date." : "null") + "\n" +
+      '- "rdv_date" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
+      '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
+      'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","rdv_date":"2026-01-15","rdv_heure":"08:00"}\n\n' +
+      "Note complète :\n" + se.contenu.slice(0, 8000) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : ""),
+      {modelTier: "default"});
+    const r = res && typeof res.resume === "string" ? res.resume.trim().replace(/^["«\s]+|["»\s]+$/g, "").replace(/^[àa] venir\s*:\s*/i, "").slice(0, 400) : "";
+    const d = okDate(res && res.rdv_date), h = d ? okHeure(res.rdv_heure) : "";
+    const pr = !sansPropre && res && typeof res.propre === "string" ? res.propre.trim() : "";
+    const patch = {ia_ok: true};
+    if (brut && r){ patch.avenir_resume = r; patch.avenir_source = brut; }
+    /* garde-fou : une mise au propre beaucoup plus courte que la dictée a sans doute perdu des informations, on ne la retient pas */
+    const propreRetenu = pr && pr.length >= se.contenu.length * 0.35;
+    if (propreRetenu){ patch.propre = pr; patch.propre_source = se.contenu; }
+    await scol.doc(se.id).update(patch);
+    /* on ne pose le rendez-vous que s'il est à venir et que cette séance est bien la dernière du patient */
+    const derniere = !seances.some(x => x.patient === se.patient && x.id !== se.id && String(x.date) > String(se.date));
+    if (d && d >= isoDay(new Date()) && derniere){
+      await setRdvs(se.patient, avecRdv(patientRdvs(se.patient), d, h));
+      toast("Rendez-vous repéré : " + jourLabel(d).toLowerCase() + (h ? " à " + heureFr(h) : "") + ".");
+    } else if (manuel) toast(propreRetenu ? "Séance mise au propre." : r ? "Résumé mis à jour." : "Rien à reformuler dans cette note.");
+  }catch(e){
+    const c = e && e.code;
+    if (IA_OFF.includes(c)) sampleOff = true;
+    else if (manuel) toast(c === "rate_limited" ? "Trop de demandes pour l'instant. Réessayez plus tard." : "La mise au propre n'a pas abouti. Réessayez.");
+  }finally{
+    summing.delete(se.id);
+    renderList(); if (selected && !busy()) renderMain();
+  }
+}
+
+/* ---- prochain rendez-vous (saisi à la main sur la fiche) ---- */
+const isoDay = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const rdvKey = r => r.d + " " + (r.h || "99:99");
+/* rendez-vous à venir du patient (un par jour au plus), du plus proche au plus lointain ; les passés ne comptent plus */
+function patientRdvs(patient){
+  const t = isoDay(new Date()), seen = new Map();
+  for (const x of bilans) if (dk(x) === patient){
+    const all = (Array.isArray(x.rdvs) ? x.rdvs : []).concat(x.rdv_date ? [{d: x.rdv_date, h: x.rdv_heure || ""}] : []);
+    for (const r of all) if (r && r.d && r.d >= t) seen.set(r.d, {d: r.d, h: r.h || ""});
+  }
+  return [...seen.values()].sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+}
+const avecRdv = (list, d, h) => list.filter(r => r.d !== d).concat([{d, h: h || ""}]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+function rdvOf(patient){
+  const l = patientRdvs(patient);
+  return l.length ? {k: rdvKey(l[0]), date: l[0].d, heure: l[0].h, autres: l.length - 1} : null;
+}
+/* les rendez-vous sont rangés sur le ou les bilans du patient */
+async function setRdvs(patient, list){
+  for (const x of bilans.filter(x => dk(x) === patient)) await col.doc(x.id).update({rdvs: list, rdv_date: "", rdv_heure: ""});
+}
+function jourLabel(iso){
+  const now = new Date(); if (iso === isoDay(now)) return "Aujourd'hui";
+  const tm = new Date(now); tm.setDate(tm.getDate() + 1); if (iso === isoDay(tm)) return "Demain";
+  const [y, m, d] = iso.split("-").map(Number);
+  const s = new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", {weekday: "long", day: "numeric", month: "long"});
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const heureFr = h => h ? h.replace(/^0/, "").replace(":", " h ") : "";
+
+/* ---- liste ---- */
+function renderList(){
+  const q = $("#q").value.trim().toLowerCase();
+  const t = isoDay(new Date());
+  const all = dossiers();
+  const rows = all.filter(d => !q || (d.label + " " + d.bilans.map(b => b.fichier).join(" ")).toLowerCase().includes(q))
+    .map(d => ({d, rv: rdvOf(d.key)}))
+    .sort((x, y) => { const a = x.rv ? x.rv.k : "~", c = y.rv ? y.rv.k : "~";
+      return (a < c ? -1 : a > c ? 1 : 0) || x.d.label.localeCompare(y.d.label, "fr") || (x.d.age || 0) - (y.d.age || 0); });
+  if (!bilans.length){ $("#list").innerHTML = `<div class="note" style="padding:10px">Aucun bilan pour l'instant.</div>`; return; }
+  if (!rows.length){ $("#list").innerHTML = `<div class="note" style="padding:10px">Aucun patient ne correspond.</div>`; return; }
+  let grp = null;
+  $("#list").innerHTML = rows.map(({d, rv}) => {
+    const b = d.bilans[0], r = b.resume;
+    const sub = r ? [r.region, r.date_bilan].filter(Boolean).join(", ") : "";
+    const g = rv ? rv.date : "";
+    let head = "";
+    if (g !== grp){ grp = g; head = `<div class="grp${g === t ? " now" : ""}">${g ? esc(jourLabel(g)) : "Sans rendez-vous prévu"}</div>`; }
+    const cur = d.bilans.some(x => x.id === selected);
+    const n = seances.filter(s => s.patient === d.key).length;
+    const ask = d.bilans.some(x => questionHomonyme(x, all));
+    return head + `<button class="item${g === t ? " now" : ""}" data-id="${esc(cur ? selected : b.id)}" aria-current="${cur}">
+      <b>${rv && rv.heure ? `<i class="hr">${esc(heureFr(rv.heure))}</i>` : ""}${esc(nomDe(d, all))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${d.bilans.length > 1 ? `<span>${d.bilans.length} bilans</span><br>` : ""}${d.bilans.some(x => !x.resume) ? `<span class="pending">En attente de résumé</span>` : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
+  }).join("");
+  $("#list").querySelectorAll(".item").forEach(el => el.onclick = () => { selected = el.dataset.id; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain(); });
+}
+
+/* ---- fiche ---- */
+function renderMain(){
+  const b = bilans.find(x => x.id === selected);
+  if (!b){ $("#main").innerHTML = `<div class="empty">Choisissez un bilan dans la liste, ou ajoutez-en un.</div>`; return; }
+  const r = b.resume;
+  const all = dossiers(), D = all.find(d => d.key === dk(b));
+  let html = `<div class="head"><div><h2>${esc(b.patient)}</h2><div class="meta">${esc([D.age != null && D.age + " ans"].concat(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b.fichier]).filter(Boolean).join(", "))}</div></div>${!formOpen && !editing ? `<button class="primary dict" id="dict">Dicter la séance</button>` : ""}</div>`;
+  const hq = D.bilans.map(x => ({x, d: questionHomonyme(x, all)})).find(o => o.d);
+  if (hq){
+    const o = hq.d, ob = o.bilans[0].resume;
+    html += `<div class="check" id="hbox"><b>Même personne ?</b>
+      <p style="color:var(--ink);margin:6px 0 10px">Un autre dossier porte le même prénom et la même initiale${ageOf(hq.x) != null && o.age != null ? ", avec un âge qui correspond" : ""} : <b>${esc(o.label)}${o.age != null ? ", " + o.age + " ans" : ""}</b>${ob ? esc(" (" + [ob.region, ob.date_bilan && "bilan du " + ob.date_bilan].filter(Boolean).join(", ") + ")") : ""}. Ce nouveau bilan concerne-t-il la même personne ?</p>
+      <div class="vbtns"><button class="ok" id="hyes">Oui, même personne</button><button id="hno">Non, deux personnes différentes</button></div></div>`;
+  }
+  const rv = rdvOf(dk(b));
+  html += rdvOpen ? `<div class="sform" style="margin-top:12px">
+      <label for="rdate">Date du prochain rendez-vous</label><input type="date" id="rdate" value="${esc(rv ? rv.date : isoDay(new Date()))}">
+      <label for="rtime">Heure</label><input type="time" id="rtime" value="${esc(rv ? rv.heure : "")}">
+      <div class="row"><button class="primary" id="rsave">Enregistrer</button>${rv ? `<button id="rclear">Effacer le rendez-vous</button>` : ""}<button id="rcancel">Annuler</button></div></div>`
+    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date).toLowerCase() + (rv.heure ? " à " + heureFr(rv.heure) : ""))}</b>${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span><button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
+  const av = avenirFor(b);
+  if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
+    <div class="avmeta"><span>Noté à la séance du ${esc(frDate(av.s.date))}</span>${!av.resume && sample && !sampleOff ? `<button id="avsum"${summing.has(av.s.id) ? " disabled" : ""}>${summing.has(av.s.id) ? "Reformulation…" : "Reformuler en bref"}</button>` : ""}</div></div>`;
+  if (D.bilans.length > 1) html += `<div class="bils" role="group" aria-label="Bilans de ce dossier">${D.bilans.map(x => `<button data-bil="${esc(x.id)}" aria-pressed="${x.id === b.id}">${esc(x.resume ? ["Bilan du " + (x.resume.date_bilan || frDate(String(x.ajoute).slice(0, 10))), x.resume.region].filter(Boolean).join(", ") : "Nouveau bilan, en attente de résumé")}</button>`).join("")}</div>`;
+  if (!r){
+    html += `<div class="wait">Ce bilan n'est pas encore résumé. Dans le projet « app kiné », écrivez à Claude : <b>« Résume les nouveaux bilans, avec l'âge »</b>.</div>`;
+  } else {
+    html += `<p class="glance">${esc(r.coup_oeil)}</p>`;
+    if (Array.isArray(r.chiffres) && r.chiffres.length)
+      html += `<div class="chips">${r.chiffres.map(c => `<div class="chip"><small>${esc(c.label)}</small><strong>${esc(c.valeur)}</strong></div>`).join("")}</div>`;
+    (r.sections || []).forEach((s, i) => {
+      if (!s.items || !s.items.length) return;
+      html += `<details class="sec"${i < 2 ? " open" : ""}><summary>${esc(s.titre)}</summary><ul>${s.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></details>`;
+    });
+    if (Array.isArray(r.a_verifier) && r.a_verifier.length)
+      html += `<div class="check"><b>À vérifier</b><ul class="vlist">${r.a_verifier.map((x, i) => `<li class="vitem" data-i="${i}"><p>${esc(x)}</p>
+        <div class="vbtns"><button class="ok" data-act="ok">C'est juste</button><button data-act="fix">Corriger</button></div></li>`).join("")}</ul></div>`;
+  }
+  html += `<div class="actions"><button class="primary" id="open">Voir le bilan complet</button><button id="del">Supprimer</button></div>
+    <p class="note" style="margin-top:14px">Fichier : ${esc(b.fichier)}</p>`;
+  html += seancesHtml(b);
+  $("#main").innerHTML = html;
+  wireSeances(b);
+  wireRdv(b);
+  $("#main").querySelectorAll("[data-bil]").forEach(el => el.onclick = () => { selected = el.dataset.bil; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain(); });
+  if (hq) wireHomonyme(hq.x, hq.d);
+  const avb = $("#avsum");
+  if (avb && av) avb.onclick = () => { analyseSeance(av.s, true); renderMain(); };
+  $("#open").onclick = () => openViewer(b);
+  $("#main").querySelectorAll(".vitem").forEach(li => {
+    const i = +li.dataset.i;
+    li.querySelector('[data-act="ok"]').onclick = () => verify(b, i, null);
+    li.querySelector('[data-act="fix"]').onclick = () => {
+      if (li.querySelector(".vedit")) return;
+      const d = document.createElement("div"); d.className = "vedit";
+      d.innerHTML = `<input type="text" placeholder="La bonne information" aria-label="Correction"><button class="primary">Enregistrer</button><button>Annuler</button>`;
+      li.append(d);
+      const inp = d.querySelector("input"); inp.focus();
+      const save = () => { const v = inp.value.trim(); if (v) verify(b, i, v); else inp.focus(); };
+      d.querySelector(".primary").onclick = save;
+      inp.onkeydown = e => { if (e.key === "Enter") save(); };
+      d.querySelector("button:last-child").onclick = () => d.remove();
+    };
+  });
+  $("#del").onclick = () => removeBilan(b);
+}
+
+/* réponse à « même personne ? » : oui = on réunit les deux dossiers ; non = on ajoute la 2e lettre du nom au nouveau */
+function wireHomonyme(x, autre){
+  const box = $("#hbox"), ancien = dk(x);
+  $("#hyes").onclick = async () => {
+    $("#hyes").disabled = true;
+    try{
+      for (const y of bilans.filter(y => dk(y) === ancien)) await col.doc(y.id).update({dossier: autre.key, homonyme: false});
+      for (const s of seances.filter(s => s.patient === ancien)) await scol.doc(s.id).update({patient: autre.key});
+      toast("Les deux bilans sont réunis dans un seul dossier."); renderList(); renderMain();
+    }catch(e){ toast("L'enregistrement a échoué. Réessayez."); renderMain(); }
+  };
+  $("#hno").onclick = () => {
+    if (box.querySelector(".vedit")) return;
+    homoOpen = true;
+    const d = document.createElement("div"); d.className = "vedit";
+    d.innerHTML = `<input type="text" maxlength="1" autocapitalize="off" placeholder="2e lettre du nom de famille" aria-label="Deuxième lettre du nom de famille de ce patient"><button class="primary">Enregistrer</button><button>Annuler</button>`;
+    box.append(d);
+    const inp = d.querySelector("input"); inp.focus();
+    const save = async () => {
+      const l = inp.value.trim();
+      if (!/^\p{L}$/u.test(l)){ toast("Indiquez une seule lettre."); inp.focus(); return; }
+      const label = x.patient.replace(/\.$/, "") + l.toLowerCase() + ".";
+      try{
+        for (const y of bilans.filter(y => dk(y) === ancien)) await col.doc(y.id).update({patient: label, homonyme: false});
+        homoOpen = false; toast("Ce patient s'appelle maintenant " + label); renderList(); renderMain();
+      }catch(e){ toast("L'enregistrement a échoué. Réessayez."); }
+    };
+    d.querySelector(".primary").onclick = save;
+    inp.onkeydown = e => { if (e.key === "Enter") save(); };
+    d.querySelector("button:last-child").onclick = () => { homoOpen = false; renderMain(); };
+  };
+}
+
+/* le rendez-vous est rangé sur le ou les bilans du patient */
+async function saveRdv(b, date, heure){
+  try{
+    const suite = patientRdvs(dk(b)).slice(1);   // « Modifier » remplace le prochain, « Effacer » le retire
+    await setRdvs(dk(b), date ? avecRdv(suite, date, heure) : suite);
+    rdvOpen = false; toast(date ? "Rendez-vous enregistré." : "Rendez-vous effacé."); renderList(); renderMain();
+  }catch(e){ toast("L'enregistrement a échoué. Réessayez."); const s = $("#rsave"); if (s) s.disabled = false; }
+}
+function wireRdv(b){
+  const open = $("#rbtn"); if (open) open.onclick = () => { rdvOpen = true; formOpen = false; editing = null; renderMain(); $("#rdate").focus(); };
+  const cancel = $("#rcancel"); if (cancel) cancel.onclick = () => { rdvOpen = false; renderMain(); };
+  const clear = $("#rclear"); if (clear) clear.onclick = () => saveRdv(b, "", "");
+  const save = $("#rsave");
+  if (save) save.onclick = () => {
+    const date = $("#rdate").value, heure = $("#rtime").value;
+    if (!date){ toast("Indiquez la date du rendez-vous."); return; }
+    if (date < isoDay(new Date())){ toast("Cette date est déjà passée."); return; }
+    save.disabled = true; saveRdv(b, date, heure);
+  };
+}
+
+/* ---- séances ---- */
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const frDate = iso => { const [y, m, d] = String(iso).split("-"); return d ? `${d}/${m}/${y}` : iso; };
+function seancesHtml(b){
+  const list = seancesOf(dk(b));
+  const ed = editing && seances.find(s => s.id === editing);
+  const form = (formOpen || ed) ? `<div class="sform">
+      <label for="sdate">Date de la séance</label><input type="date" id="sdate" value="${esc(ed ? ed.date : today())}">
+      <label for="stext">Contenu de la séance</label><textarea id="stext" placeholder="Touchez le micro de votre clavier et dictez en vrac : ce que dit le patient, ce qui a été fait, les exercices donnés, puis « Pour la prochaine séance… ». La mise au propre se fait à l'enregistrement.">${esc(ed ? texteDe(ed) : "")}</textarea>
+      <div class="note" id="avprev"></div>
+      <div class="row"><button class="primary" id="ssave">${ed ? "Enregistrer les modifications" : "Enregistrer la séance"}</button><button id="scancel">Annuler</button></div></div>` : "";
+  const ia = sample && !sampleOff;
+  return `<div class="seances"><h3>Séances (${list.length})${!form ? `<button class="primary" id="sadd">Ajouter une séance</button>` : ""}</h3>${form}
+    ${list.length ? list.map((s, k) => { const ok = propreOk(s), orig = s.brut || s.contenu, encours = summing.has(s.id);
+      return `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre) : esc(s.contenu)}</div>
+      ${encours ? `<div class="note">Mise au propre en cours…</div>` : ""}
+      ${ok && orig !== s.propre ? `<details class="orig"><summary>Texte d'origine</summary><div class="sc">${esc(orig)}</div></details>` : ""}
+      <div class="sa"><button data-edit="${esc(s.id)}">Modifier</button>${!ok && ia && !encours ? `<button data-clean="${esc(s.id)}">Mettre au propre</button>` : ""}<button data-sdel="${esc(s.id)}">Supprimer</button></div></div>`; }).join("")
+      : (form ? "" : `<p class="note">Aucune séance enregistrée pour ce patient.</p>`)}</div>`;
+}
+function wireSeances(b){
+  const ouvrir = () => { formOpen = true; editing = null; rdvOpen = false; renderMain(); const ta = $("#stext"); ta.scrollIntoView({block: "center"}); ta.focus(); };
+  const add = $("#sadd"); if (add) add.onclick = ouvrir;
+  const dict = $("#dict"); if (dict) dict.onclick = ouvrir;
+  $("#main").querySelectorAll("[data-clean]").forEach(el => el.onclick = () => { const s = seances.find(x => x.id === el.dataset.clean); if (s) analyseSeance(s, true, false); });
+  const cancel = $("#scancel"); if (cancel) cancel.onclick = () => { formOpen = false; editing = null; renderMain(); };
+  const ta = $("#stext"), prev = $("#avprev");
+  if (ta && prev){
+    const show = () => { const a = avenirFrom(ta.value);
+      prev.textContent = a ? "À venir repéré : " + a : "Ce que vous écrivez après « Pour la prochaine séance » s'affichera sous le nom du patient. Si vous y dites quand elle aura lieu (« dans une semaine à 8 heures »), le rendez-vous se place tout seul."; };
+    ta.oninput = show; show();
+  }
+  const save = $("#ssave");
+  if (save) save.onclick = async () => {
+    const date = $("#sdate").value, contenu = $("#stext").value.trim();
+    if (!date){ toast("Indiquez la date de la séance."); return; }
+    if (!contenu){ toast("Écrivez le contenu de la séance."); $("#stext").focus(); return; }
+    save.disabled = true;
+    try{
+      let sid = editing;
+      const avant = editing && seances.find(s => s.id === editing);
+      if (avant){
+        const garde = propreOk(avant);                 // le texte affiché était déjà mis au propre
+        const inchange = contenu === texteDe(avant);
+        if (inchange){
+          await scol.doc(editing).update({date});
+          if (!avant.ia_ok || avant.date !== date) analyseSeance({id: sid, patient: dk(b), date, contenu: avant.contenu}, false, garde);
+        } else {
+          /* correction à la main d'un texte déjà mis au propre : sa version fait foi, la dictée d'origine est conservée */
+          await scol.doc(editing).update(garde ? {date, contenu, propre: contenu, propre_source: contenu, brut: avant.brut || avant.contenu, ia_ok: false} : {date, contenu, ia_ok: false});
+          analyseSeance({id: sid, patient: dk(b), date, contenu}, false, garde);
+        }
+      } else {
+        sid = (await scol.add({patient: dk(b), date, contenu, cree: new Date().toISOString()})).id;
+        if (sid) analyseSeance({id: sid, patient: dk(b), date, contenu}, false, false);
+      }
+      toast(editing ? "Séance modifiée." : "Séance enregistrée.");
+      formOpen = false; editing = null; renderMain();
+    }catch(e){ save.disabled = false; toast("L'enregistrement a échoué. Réessayez."); }
+  };
+  $("#main").querySelectorAll("[data-edit]").forEach(el => el.onclick = () => { editing = el.dataset.edit; formOpen = false; rdvOpen = false; renderMain(); $("#stext").focus(); });
+  $("#main").querySelectorAll("[data-sdel]").forEach(el => el.onclick = async () => {
+    if (!confirm("Supprimer cette séance ? Cette action est définitive.")) return;
+    try{ await scol.doc(el.dataset.sdel).delete(); toast("Séance supprimée."); }catch(e){ toast("La suppression a échoué."); }
+  });
+}
+
+/* ---- visionneuse ---- */
+async function openViewer(b){
+  const v = document.createElement("div"); v.className = "viewer";
+  v.innerHTML = `<div class="bar"><b>${esc(b.patient)}</b><button id="vclose">Fermer</button></div><div class="pages"><p style="color:#fff">Ouverture…</p></div>`;
+  document.body.append(v);
+  v.querySelector("#vclose").onclick = () => v.remove();
+  const pages = v.querySelector(".pages");
+  try{
+    pages.innerHTML = "";
+    for (const f of b.fichiers || []){
+      if (f.type === "application/pdf"){
+        if (!window.pdfjsLib) throw new Error("lecteur PDF indisponible");
+        const buf = await (await fetch(f.url)).arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+        for (let i = 1; i <= pdf.numPages; i++){
+          const page = await pdf.getPage(i);
+          const w = Math.min(1000, pages.clientWidth - 32) * (window.devicePixelRatio || 1);
+          const vp = page.getViewport({scale: w / page.getViewport({scale:1}).width});
+          const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+          c.style.width = (vp.width / (window.devicePixelRatio || 1)) + "px";
+          pages.append(c);
+          await page.render({canvasContext: c.getContext("2d"), viewport: vp}).promise;
+        }
+      } else {
+        const img = document.createElement("img"); img.src = f.url; img.alt = "Page du bilan"; pages.append(img);
+      }
+    }
+  }catch(e){
+    pages.innerHTML = `<p style="color:#fff">Le bilan n'a pas pu s'afficher ici.</p>` +
+      (b.fichiers || []).map(f => `<a class="btn" href="${esc(f.url)}" target="_blank" rel="noopener">Ouvrir le fichier</a>`).join(" ");
+  }
+}
+
+/* ---- ajout ---- */
+$("#add").onclick = () => $("#file").click();
+$("#file").onchange = async e => {
+  const files = [...e.target.files]; e.target.value = "";
+  if (!files.length) return;
+  const pdfs = files.filter(f => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+  const imgs = files.filter(f => f.type.startsWith("image/"));
+  const groups = pdfs.map(f => [f]);
+  if (imgs.length) groups.push(imgs);   // les photos choisies ensemble = un seul bilan
+  $("#add").disabled = true;
+  let ok = 0;
+  const vus = new Set(bilans.map(x => x.patient));
+  for (const g of groups){
+    try{
+      toast(`Envoi de ${g[0].name}…`);
+      const fichiers = [];
+      for (const f of g){
+        const up = await assets.upload(f);
+        fichiers.push({id: up.id, url: up.url, type: up.contentType || f.type});
+      }
+      const nom = g[0].name.replace(/\.[^.]+$/, "");
+      const label = patientFrom(g[0].name);
+      const doc = {fichier: nom, patient: label, fichiers, ajoute: new Date().toISOString(), resume: null};
+      if (vus.has(label)){ doc.dossier = label + "#" + Math.random().toString(36).slice(2, 8); doc.homonyme = true; }
+      vus.add(label);
+      const ref = await col.add(doc);
+      selected = ref.id; ok++;
+    }catch(err){
+      toast(err && err.code === "too_large" ? `${g[0].name} est trop lourd (20 Mo maximum).` : `${g[0].name} n'a pas pu être ajouté.`);
+    }
+  }
+  $("#add").disabled = false;
+  if (ok) toast(ok > 1 ? `${ok} bilans ajoutés.` : "Bilan ajouté.");
+};
+
+/* valider (correction = null) ou corriger un point à vérifier */
+async function verify(b, i, correction){
+  const r = b.resume, point = r.a_verifier[i];
+  const reste = r.a_verifier.filter((_, k) => k !== i);
+  const patch = {resume: {...r, a_verifier: reste}};
+  if (correction) patch.corrections = [...(b.corrections || []), {point, correction, quand: new Date().toISOString()}];
+  else patch.valides = [...(b.valides || []), point];
+  try{
+    await col.doc(b.id).update(patch);
+    toast(correction ? "Correction enregistrée." : "Validé.");
+  }catch(e){ toast("L'enregistrement a échoué. Réessayez."); }
+}
+
+async function removeBilan(b){
+  if (!confirm(`Supprimer le bilan de ${b.patient} ? Cette action est définitive.`)) return;
+  try{
+    await col.doc(b.id).delete();
+    for (const f of b.fichiers || []) { try{ await assets.delete(f.id); }catch(e){} }
+    selected = null; renderMain(); toast("Bilan supprimé.");
+  }catch(e){ toast("La suppression a échoué."); }
+}
+
+$("#q").oninput = renderList;
+document.addEventListener("visibilitychange", () => { if (!document.hidden && col){ renderList(); if (selected && !busy()) renderMain(); } });
+
+/* ---- démarrage ---- */
+(async () => {
+  if (!window.claude){ $("#list").innerHTML = `<div class="note" style="padding:10px">Ouvrez cette page depuis claude.ai pour accéder à vos bilans.</div>`; return; }
+  const [d, a, u] = await Promise.all([claude.use("db"), claude.use("assets"), claude.use("user")]);
+  db = d; assets = a;
+  claude.use("sample").then(sm => { sample = sm; if (selected && !busy()) renderMain(); }).catch(() => {});
+  if (!db || !u){ $("#list").innerHTML = `<div class="note" style="padding:10px">Connectez-vous à claude.ai pour accéder à vos bilans.</div>`; return; }
+  const id = await u.id();
+  col = db.collection("data/users/" + id + "/bilans/liste");
+  scol = db.collection("data/users/" + id + "/seances/liste");
+  scol.onSnapshot(snap => {
+    seances = snap.docs.map(s => ({id: s.id, ...s.data()}));
+    renderList();
+    if (selected && !busy()) renderMain();
+  }, () => toast("Les séances n'ont pas pu être chargées."));
+  $("#add").disabled = !assets;
+  if (!assets) $("#add").title = "L'ajout n'est possible que pour le propriétaire de la page.";
+  col.onSnapshot(snap => {
+    bilans = snap.docs.map(s => ({id: s.id, ...s.data()}));
+    renderList();
+    if (selected && !busy()) renderMain();
+  }, () => { $("#list").innerHTML = `<div class="note" style="padding:10px">Vos bilans n'ont pas pu être chargés. Rechargez la page.</div>`; });
+})();
+</script>
+</body>
+</html>
