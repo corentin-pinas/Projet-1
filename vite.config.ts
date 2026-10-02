@@ -6,7 +6,7 @@ export default defineConfig({
   define: { __VERSION__: JSON.stringify(pkg.version) },
   plugins: [
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["icons/icon.svg"],
       manifest: {
         name: "Mes patients",
@@ -26,7 +26,8 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globPatterns: ["**/*.{js,mjs,css,html,svg,png,woff2}"],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: "index.html"
       }
     })

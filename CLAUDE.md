@@ -160,4 +160,8 @@ Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; «
 - Couleurs uniquement via les variables CSS de `src/styles.css` (palettes et thème à venir).
 - Commandes : `npm run dev` (développement), `npm test` (règles métier, Vitest), `npm run test:e2e` (écrans en largeur tablette, Playwright ; Chromium dans `/opt/pw-browsers/chromium` en session cloud), `npm run build` (vérifie les types puis construit `dist/`), `npm run icons` (régénère les icônes PNG depuis `public/icons/icon.svg`).
 - Mise en ligne : Railway (choix de Corentin, 5 €/mois, un collègue le connaît). Railway lance `npm run build` puis `npm start` (`server.mjs`, serveur Node sans dépendance qui livre `dist/`). Réglages dans `railway.json`. Aucune donnée patient ne doit jamais être stockée sur le serveur (Railway n'est pas certifié HDS).
+- Structure : `src/regles.ts` (règles métier pures, reprises de la version d'essai), `src/db.ts` (IndexedDB : dossiers, bilans, séances, fichiers), `src/app.ts` (écrans), `src/main.ts` (démarrage, état de l'appli, mises à jour), `src/ui.ts` (messages, confirmation), `src/pdf.ts` (lecteur PDF chargé à la demande).
+- Modèle de données de la version autonome : un dossier porte le nom affiché, les rendez-vous et le drapeau `homonyme` ; bilans et séances y sont rattachés par `dossierId`. Supprimer le dernier bilan d'un dossier supprime le dossier et ses séances (confirmation explicite).
+- `pdfjs-dist` figé en 4.10.38 : la 6.x utilise `Map.getOrInsertComputed`, absent de Chrome < 145.
+- Mises à jour en mode « prompt » : bandeau « Mettre à jour », jamais de rechargement automatique (ne pas perdre une dictée en cours).
 - Avant chaque envoi : `npm test` et `npm run test:e2e` doivent passer.
