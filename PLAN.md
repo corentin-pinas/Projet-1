@@ -22,14 +22,14 @@ Hors V1 : téléphone, tout ce qui figure dans « Idées pour la suite » du CLA
 | 2 | Résumé des bilans | Automatique au dépôt |
 | 3 | Données existantes | On repart de zéro |
 | 4 | Ordre | D'abord à l'identique, puis les idées une par une |
-| 5 | Installation | Appli web installable (« Ajouter à l'écran d'accueil »), code publié sur un hébergement gratuit, aucune donnée patient en ligne |
+| 5 | Installation | Appli web installable (« Ajouter à l'écran d'accueil »), code publié sur Railway, aucune donnée patient en ligne |
 | 6 | IA | Compte API Anthropic à l'usage, avec plafond mensuel bas ; clé saisie dans les Paramètres |
 | 7 | Sauvegarde | Fichier chiffré par mot de passe, rappel hebdomadaire ; copies automatiques internes à la tablette |
 
 ## 3. Architecture
 
 - **Type d'appli** : application web installable (PWA), qui fonctionne hors connexion. Aucun serveur ne stocke de données patient.
-- **Hébergement du code** : gratuit. GitHub Pages n'est gratuit que pour un dépôt public ; le dépôt étant privé, on utilisera Cloudflare Pages ou Netlify (gratuits avec un dépôt privé). Choix final à l'étape 1.
+- **Hébergement du code** : Railway (environ 5 € par mois), choisi par Corentin car un collègue le connaît. Il livre l'appli à la tablette et pourra plus tard faire tourner un petit serveur si besoin. Il ne stocke aucune donnée patient.
 - **Données** : base locale du navigateur (IndexedDB), bilans PDF et photos compris. Demande de stockage persistant au navigateur pour éviter un effacement automatique.
 - **IA** : appel direct depuis la tablette à l'API Anthropic. La clé est rangée dans la tablette. Usages : résumé des bilans (lecture du PDF ou des photos), mise au propre des séances, résumé « À venir », date du rendez-vous dicté. Modèle et coût précis choisis et mesurés à l'étape 3.
 - **Sauvegarde** :
@@ -99,5 +99,4 @@ Chaque étape se termine par une version que Corentin ouvre sur la tablette. La 
 
 ## 8. Questions encore ouvertes
 
-- Hébergement gratuit : Cloudflare Pages ou Netlify (décidé à l'étape 1, Corentin créera un compte gratuit).
 - Modèle d'IA et coût réel : mesurés à l'étape 3.

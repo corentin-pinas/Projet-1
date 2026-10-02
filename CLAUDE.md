@@ -157,5 +157,5 @@ Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; «
 - Appli web installable (PWA) : Vite + TypeScript, sans framework. `vite-plugin-pwa` pour le hors-connexion. Police Atkinson Hyperlegible hébergée avec l'appli.
 - Couleurs uniquement via les variables CSS de `src/styles.css` (palettes et thème à venir).
 - Commandes : `npm run dev` (développement), `npm test` (règles métier, Vitest), `npm run test:e2e` (écrans en largeur tablette, Playwright ; Chromium dans `/opt/pw-browsers/chromium` en session cloud), `npm run build` (vérifie les types puis construit `dist/`), `npm run icons` (régénère les icônes PNG depuis `public/icons/icon.svg`).
-- Mise en ligne : Cloudflare Pages, commande `npm run build`, dossier `dist`. Chaque branche a sa propre adresse d'essai.
+- Mise en ligne : Railway (choix de Corentin, 5 €/mois, un collègue le connaît). Railway lance `npm run build` puis `npm start` (`server.mjs`, serveur Node sans dépendance qui livre `dist/`). Réglages dans `railway.json`. Aucune donnée patient ne doit jamais être stockée sur le serveur (Railway n'est pas certifié HDS).
 - Avant chaque envoi : `npm test` et `npm run test:e2e` doivent passer.
