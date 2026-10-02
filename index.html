@@ -27,11 +27,20 @@
 <dialog class="etatdlg" id="etatdlg" aria-labelledby="etattitre">
   <div class="head"><div><h2 id="etattitre">État de l'appli</h2><div class="meta">Version <span id="version"></span></div></div><button id="etatclose">Fermer</button></div>
   <ul class="checks" id="checks" aria-live="polite"></ul>
+  <section class="iabox" aria-labelledby="iatitre">
+    <h3 id="iatitre">IA Claude</h3>
+    <p class="note" id="iaetat"></p>
+    <div class="vedit" id="iaform">
+      <input type="password" id="iacle" placeholder="Collez ici la clé (elle commence par sk-ant-)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Clé de l'IA">
+      <button class="primary" id="iasave">Enregistrer la clé</button>
+    </div>
+    <button id="iadel" hidden>Retirer la clé de cette tablette</button>
+  </section>
   <div class="actions">
     <button class="primary" id="persist" hidden>Protéger mes données</button>
     <button id="refresh">Vérifier à nouveau</button>
   </div>
-  <p class="note">Rien n'est envoyé sur internet : les données de l'appli restent dans cette tablette.</p>
+  <p class="note">Les données restent dans cette tablette. Seuls le bilan à résumer et le texte des séances partent vers l'IA, le temps du traitement.</p>
 </dialog>
 <script type="module" src="/src/main.ts"></script>
 </body>

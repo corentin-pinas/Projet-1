@@ -30,6 +30,7 @@ export type Bilan = {
   fichiers: FichierBilan[];
   ajoute: string;                                     // ISO
   resume: Resume | null;
+  resume_erreur?: string;                             // dernier échec du résumé automatique
   valides: string[];
   corrections: { point: string; correction: string; quand: string }[];
 };

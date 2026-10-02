@@ -75,3 +75,18 @@ describe("bilans et dossiers", () => {
     expect(n).toBe(2);
   });
 });
+
+describe("réglages", () => {
+  it("garde la clé de l'IA et peut l'effacer", async () => {
+    await db.ecrireParametre("cle_ia", "sk-test");
+    expect(await db.lireParametre("cle_ia")).toBe("sk-test");
+    await db.ecrireParametre("cle_ia", undefined);
+    expect(await db.lireParametre("cle_ia")).toBeUndefined();
+  });
+
+  it("additionne la consommation du mois", async () => {
+    await db.ajouterConso("bilans", { entree: 9000, sortie: 4000 });
+    await db.ajouterConso("seances", { entree: 3000, sortie: 1500 });
+    expect(await db.consoDuMois()).toMatchObject({ bilans: 1, seances: 1, entree: 12000, sortie: 5500 });
+  });
+});

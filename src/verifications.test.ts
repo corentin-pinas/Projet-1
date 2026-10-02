@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatOctets, verifications, type EtatAppareil } from "./verifications";
 
-const tout: EtatAppareil = { installee: true, horsConnexionPret: true, stockageProtege: true, espaceLibre: 8e9, protectionRefusee: false, brave: false };
+const tout: EtatAppareil = { installee: true, horsConnexionPret: true, stockageProtege: true, espaceLibre: 8e9, protectionRefusee: false, brave: false, cleIA: true };
 
 describe("formatOctets", () => {
   it("écrit les tailles à la française", () => {
@@ -44,5 +44,13 @@ describe("verifications", () => {
     const v = verifications({ ...tout, espaceLibre: 200e6 }).find(v => v.id === "espace")!;
     expect(v.ok).toBe(false);
     expect(v.detail).toBe("200 Mo disponibles pour les bilans et les séances.");
+  });
+});
+
+describe("IA", () => {
+  it("demande la clé tant qu'elle n'est pas enregistrée", () => {
+    const v = verifications({ ...tout, cleIA: false }).find(v => v.id === "ia")!;
+    expect(v.ok).toBe(false);
+    expect(v.detail).toContain("Collez la clé");
   });
 });

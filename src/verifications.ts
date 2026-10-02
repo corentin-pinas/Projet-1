@@ -8,10 +8,11 @@ export type EtatAppareil = {
   espaceLibre: number | null;  // en octets
   protectionRefusee: boolean;  // la protection a été demandée et le navigateur a dit non
   brave: boolean;
+  cleIA: boolean;              // une clé d'IA est enregistrée
 };
 
 export type Verification = {
-  id: "installee" | "hors-connexion" | "stockage" | "espace";
+  id: "installee" | "hors-connexion" | "stockage" | "espace" | "ia";
   titre: string;
   ok: boolean;
   detail: string;
@@ -34,7 +35,7 @@ export function verifications(e: EtatAppareil): Verification[] {
       ok: e.installee,
       detail: e.installee
         ? "Ouverte depuis l'icône de l'écran d'accueil."
-        : "Dans Brave, touchez le menu ⋮ puis « Ajouter à l'écran d'accueil », et rouvrez l'appli depuis l'icône."
+        : "Dans Chrome, touchez le menu ⋮ puis « Ajouter à l'écran d'accueil » (ou « Installer l'application »), et rouvrez l'appli depuis l'icône."
     },
     {
       id: "hors-connexion",
@@ -65,6 +66,14 @@ export function verifications(e: EtatAppareil): Verification[] {
       detail: e.espaceLibre === null
         ? "Ce navigateur ne permet pas de le vérifier."
         : formatOctets(e.espaceLibre) + " disponibles pour les bilans et les séances."
+    },
+    {
+      id: "ia",
+      titre: "IA Claude branchée",
+      ok: e.cleIA,
+      detail: e.cleIA
+        ? "Les bilans se résument tout seuls et les séances sont mises au propre."
+        : "Collez la clé de votre compte Anthropic ci-dessous pour que les bilans se résument tout seuls."
     }
   ];
 }

@@ -1,6 +1,8 @@
 import "./styles.css";
 import { registerSW } from "virtual:pwa-register";
-import { demarrer } from "./app";
+import { demarrer, rafraichirIA } from "./app";
+import * as db from "./db";
+import { coutDollars, testerCle } from "./ia";
 import { toast, esc } from "./ui";
 import { verifications, type EtatAppareil } from "./verifications";
 
@@ -35,7 +37,9 @@ async function lireEtat(): Promise<EtatAppareil> {
       if (e.quota != null) espaceLibre = e.quota - (e.usage ?? 0);
     }
   } catch { /* pas de réponse */ }
-  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave };
+  let cleIA = false;
+  try { cleIA = !!(await db.lireParametre<string>("cle_ia")); } catch { /* base indisponible */ }
+  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave, cleIA };
 }
 
 /* Le bouton « État de l'appli » en bas de la liste devient orange dès qu'un point demande attention. */
@@ -48,11 +52,44 @@ async function afficherEtat() {
       <div><b>${esc(x.titre)}</b><span>${esc(x.detail)}</span></div>
     </li>`).join("");
   $("#persist").hidden = etat.stockageProtege !== false || protectionRefusee;
+  await afficherIA(etat.cleIA);
   const reste = v.filter(x => !x.ok).length;
   $("#etatbtn").classList.toggle("alerte", reste > 0);
   $("#etattxt").textContent = reste ? `État de l'appli : ${reste} point${reste > 1 ? "s" : ""} à voir` : "État de l'appli";
   return v;
 }
+
+const dollars = (n: number) => n.toLocaleString("fr-FR", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+
+async function afficherIA(cle: boolean) {
+  $("#iaform").hidden = cle;
+  $("#iadel").hidden = !cle;
+  if (!cle) { $("#iaetat").textContent = "Aucune clé enregistrée. La clé se crée sur console.anthropic.com, rubrique « API Keys »."; return; }
+  const c = await db.consoDuMois();
+  $("#iaetat").textContent = c.bilans || c.seances
+    ? `Clé enregistrée. Ce mois-ci : ${c.bilans} bilan${c.bilans > 1 ? "s" : ""} résumé${c.bilans > 1 ? "s" : ""} et ${c.seances} séance${c.seances > 1 ? "s" : ""} traitée${c.seances > 1 ? "s" : ""}, environ ${dollars(coutDollars(c))}.`
+    : "Clé enregistrée. Rien de consommé ce mois-ci.";
+}
+
+$("#iasave").addEventListener("click", async () => {
+  const cle = $<HTMLInputElement>("#iacle").value.trim();
+  if (!/^sk-ant-[\w-]{20,}$/.test(cle)) { toast("Cette clé ne ressemble pas à une clé Anthropic : elle commence par sk-ant-."); return; }
+  const btn = $<HTMLButtonElement>("#iasave"); btn.disabled = true; btn.textContent = "Vérification…";
+  const erreur = await testerCle(cle);
+  btn.disabled = false; btn.textContent = "Enregistrer la clé";
+  if (erreur) { toast(erreur); return; }
+  await db.ecrireParametre("cle_ia", cle);
+  $<HTMLInputElement>("#iacle").value = "";
+  toast("Clé vérifiée et enregistrée. Les bilans en attente vont être résumés.");
+  await afficherEtat();
+  rafraichirIA();
+});
+$("#iadel").addEventListener("click", async () => {
+  await db.ecrireParametre("cle_ia", undefined);
+  toast("Clé retirée de cette tablette.");
+  await afficherEtat();
+  rafraichirIA();
+});
 
 async function demanderProtection() {
   let ok = false;

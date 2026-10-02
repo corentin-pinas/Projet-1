@@ -11,7 +11,7 @@ test("l'état de l'appli affiche les vérifications d'installation", async ({ pa
   // ouverte dans le navigateur, pas depuis l'icône : le bouton d'état signale un point à voir
   await expect(page.locator("#etatbtn")).toHaveClass(/alerte/);
   await ouvrirEtat(page);
-  await expect(page.locator("#checks .verif")).toHaveCount(4);
+  await expect(page.locator("#checks .verif")).toHaveCount(5);
   await expect(page.locator('[data-id="installee"]')).toContainText("Ajouter à l'écran d'accueil");
 });
 

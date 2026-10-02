@@ -6,6 +6,7 @@ import {
   prochainRdv, propreOk, questionHomonyme, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Dossier, type Seance
 } from "./regles";
+import * as moteur from "./moteur";
 import { confirmer, esc, toast } from "./ui";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -14,6 +15,7 @@ let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
 let selected: string | null = null;      // bilan affiché
 let formOpen = false, editing: string | null = null, rdvOpen = false, homoOpen = false;
 const busy = () => formOpen || !!editing || rdvOpen || homoOpen;
+let aCle = false;                         // une clé d'IA est enregistrée
 
 const aujourdhui = () => isoDay(new Date());
 const RUBRIQUES = ["État du patient", "Fait en séance", "À faire à la maison", "Autres notes", "À venir"];
@@ -32,6 +34,10 @@ export async function demarrer() {
     renderList();
     if (!busy()) renderMain();
   });
+  moteur.abonner(() => { renderList(); if (!busy()) renderMain(); });
+  moteur.surMessage(toast);
+  addEventListener("online", () => moteur.resumerEnAttente());
+  await rafraichirIA();
   $("#add").addEventListener("click", () => $("#file").click());
   $<HTMLInputElement>("#file").addEventListener("change", ajouter);
   $("#q").addEventListener("input", renderList);
@@ -39,6 +45,19 @@ export async function demarrer() {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { renderList(); if (selected && !busy()) renderMain(); } });
   renderList();
   renderMain();
+}
+
+/* à appeler quand la clé de l'IA change : relance les résumés en attente */
+export async function rafraichirIA() {
+  aCle = !!(await moteur.cleIA());
+  renderList(); if (!busy()) renderMain();
+  moteur.resumerEnAttente();
+}
+
+function etatResume(bilans: Bilan[]) {
+  if (bilans.some(x => moteur.occupe(x.id))) return `<span class="pending">Résumé en cours…</span>`;
+  if (bilans.some(x => !x.resume && x.resume_erreur)) return `<span class="pending">Résumé à refaire</span>`;
+  return `<span class="pending">En attente de résumé</span>`;
 }
 
 /* ---------- liste ---------- */
@@ -59,7 +78,7 @@ function renderList() {
     const n = donnees.seances.filter(s => s.dossierId === d.id).length;
     const ask = !!questionHomonyme(d, donnees.dossiers, donnees.bilans);
     return head + `<button class="item${g === t ? " now" : ""}" data-id="${esc(cur ? selected! : b?.id ?? "")}" aria-current="${cur}">
-      <b>${rdv?.heure ? `<i class="hr">${esc(heureFr(rdv.heure))}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${bilans.some(x => !x.resume) ? `<span class="pending">En attente de résumé</span>` : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
+      <b>${rdv?.heure ? `<i class="hr">${esc(heureFr(rdv.heure))}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
   }).join("");
   $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => {
     selected = el.dataset.id || null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
@@ -94,12 +113,18 @@ export function renderMain() {
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
-    <div class="avmeta"><span>Noté à la séance du ${esc(frDate(av.s.date))}</span></div></div>`;
+    <div class="avmeta"><span>Noté à la séance du ${esc(frDate(av.s.date))}</span>${!av.resume && aCle ? `<button id="avsum"${moteur.occupe(av.s.id) ? " disabled" : ""}>${moteur.occupe(av.s.id) ? "Reformulation…" : "Reformuler en bref"}</button>` : ""}</div></div>`;
 
   if (bilans.length > 1) html += `<div class="bils" role="group" aria-label="Bilans de ce dossier">${bilans.map(x => `<button data-bil="${esc(x.id)}" aria-pressed="${x.id === b.id}">${esc(x.resume ? ["Bilan du " + (x.resume.date_bilan || frDate(x.ajoute.slice(0, 10))), x.resume.region].filter(Boolean).join(", ") : "Bilan du " + frDate(x.ajoute.slice(0, 10)) + ", en attente de résumé")}</button>`).join("")}</div>`;
 
   if (!r) {
-    html += `<div class="wait">Ce bilan n'est pas encore résumé. Le résumé automatique arrivera avec l'étape 3 de l'appli. En attendant, le bilan complet s'ouvre avec le bouton ci-dessous.</div>`;
+    html += moteur.occupe(b.id)
+      ? `<div class="wait encours">Résumé en cours… L'IA lit le bilan, cela prend en général moins d'une minute.</div>`
+      : !aCle
+        ? `<div class="wait">Ce bilan n'est pas encore résumé. Pour que les résumés se fassent tout seuls, enregistrez la clé de l'IA dans « État de l'appli », en bas de la liste.</div>`
+        : b.resume_erreur
+          ? `<div class="wait">Le résumé n'a pas abouti : ${esc(b.resume_erreur)}<div class="row" style="margin-top:10px"><button class="primary" id="resum">Réessayer le résumé</button></div></div>`
+          : `<div class="wait">Ce bilan n'est pas encore résumé. Il le sera dès que la tablette sera connectée à internet.<div class="row" style="margin-top:10px"><button id="resum">Résumer maintenant</button></div></div>`;
   } else {
     if (r.coup_oeil) html += `<p class="glance">${esc(r.coup_oeil)}</p>`;
     if (r.chiffres?.length) html += `<div class="chips">${r.chiffres.map(c => `<div class="chip"><small>${esc(c.label)}</small><strong>${esc(c.valeur)}</strong></div>`).join("")}</div>`;
@@ -122,6 +147,8 @@ export function renderMain() {
     selected = el.dataset.bil!; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
   });
   $("#open").onclick = () => ouvrirVisionneuse(b);
+  const resum = $("#resum"); if (resum) resum.onclick = () => moteur.resumer(b.id, true);
+  const avb = $("#avsum"); if (avb && av) avb.onclick = () => moteur.analyser(av.s, true, false);
   $("#del").onclick = () => supprimer(b);
   $("#main").querySelectorAll<HTMLElement>(".vitem").forEach(li => {
     const i = +li.dataset.i!;
@@ -202,15 +229,16 @@ function seancesHtml(D: Dossier) {
   const ed = editing ? donnees.seances.find(s => s.id === editing) : undefined;
   const form = (formOpen || ed) ? `<div class="sform">
       <label for="sdate">Date de la séance</label><input type="date" id="sdate" value="${esc(ed ? ed.date : aujourdhui())}">
-      <label for="stext">Contenu de la séance</label><textarea id="stext" placeholder="Touchez le micro de votre clavier et dictez en vrac : ce que dit le patient, ce qui a été fait, les exercices donnés, puis « Pour la prochaine séance… ».">${esc(ed ? texteDe(ed) : "")}</textarea>
+      <label for="stext">Contenu de la séance</label><textarea id="stext" placeholder="Touchez le micro de votre clavier et dictez en vrac : ce que dit le patient, ce qui a été fait, les exercices donnés, puis « Pour la prochaine séance… ». La mise au propre se fait à l'enregistrement.">${esc(ed ? texteDe(ed) : "")}</textarea>
       <div class="note" id="avprev"></div>
       <div class="row"><button class="primary" id="ssave">${ed ? "Enregistrer les modifications" : "Enregistrer la séance"}</button><button id="scancel">Annuler</button></div></div>` : "";
   return `<div class="seances"><h3>Séances (${list.length})${!form ? `<button class="primary" id="sadd">Ajouter une séance</button>` : ""}</h3>${form}
     ${list.length ? list.map((s, k) => {
       const ok = propreOk(s), orig = s.brut || s.contenu;
       return `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre!) : esc(s.contenu)}</div>
+      ${moteur.occupe(s.id) ? `<div class="note">Mise au propre en cours…</div>` : ""}
       ${ok && orig !== s.propre ? `<details class="orig"><summary>Texte d'origine</summary><div class="sc">${esc(orig)}</div></details>` : ""}
-      <div class="sa"><button data-edit="${esc(s.id)}">Modifier</button><button data-sdel="${esc(s.id)}">Supprimer</button></div></div>`;
+      <div class="sa"><button data-edit="${esc(s.id)}">Modifier</button>${!ok && aCle && !moteur.occupe(s.id) ? `<button data-clean="${esc(s.id)}">Mettre au propre</button>` : ""}<button data-sdel="${esc(s.id)}">Supprimer</button></div></div>`;
     }).join("") : (form ? "" : `<p class="note">Aucune séance enregistrée pour ce patient.</p>`)}</div>`;
 }
 
@@ -226,7 +254,7 @@ function wireSeances(D: Dossier) {
   if (ta && prev) {
     const show = () => {
       const a = avenirFrom(ta.value);
-      prev.textContent = a ? "À venir repéré : " + a : "Ce que vous dictez après « Pour la prochaine séance » s'affichera en haut de la fiche du patient.";
+      prev.textContent = a ? "À venir repéré : " + a : "Ce que vous dictez après « Pour la prochaine séance » s'affichera en haut de la fiche du patient. Si vous y dites quand elle aura lieu (« dans une semaine à 8 heures »), le rendez-vous se place tout seul.";
     };
     ta.oninput = show; show();
   }
@@ -239,19 +267,28 @@ function wireSeances(D: Dossier) {
     const avant = editing ? donnees.seances.find(s => s.id === editing) : undefined;
     try {
       if (avant) {
-        if (contenu === texteDe(avant)) await enregistrerSansBouger(() => db.majSeance(avant.id, { date }));
-        else {
+        const garde = propreOk(avant);                 // le texte affiché était déjà mis au propre
+        if (contenu === texteDe(avant)) {
+          await enregistrerSansBouger(() => db.majSeance(avant.id, { date }));
+          if (!avant.ia_ok || avant.date !== date) moteur.analyser({ ...avant, date }, false, garde);
+        } else {
           /* correction à la main d'un texte déjà mis au propre : sa version fait foi, la dictée d'origine est conservée */
-          const garde = propreOk(avant);
           const patch: Partial<Seance> = garde
             ? { date, contenu, propre: contenu, propre_source: contenu, brut: avant.brut || avant.contenu, ia_ok: false }
             : { date, contenu, ia_ok: false };
           await enregistrerSansBouger(() => db.majSeance(avant.id, patch));
+          moteur.analyser({ ...avant, ...patch }, false, garde);
         }
-      } else await enregistrerSansBouger(() => db.ajouterSeance(D.id, date, contenu));
+      } else {
+        const s = await enregistrerSansBouger(() => db.ajouterSeance(D.id, date, contenu));
+        moteur.analyser(s, false, false);
+      }
       toast(avant ? "Séance modifiée." : "Séance enregistrée.");
     } catch { save.disabled = false; toast("L'enregistrement a échoué. Réessayez."); }
   };
+  $("#main").querySelectorAll<HTMLElement>("[data-clean]").forEach(el => el.onclick = () => {
+    const s = donnees.seances.find(x => x.id === el.dataset.clean); if (s) moteur.analyser(s, true, false);
+  });
   $("#main").querySelectorAll<HTMLElement>("[data-edit]").forEach(el => el.onclick = () => {
     editing = el.dataset.edit!; formOpen = false; rdvOpen = false; renderMain(); $("#stext").focus();
   });
@@ -262,10 +299,10 @@ function wireSeances(D: Dossier) {
 }
 
 /* ferme le formulaire juste avant l'écriture, pour que l'écran se mette à jour avec la séance enregistrée */
-async function enregistrerSansBouger(ecrire: () => Promise<unknown>) {
+async function enregistrerSansBouger<T>(ecrire: () => Promise<T>): Promise<T> {
   const f = formOpen, e = editing;
   formOpen = false; editing = null;
-  try { await ecrire(); } catch (err) { formOpen = f; editing = e; throw err; }
+  try { return await ecrire(); } catch (err) { formOpen = f; editing = e; throw err; }
 }
 
 /* ---------- ajout, vérification, suppression ---------- */
@@ -291,7 +328,11 @@ async function ajouter(e: Event) {
     }
   }
   btn.disabled = false;
-  if (ok) { formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain(); toast(ok > 1 ? `${ok} bilans ajoutés.` : "Bilan ajouté."); }
+  if (ok) {
+    formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
+    toast((ok > 1 ? `${ok} bilans ajoutés.` : "Bilan ajouté.") + (aCle && navigator.onLine ? " Le résumé est en cours." : ""));
+    moteur.resumerEnAttente();
+  }
 }
 
 /* valider (correction = null) ou corriger un point à vérifier */

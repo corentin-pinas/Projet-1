@@ -23,7 +23,7 @@ test("ajouter un bilan, dicter une séance, poser un rendez-vous, puis supprimer
   await expect(page.getByRole("status")).toContainText("Bilan ajouté");
   await expect(item(page, "Marc D.")).toContainText("En attente de résumé");
   await expect(page.locator("#main h2")).toHaveText("Marc D.");
-  await expect(page.locator(".wait")).toContainText("étape 3");
+  await expect(page.locator(".wait")).toContainText("clé de l'IA");
 
   // le bilan complet s'affiche, page par page
   await page.getByRole("button", { name: "Voir le bilan complet" }).click();

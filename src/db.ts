@@ -8,17 +8,23 @@ interface Schema extends DBSchema {
   bilans: { key: string; value: Bilan; indexes: { dossierId: string } };
   seances: { key: string; value: Seance; indexes: { dossierId: string } };
   fichiers: { key: string; value: { id: string; blob: Blob } };
+  parametres: { key: string; value: { cle: string; valeur: unknown } };
 }
+
+export type Conso = { mois: string; bilans: number; seances: number; entree: number; sortie: number };
 
 export type Donnees = { dossiers: Dossier[]; bilans: Bilan[]; seances: Seance[] };
 
 let base: Promise<IDBPDatabase<Schema>> | null = null;
-const ouvrir = () => base ??= openDB<Schema>("mes-patients", 1, {
-  upgrade(db) {
-    db.createObjectStore("dossiers", { keyPath: "id" });
-    db.createObjectStore("bilans", { keyPath: "id" }).createIndex("dossierId", "dossierId");
-    db.createObjectStore("seances", { keyPath: "id" }).createIndex("dossierId", "dossierId");
-    db.createObjectStore("fichiers", { keyPath: "id" });
+const ouvrir = () => base ??= openDB<Schema>("mes-patients", 2, {
+  upgrade(db, ancienne) {
+    if (ancienne < 1) {
+      db.createObjectStore("dossiers", { keyPath: "id" });
+      db.createObjectStore("bilans", { keyPath: "id" }).createIndex("dossierId", "dossierId");
+      db.createObjectStore("seances", { keyPath: "id" }).createIndex("dossierId", "dossierId");
+      db.createObjectStore("fichiers", { keyPath: "id" });
+    }
+    if (ancienne < 2) db.createObjectStore("parametres", { keyPath: "cle" });   // version 0.3 : clé de l'IA, consommation
   }
 });
 
@@ -146,4 +152,29 @@ export async function majSeance(id: string, patch: Partial<Seance>) {
 export async function supprimerSeance(id: string) {
   await (await ouvrir()).delete("seances", id);
   prevenir();
+}
+
+/* ---------- réglages ---------- */
+
+export async function lireParametre<T>(cle: string): Promise<T | undefined> {
+  return (await (await ouvrir()).get("parametres", cle))?.valeur as T | undefined;
+}
+
+export async function ecrireParametre(cle: string, valeur: unknown) {
+  const db = await ouvrir();
+  if (valeur === undefined) await db.delete("parametres", cle);
+  else await db.put("parametres", { cle, valeur });
+}
+
+const moisCourant = () => new Date().toISOString().slice(0, 7);
+
+/* consommation de l'IA du mois en cours (jetons d'entrée et de sortie) */
+export async function consoDuMois(): Promise<Conso> {
+  const c = await lireParametre<Conso>("conso");
+  return c && c.mois === moisCourant() ? c : { mois: moisCourant(), bilans: 0, seances: 0, entree: 0, sortie: 0 };
+}
+
+export async function ajouterConso(type: "bilans" | "seances", usage: { entree: number; sortie: number }) {
+  const c = await consoDuMois();
+  await ecrireParametre("conso", { ...c, [type]: c[type] + 1, entree: c.entree + usage.entree, sortie: c.sortie + usage.sortie });
 }
