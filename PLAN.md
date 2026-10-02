@@ -60,12 +60,14 @@ Repris de la version d'essai (voir CLAUDE.md), avec trois ajustements :
 
 - Bouton micro en haut de la liste des patients, qui ouvre une grande zone de dictée (micro du clavier).
 - Corentin dicte toute sa matinée : « Avec Marc D., on a fait… Ensuite Lucie B.… ».
-- L'IA découpe le texte par patient et le rattache aux dossiers existants, en s'aidant des rendez-vous du jour. Elle ne range rien : elle propose.
-- Écran de vérification : une ligne par patient avec le texte qui lui est attribué. Un patient inconnu ou ambigu (homonymes) est signalé et Corentin choisit. Rien n'est enregistré sans son accord.
+- L'IA découpe le texte par patient et le rattache aux dossiers existants, en s'aidant des rendez-vous du jour.
+- Rangement automatique (décision de Corentin) : si le patient nommé correspond à un seul patient ayant rendez-vous ce jour-là, la séance va directement dans son dossier, sans validation.
+- Validation seulement en cas de doute : deux patients possibles le même jour (homonymes), patient sans rendez-vous ce jour-là, ou patient non reconnu. Corentin choisit le dossier sur un écran court ; rien n'est deviné.
+- Filet de sécurité sans geste en plus : un récapitulatif « 4 séances rangées : Marc D., Lucie B.… » s'affiche après l'enregistrement, avec un bouton « Annuler » pendant quelques secondes.
 - Une fois validé, chaque morceau devient une séance normale (mise au propre, « À venir », rendez-vous dicté).
 - Confidentialité : si un nom complet est dicté, il est réduit à l'initiale avant enregistrement.
 - Limite connue : Brave ne propose pas de reconnaissance vocale intégrée aux pages ; on garde le micro du clavier, qui peut s'arrêter après un long silence (il suffit de le relancer).
-- Piste plus tard : enregistrer l'audio et le faire transcrire par un service spécialisé. Cela ajoute un compte et un service tiers qui reçoit la voix ; à décider seulement si le clavier ne suffit pas.
+- Piste plus tard, jugée probablement plus logique par Corentin : enregistrer l'audio et le faire transcrire par un service spécialisé. Un même abonnement pourrait servir à ses autres applis à commande vocale. Ajoute un service tiers qui reçoit la voix (confidentialité à examiner à ce moment-là).
 
 ### Couleurs (ajouté le 2 octobre 2026)
 

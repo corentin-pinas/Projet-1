@@ -121,6 +121,8 @@ Points ouverts :
 - **Résumé automatique des bilans** dès le dépôt du PDF, sans passer par le chat.
 - **On repart de zéro** : les données de test des pages claude.ai ne sont pas reprises.
 - **D'abord à l'identique** : reproduire la version d'essai, l'utiliser en vrai, puis ajouter les idées une par une.
+- **Dictée groupée** (étape 4) : plusieurs patients dictés d'un bloc ; rangement automatique quand le patient est le seul de ce nom parmi les rendez-vous du jour, validation seulement en cas de doute ; récapitulatif avec « Annuler ». Nom complet dicté réduit automatiquement à l'initiale.
+- **Voix** : micro du clavier pour commencer ; transcription audio par un service dédié envisagée plus tard (Corentin prévoit d'autres applis à commande vocale).
 
 ## Décisions prises et pistes écartées
 
