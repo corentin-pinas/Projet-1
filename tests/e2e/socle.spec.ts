@@ -28,3 +28,21 @@ test("l'appli s'ouvre sans internet une fois chargée", async ({ page, context }
   await expect(page.locator('[data-id="hors-connexion"]')).toHaveClass(/ok/);
   await context.setOffline(false);
 });
+
+test("les boutons répondent toujours par un message visible", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Vérifier à nouveau" }).click();
+  await expect(page.getByRole("status")).toContainText("Vérifié");
+});
+
+test("un refus de protection est expliqué", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.storage, "persisted", { value: async () => false });
+    Object.defineProperty(navigator.storage, "persist", { value: async () => false });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Protéger mes données" }).click();
+  await expect(page.getByRole("status")).toContainText("refusé");
+  await expect(page.locator('[data-id="stockage"]')).toContainText("refusé");
+  await expect(page.getByRole("button", { name: "Protéger mes données" })).toBeHidden();
+});

@@ -6,6 +6,8 @@ export type EtatAppareil = {
   horsConnexionPret: boolean;  // l'appli est gardée dans la tablette et s'ouvre sans internet
   stockageProtege: boolean | null; // null : le navigateur ne sait pas répondre
   espaceLibre: number | null;  // en octets
+  protectionRefusee: boolean;  // la protection a été demandée et le navigateur a dit non
+  brave: boolean;
 };
 
 export type Verification = {
@@ -50,7 +52,11 @@ export function verifications(e: EtatAppareil): Verification[] {
         ? "Le navigateur s'est engagé à ne pas effacer les données de l'appli."
         : e.stockageProtege === null
           ? "Ce navigateur ne permet pas de le vérifier."
-          : "Pas encore accordé. Touchez « Protéger mes données ». L'installation sur l'écran d'accueil aide le navigateur à accepter."
+          : e.protectionRefusee && e.brave
+            ? "Brave refuse cette protection, par choix de confidentialité. Installez l'appli avec Chrome : il l'accorde aux applis installées."
+            : e.protectionRefusee
+              ? "Le navigateur a refusé. Installez l'appli sur l'écran d'accueil, puis réessayez."
+              : "Pas encore accordé. Touchez « Protéger mes données ». L'installation sur l'écran d'accueil aide le navigateur à accepter."
     },
     {
       id: "espace",

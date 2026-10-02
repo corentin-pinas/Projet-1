@@ -54,3 +54,4 @@ input:disabled{opacity:.6}
 .check b{display:block}
 .check span{color:var(--soft)}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 14px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:.95rem;max-width:calc(100vw - 32px)}

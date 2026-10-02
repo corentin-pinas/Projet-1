@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatOctets, verifications, type EtatAppareil } from "./verifications";
 
-const tout: EtatAppareil = { installee: true, horsConnexionPret: true, stockageProtege: true, espaceLibre: 8e9 };
+const tout: EtatAppareil = { installee: true, horsConnexionPret: true, stockageProtege: true, espaceLibre: 8e9, protectionRefusee: false, brave: false };
 
 describe("formatOctets", () => {
   it("écrit les tailles à la française", () => {
@@ -26,6 +26,18 @@ describe("verifications", () => {
     const v = verifications({ ...tout, stockageProtege: null }).find(v => v.id === "stockage")!;
     expect(v.ok).toBe(false);
     expect(v.detail).toContain("ne permet pas");
+  });
+
+  it("dit clairement quand Brave refuse la protection, et quoi faire", () => {
+    const v = verifications({ ...tout, stockageProtege: false, protectionRefusee: true, brave: true }).find(v => v.id === "stockage")!;
+    expect(v.ok).toBe(false);
+    expect(v.detail).toContain("Brave refuse");
+    expect(v.detail).toContain("Chrome");
+  });
+
+  it("propose d'abord de demander la protection tant qu'elle n'a pas été refusée", () => {
+    const v = verifications({ ...tout, stockageProtege: false, brave: true }).find(v => v.id === "stockage")!;
+    expect(v.detail).toContain("Protéger mes données");
   });
 
   it("signale un espace trop juste", () => {

@@ -6,12 +6,29 @@ const $ = <T extends HTMLElement>(s: string) => document.querySelector(s) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 let horsConnexionPret = !!navigator.serviceWorker?.controller;
+let protectionRefusee = false;
+let brave = false;
 
 registerSW({
   immediate: true,
   onOfflineReady() { horsConnexionPret = true; afficher(); },
   onRegistered(reg) { if (reg?.active) { horsConnexionPret = true; afficher(); } }
 });
+
+/* Brave se signale par navigator.brave ; son message de refus n'est pas le même que celui des autres navigateurs. */
+(navigator as Navigator & { brave?: { isBrave(): Promise<boolean> } }).brave?.isBrave()
+  .then(b => { brave = b; afficher(); })
+  .catch(() => {});
+
+function toast(texte: string) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const d = document.createElement("div");
+  d.className = "toast";
+  d.setAttribute("role", "status");
+  d.textContent = texte;
+  document.body.append(d);
+  setTimeout(() => d.remove(), 3500);
+}
 
 async function lireEtat(): Promise<EtatAppareil> {
   const installee = matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches;
@@ -23,7 +40,7 @@ async function lireEtat(): Promise<EtatAppareil> {
       if (e.quota != null) espaceLibre = e.quota - (e.usage ?? 0);
     }
   } catch { /* pas de réponse */ }
-  return { installee, horsConnexionPret, stockageProtege, espaceLibre };
+  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave };
 }
 
 async function afficher() {
@@ -33,22 +50,35 @@ async function afficher() {
       <span class="pastille" aria-hidden="true">${v.ok ? "✓" : "!"}</span>
       <div><b>${esc(v.titre)}</b><span>${esc(v.detail)}</span></div>
     </li>`).join("");
-  $("#persist").hidden = etat.stockageProtege !== false;
+  $("#persist").hidden = etat.stockageProtege !== false || protectionRefusee;
+  return etat;
+}
+
+async function demanderProtection() {
+  let ok = false;
+  try { ok = await navigator.storage.persist(); } catch { /* traité comme un refus */ }
+  protectionRefusee = !ok;
+  return ok;
 }
 
 $("#version").textContent = __VERSION__;
 $("#persist").addEventListener("click", async () => {
-  try { await navigator.storage.persist(); } catch { /* refus du navigateur : l'écran le dira */ }
-  afficher();
+  const ok = await demanderProtection();
+  await afficher();
+  toast(ok ? "Données protégées." : "Le navigateur a refusé. L'explication est dans l'encadré orange.");
 });
-$("#refresh").addEventListener("click", afficher);
+$("#refresh").addEventListener("click", async () => {
+  const etat = await afficher();
+  const reste = verifications(etat).filter(v => !v.ok).length;
+  toast(reste ? `Vérifié : ${reste} point${reste > 1 ? "s" : ""} encore en orange.` : "Vérifié : tout est au vert.");
+});
 matchMedia("(display-mode: standalone)").addEventListener("change", afficher);
 
-/* Une appli installée demande d'emblée la protection : sur Android, elle est en général accordée sans question. */
+/* Une appli installée demande d'emblée la protection : Chrome sur Android l'accorde en général sans question. */
 (async () => {
   try {
     if (matchMedia("(display-mode: standalone)").matches && navigator.storage?.persisted && !(await navigator.storage.persisted()))
-      await navigator.storage.persist();
+      await demanderProtection();
   } catch { /* sans effet */ }
   afficher();
 })();
