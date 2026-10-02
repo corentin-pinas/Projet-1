@@ -9,6 +9,7 @@ Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essa
 - **Ne sait pas coder et ne relit pas la technique.** Il laisse les choix d'architecture à Claude et veut être guidé de bout en bout.
 - Il dicte ses messages à la voix : attendre des phrases orales, parfois approximatives.
 - Matériel : tablette Android au cabinet (navigateur Brave, usage en paysage), téléphone en complément.
+- **Pas d'ordinateur** : il fait tout sur la tablette et le téléphone, y compris les réglages (GitHub, Railway, compte IA). Toutes les marches à suivre doivent être faisables sur tablette Android. Passer sur ordinateur n'est envisagé que si un projet l'impose vraiment.
 - Agenda du cabinet : Maiia. Aucune connexion possible avec l'appli pour l'instant.
 
 ## Comment travailler avec lui
