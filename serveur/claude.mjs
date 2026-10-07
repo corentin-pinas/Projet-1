@@ -84,6 +84,7 @@ export function demarrerConnexion() {
     if (connexion) tuer(connexion.p);
     const p = spawn(bin, ["auth", "login", "--claudeai"], { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
     const c = { p, texte: "", fini: null, lien: null };
+    let t;
     connexion = c;
     let repondu = false;
     const repondre = r => { if (!repondu) { repondu = true; resolve(r); } };
@@ -91,14 +92,15 @@ export function demarrerConnexion() {
       c.texte += d;
       const m = /https:\/\/\S+/.exec(c.texte);
       // l'invite « Paste code here if prompted > » arrive sans retour à la ligne : le lien suffit pour répondre
-      if (m && !c.lien) { c.lien = m[0]; repondre({ lien: c.lien }); }
+      // le lien trouvé, on attend le code (jusqu'à 10 minutes) : le délai d'apparition du lien ne s'applique plus
+      if (m && !c.lien) { c.lien = m[0]; clearTimeout(t); repondre({ lien: c.lien }); }
     };
     p.stdout.on("data", lire);
     p.stderr.on("data", lire);
-    const t = setTimeout(() => { tuer(p); repondre({ erreur: "Claude Code n'a pas proposé de lien de connexion." }); }, 30_000);
+    t = setTimeout(() => { tuer(p); repondre({ erreur: "Claude Code n'a pas proposé de lien de connexion." }); }, Number(process.env.CLAUDE_DELAI_LIEN_MS) || 30_000);
     c.fini = new Promise(ok => p.on("close", code => { clearTimeout(t); if (connexion === c) connexion = null; ok(code); }));
     p.on("error", () => repondre({ erreur: "Claude Code n'a pas pu démarrer." }));
-    setTimeout(() => tuer(p), 10 * 60_000).unref();   // abandon après 10 minutes sans code
+    setTimeout(() => { if (connexion === c) tuer(p); }, 10 * 60_000).unref();   // abandon après 10 minutes sans code
   });
 }
 

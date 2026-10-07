@@ -8,7 +8,8 @@ export function toast(texte: string) {
   d.className = "toast";
   d.setAttribute("role", "status");
   d.textContent = texte;
-  document.body.append(d);
+  // une fenêtre ouverte passe au-dessus de tout : le message doit s'afficher dedans pour rester visible
+  (document.querySelector("dialog[open]") ?? document.body).append(d);
   setTimeout(() => d.remove(), 3500);
 }
 

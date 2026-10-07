@@ -51,7 +51,7 @@ export async function demarrer() {
 export async function rafraichirIA() {
   aCle = !!(await moteur.configIA());
   renderList(); if (!busy()) renderMain();
-  moteur.resumerEnAttente();
+  moteur.relancerEnAttente();
 }
 
 function etatResume(bilans: Bilan[]) {

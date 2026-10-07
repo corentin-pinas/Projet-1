@@ -22,9 +22,12 @@ async function connecterAbonnement(page: Page) {
   await expect(page.locator("#abostatut")).toContainText("pas encore connecté");
   await page.getByRole("button", { name: "Connecter mon abonnement Claude" }).click();
   await expect(page.locator("#abolien")).toHaveAttribute("href", /^https:\/\/claude\.com\/cai\/oauth/);
+  // le temps de se connecter sur la page de Claude : la connexion doit rester ouverte au-delà du délai d'apparition du lien
+  await page.waitForTimeout(1500);
   await page.locator("#abocodeco").fill("BON-CODE");
   await page.getByRole("button", { name: "Valider" }).click();
-  await expect(page.getByRole("status")).toContainText("Abonnement connecté");
+  // le message s'affiche dans la fenêtre, sinon il serait caché derrière elle
+  await expect(page.locator("#etatdlg [role=status]")).toContainText("Abonnement connecté");
   await expect(page.locator("#abostatut")).toContainText("connecté à votre abonnement");
   await expect(page.locator('[data-id="ia"]')).toHaveClass(/ok/);
   await page.getByRole("button", { name: "Fermer" }).click();
@@ -91,6 +94,35 @@ test("si l'abonnement est déconnecté, le bilan explique quoi faire", async ({ 
   await page.getByRole("button", { name: "Fermer" }).click();
   await page.locator("#file").setInputFiles([{ name: "Bilan - Paul ROUX.pdf", mimeType: "application/pdf", buffer: await fairePdf(page) }]);
   await expect(page.locator(".wait")).toContainText("n'est plus connecté à l'abonnement", { timeout: 15_000 });
+});
+
+test("un code de connexion refusé est expliqué dans la fenêtre", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#etatbtn").click();
+  await page.locator("#abocode").fill(CODE);
+  await page.getByRole("button", { name: "Enregistrer le code" }).click();
+  await page.getByRole("button", { name: "Connecter mon abonnement Claude" }).click();
+  await page.locator("#abocodeco").fill("MAUVAIS-CODE");
+  await page.getByRole("button", { name: "Valider" }).click();
+  await expect(page.locator("#abostatut")).toContainText("pas été accepté");
+  await expect(page.locator("#etatdlg [role=status]")).toBeVisible();
+});
+
+test("les bilans en échec sont relancés une fois l'abonnement connecté", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#etatbtn").click();
+  await page.locator("#abocode").fill(CODE);
+  await page.getByRole("button", { name: "Enregistrer le code" }).click();
+  await expect(page.locator("#abostatut")).toContainText("pas encore connecté");
+  await page.getByRole("button", { name: "Fermer" }).click();
+  await page.locator("#file").setInputFiles([{ name: "Bilan - Paul ROUX.pdf", mimeType: "application/pdf", buffer: await fairePdf(page) }]);
+  await expect(page.locator("#list .item")).toContainText("Résumé à refaire", { timeout: 15_000 });
+  await page.locator("#etatbtn").click();
+  await page.getByRole("button", { name: "Connecter mon abonnement Claude" }).click();
+  await page.locator("#abocodeco").fill("BON-CODE");
+  await page.getByRole("button", { name: "Valider" }).click();
+  await page.getByRole("button", { name: "Fermer" }).click();
+  await expect(page.locator(".glance")).toContainText("résumé par l'abonnement", { timeout: 15_000 });
 });
 
 test("la clé API reste verrouillée tant qu'elle n'est pas autorisée", async ({ page }) => {

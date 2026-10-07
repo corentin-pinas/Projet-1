@@ -12,7 +12,7 @@ export default defineConfig({
   },
   workers: 1, // le faux Claude Code garde un état (connecté ou non) partagé entre les tests
   webServer: {
-    command: "rm -rf .faux-claude && PORT=4173 CODE_ACCES=code-acces-essai-123 CLAUDE_BIN=tests/faux/claude.mjs CLAUDE_CONFIG_DIR=.faux-claude node server.mjs",
+    command: "rm -rf .faux-claude && PORT=4173 CODE_ACCES=code-acces-essai-123 CLAUDE_BIN=tests/faux/claude.mjs CLAUDE_CONFIG_DIR=.faux-claude CLAUDE_DELAI_LIEN_MS=1000 node server.mjs",
     url: "http://localhost:4173",
     reuseExistingServer: false
   }

@@ -94,6 +94,12 @@ export async function resumer(bilanId: string, manuel: boolean) {
   }
 }
 
+/* Après un changement de réglage de l'IA : tous les bilans sans résumé ont droit à un nouvel essai. */
+export function relancerEnAttente() {
+  tentes.clear();
+  return resumerEnAttente();
+}
+
 /* Lance, un par un, le résumé des bilans qui n'en ont pas encore (une seule tentative automatique par ouverture de l'appli). */
 let enFile = false;
 export async function resumerEnAttente() {

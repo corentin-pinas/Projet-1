@@ -105,7 +105,7 @@ export function brancherReglagesIA(changement: () => void) {
     const btn = $<HTMLButtonElement>("#aboconnect"); btn.disabled = true;
     const r = await serveur<{ lien?: string }>("/api/ia/connexion", "POST");
     btn.disabled = false;
-    if (r.erreur || !r.lien) { toast(r.erreur || "Le serveur n'a pas proposé de lien de connexion."); return; }
+    if (r.erreur || !r.lien) { const m = r.erreur || "Le serveur n'a pas proposé de lien de connexion."; $("#abostatut").textContent = m; toast(m); return; }
     $<HTMLAnchorElement>("#abolien").href = r.lien;
     $("#aboetape").hidden = false;
     $("#abocodeco").focus();
@@ -117,7 +117,13 @@ export function brancherReglagesIA(changement: () => void) {
     const btn = $<HTMLButtonElement>("#abovalider"); btn.disabled = true; btn.textContent = "Connexion…";
     const r = await serveur<{ ok?: boolean }>("/api/ia/connexion/code", "POST", { code });
     btn.disabled = false; btn.textContent = "Valider";
-    if (r.erreur) { toast(r.erreur); return; }
+    if (r.erreur) {
+      // le message reste affiché (le toast disparaît au bout de quelques secondes)
+      $("#abostatut").textContent = r.erreur + " Touchez « Connecter mon abonnement Claude » pour recommencer.";
+      $("#aboetape").hidden = true;
+      toast(r.erreur);
+      return;
+    }
     $<HTMLInputElement>("#abocodeco").value = "";
     $("#aboetape").hidden = true;
     toast("Abonnement connecté. Les bilans en attente vont être résumés.");
