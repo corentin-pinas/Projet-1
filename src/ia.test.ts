@@ -60,6 +60,14 @@ describe("résumé d'un bilan", () => {
     expect(p.at(-1)).toMatchObject({ type: "text" });
   });
 
+  it("joint le texte tapé de la trame, en précisant qu'il ne contient pas l'écriture au stylet", () => {
+    const c = contenuBilan([{ type: "image/jpeg", donnees: "a" }, { type: "text/plain", donnees: "Page 1 : BILAN ÉPAULE EVA ___" }]);
+    expect(c.filter(b => b.type === "image")).toHaveLength(1);
+    expect(c[1]).toMatchObject({ type: "text" });
+    expect((c[1] as { text: string }).text).toContain("sans l'écriture au stylet");
+    expect((c[1] as { text: string }).text).toContain("BILAN ÉPAULE");
+  });
+
   it("rappelle les règles de confidentialité et les conventions manuscrites", () => {
     const s = systemeBilan([]);
     expect(s).toContain("prénom et première lettre du nom uniquement");

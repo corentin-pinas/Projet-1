@@ -128,7 +128,7 @@ export function systemeBilan(corrections: Correction[]): string {
   const deja = corrections.slice(-30);
   return [
     "Tu aides un kinésithérapeute en cabinet, surtout orienté épaule, à relire ses fiches de bilan initial.",
-    "Tu reçois un bilan (PDF ou photos), souvent mixte : tapé et manuscrit au stylet sur tablette.",
+    "Tu reçois un bilan en images de pages : une trame PDF tapée, remplie à la main au stylet sur tablette. Lis surtout l'écriture manuscrite et les marques (entourages, croix) ; le texte tapé de la trame t'est aussi donné à part.",
     "",
     "Produis un résumé « coup d'œil » en français, fidèle au bilan :",
     "- region : la région traitée et le côté (par exemple « Épaule D », « Coude G »).",
@@ -180,13 +180,17 @@ export function normaliserResume(x: unknown): Resume {
   };
 }
 
-export type PieceBilan = { type: string; donnees: string };   // données en base64
+/* Une pièce du bilan : une page en image (données en base64), un PDF tel quel en dernier recours,
+   ou le texte tapé de la trame (type "text/plain", données en clair). */
+export type PieceBilan = { type: string; donnees: string };
 
 export function contenuBilan(pieces: PieceBilan[]): BetaContentBlockParam[] {
-  const blocs: BetaContentBlockParam[] = pieces.map(p => p.type === "application/pdf"
+  const textes = pieces.filter(p => p.type === "text/plain" && p.donnees.trim());
+  const blocs: BetaContentBlockParam[] = pieces.filter(p => p.type !== "text/plain").map(p => p.type === "application/pdf"
     ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: p.donnees } }
     : { type: "image", source: { type: "base64", media_type: p.type as "image/jpeg", data: p.donnees } });
-  blocs.push({ type: "text", text: pieces.length > 1 ? "Voici les pages du bilan, dans l'ordre. Résume-le." : "Voici le bilan. Résume-le." });
+  if (textes.length) blocs.push({ type: "text", text: "Texte tapé de la trame, extrait du PDF (sans l'écriture au stylet, qui n'apparaît que sur les images) :\n" + textes.map(t => t.donnees).join("\n").slice(0, 20000) });
+  blocs.push({ type: "text", text: blocs.length > 2 ? "Voici les pages du bilan, dans l'ordre. Résume-le." : "Voici le bilan. Résume-le." });
   return blocs;
 }
 

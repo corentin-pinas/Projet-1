@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 /* L'IA est simulée : aucune vraie requête ne part, on vérifie ce que l'appli envoie et ce qu'elle fait de la réponse. */
-type Envoi = { model: string; fallbacks: unknown; messages: { content: { type: string; text?: string }[] }[]; output_config: { effort: string } };
+type Envoi = { model: string; fallbacks: unknown; messages: { content: { type: string; text?: string; source?: { media_type: string } }[] }[]; output_config: { effort: string } };
 
 function message(json: unknown) {
   return {
@@ -79,11 +79,14 @@ test("le bilan déposé se résume tout seul", async ({ page }) => {
   await expect(page.locator(".chip")).toContainText("5/10");
   await expect(page.locator(".vitem")).toContainText("RE2");
   await expect(page.locator("#main .meta").first()).toContainText("52 ans, Épaule D, bilan du 18/09/2026");
-  // ce qui est parti vers l'IA : le PDF en document, le bon modèle, le repli automatique en cas de refus
+  // ce qui est parti vers l'IA : la page dessinée en image (écriture au stylet comprise), le texte tapé à part,
+  // le bon modèle, le repli automatique en cas de refus
   expect(envois).toHaveLength(1);
   expect(envois[0].model).toBe("claude-opus-5-5");
   expect(envois[0].fallbacks).toBe("default");
-  expect(envois[0].messages[0].content[0].type).toBe("document");
+  const blocs = envois[0].messages[0].content;
+  expect(blocs[0]).toMatchObject({ type: "image", source: { media_type: "image/jpeg" } });
+  expect(blocs.find(b => b.type === "text" && b.text?.includes("Texte tapé de la trame"))?.text).toContain("Bilan test");
   // la consommation est comptée
   await page.locator("#etatbtn").click();
   await expect(page.locator("#iaetat")).toContainText("1 bilan et 0 séance traités");

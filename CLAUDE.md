@@ -12,6 +12,8 @@ Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essa
 - **Brave refuse la protection du stockage** (`navigator.storage.persist()` renvoie faux, constaté le 2 octobre 2026 sur sa tablette). L'appli doit être installée avec Chrome, qui l'accorde aux applis installées. Corentin peut continuer à naviguer avec Brave.
 - **Pas d'ordinateur** : il fait tout sur la tablette et le téléphone, y compris les réglages (GitHub, Railway, compte IA). Toutes les marches à suivre doivent être faisables sur tablette Android. Passer sur ordinateur n'est envisagé que si un projet l'impose vraiment.
 - Agenda du cabinet : Maiia. Aucune connexion possible avec l'appli pour l'instant.
+- Abonnement Claude : **Pro** (quota partagé avec son propre usage de Claude). Volume : 3 à 8 nouveaux bilans et 80 à 110 séances par semaine.
+- Bilans : une trame PDF tapée qu'il remplit au stylet sur la tablette. L'IA reçoit chaque page dessinée en image sur la tablette (écriture au stylet comprise, comme dans la visionneuse) et le texte tapé de la trame à part (`pdfPourIA` dans `src/moteur.ts`, 12 pages au plus). Si l'écriture est visible dans « Voir le bilan complet », l'IA la voit aussi.
 
 ## Comment travailler avec lui
 
@@ -149,6 +151,7 @@ Points ouverts :
 - Écran Paramètres : sauvegardes, gestion ; sauvegarde hebdomadaire.
 - Lecture automatique d'un dossier de bilans.
 - Conserver le marquage des douleurs sur le schéma corporel (page 1 du bilan).
+- **Transmissions** (7 octobre 2026) : un bouton qui, pour une période choisie (une semaine, quinze jours…), résume tous les patients prévus, pour un remplaçant ou un collègue qui ne les connaît pas : pathologie, état à l'arrivée, traitement en cours.
 
 ## Lecture des bilans manuscrits
 

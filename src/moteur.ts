@@ -55,14 +55,46 @@ async function photoPourIA(blob: Blob): Promise<PieceBilan> {
   }
 }
 
+const PAGES_MAX = 12;
+
+/* Chaque page du PDF est dessinée sur la tablette, écriture au stylet comprise (comme dans la visionneuse) :
+   selon l'appli de notes, l'écriture est rangée à part dans le PDF et l'IA pourrait ne pas la voir.
+   Le texte tapé de la trame est extrait en plus. */
+async function pdfPourIA(blob: Blob): Promise<PieceBilan[]> {
+  const { pdfjs } = await import("./pdf");
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  if (pdf.numPages > PAGES_MAX) throw new ErreurIA(`Ce bilan a ${pdf.numPages} pages : l'IA en lit ${PAGES_MAX} au plus.`);
+  const pages: PieceBilan[] = [], textes: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: Math.min(3, 1600 / Math.max(base.width, base.height)) });
+    const c = document.createElement("canvas");
+    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const jpeg: Blob = await new Promise((ok, ko) => c.toBlob(x => x ? ok(x) : ko(new Error("conversion")), "image/jpeg", 0.85));
+    pages.push({ type: "image/jpeg", donnees: await base64(jpeg) });
+    const t = (await page.getTextContent()).items.map(it => "str" in it ? it.str : "").join(" ").replace(/\s+/g, " ").trim();
+    if (t) textes.push(`Page ${i} : ${t}`);
+  }
+  return textes.length ? [...pages, { type: "text/plain", donnees: textes.join("\n") }] : pages;
+}
+
 async function piecesDe(b: Bilan): Promise<PieceBilan[]> {
   const pieces: PieceBilan[] = [];
   for (const f of b.fichiers) {
     const blob = await db.fichierBlob(f.id);
     if (!blob) throw new ErreurIA("Le fichier du bilan est introuvable dans la tablette.");
     if (f.type === "application/pdf" || /\.pdf$/i.test(f.nom)) {
-      if (blob.size > 24e6) throw new ErreurIA("Ce PDF est trop lourd pour l'IA (24 Mo au plus).");
-      pieces.push({ type: "application/pdf", donnees: await base64(blob) });
+      try { pieces.push(...await pdfPourIA(blob)); }
+      catch (e) {
+        if (e instanceof ErreurIA) throw e;
+        // PDF illisible sur la tablette : on l'envoie tel quel
+        if (blob.size > 24e6) throw new ErreurIA("Ce PDF est trop lourd pour l'IA (24 Mo au plus).");
+        pieces.push({ type: "application/pdf", donnees: await base64(blob) });
+      }
     } else pieces.push(await photoPourIA(blob));
   }
   return pieces;
