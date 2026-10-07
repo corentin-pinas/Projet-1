@@ -6,29 +6,38 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { BetaContentBlockParam, BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { avenirFrom, isoDay, type Resume } from "./regles";
 
-export const MODELE = "claude-opus-5-5";
-/* tarif du modèle, en dollars par million de jetons (entrée, sortie) */
-export const PRIX = { entree: 4, sortie: 20 };
+/* Deux niveaux d'IA, choisis par Corentin : la plus puissante pour les bilans (lecture du manuscrit) et la dictée groupée,
+   une plus légère pour les séances (mise au propre d'une dictée), qui consomme moins de quota.
+   prix : dollars par million de jetons (entrée, sortie), pour la clé API. */
+export type Niveau = "puissant" | "leger";
+export const MODELES: Record<Niveau, { api: string; abonnement: "opus" | "sonnet"; prix: { entree: number; sortie: number } }> = {
+  puissant: { api: "claude-opus-5-5", abonnement: "opus", prix: { entree: 4, sortie: 20 } },
+  leger: { api: "claude-sonnet-5-5", abonnement: "sonnet", prix: { entree: 2, sortie: 10 } }
+};
+export const MODELE = MODELES.puissant.api;
+export const PRIX = MODELES.puissant.prix;
 
 export class ErreurIA extends Error {}
 
-export type Usage = { entree: number; sortie: number; coutIndicatif?: number };
+/* cout : dollars facturés sur la clé API ; coutIndicatif : équivalent annoncé par Claude Code sur l'abonnement (non facturé) */
+export type Usage = { entree: number; sortie: number; cout?: number; coutIndicatif?: number };
 export type Reponse<T> = { donnees: T; usage: Usage };
 
 /* ---------- appel ---------- */
 
 export type Appel = (req: {
   cle: string; system: string; contenu: BetaContentBlockParam[];
-  schema: Record<string, unknown>; effort: "low" | "medium" | "high"; maxTokens: number;
+  schema: Record<string, unknown>; effort: "low" | "medium" | "high"; maxTokens: number; niveau: Niveau;
 }) => Promise<Reponse<unknown>>;
 
 /* Appel réel. Remplaçable dans les tests. */
-export const appelerClaude: Appel = async ({ cle, system, contenu, schema, effort, maxTokens }) => {
+export const appelerClaude: Appel = async ({ cle, system, contenu, schema, effort, maxTokens, niveau }) => {
+  const modele = MODELES[niveau];
   const client = new Anthropic({ apiKey: cle, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 180_000 });
   let r: BetaMessage;
   try {
     r = await client.beta.messages.create({
-      model: MODELE,
+      model: modele.api,
       max_tokens: maxTokens,
       // si le modèle décline par prudence, l'API reprend la demande sur un autre modèle
       betas: ["server-side-fallback-2026-07-01"],
@@ -46,7 +55,8 @@ export const appelerClaude: Appel = async ({ cle, system, contenu, schema, effor
   if (!texte || texte.type !== "text") throw new ErreurIA("L'IA n'a pas répondu.");
   let donnees: unknown;
   try { donnees = JSON.parse(texte.text); } catch { throw new ErreurIA("La réponse de l'IA est illisible. Réessayez."); }
-  return { donnees, usage: { entree: entreeTotale(r.usage), sortie: r.usage.output_tokens } };
+  const usage = { entree: entreeTotale(r.usage), sortie: r.usage.output_tokens };
+  return { donnees, usage: { ...usage, cout: (usage.entree * modele.prix.entree + usage.sortie * modele.prix.sortie) / 1e6 } };
 };
 
 const entreeTotale = (u: BetaMessage["usage"]) =>
@@ -54,13 +64,13 @@ const entreeTotale = (u: BetaMessage["usage"]) =>
 
 /* Appel par l'abonnement : la demande part vers le serveur de l'appli, qui la confie à Claude Code connecté à l'abonnement.
    « cle » est ici le code d'accès au serveur. Rien n'est facturé à l'usage : c'est le quota de l'abonnement. */
-export const appelerAbonnement: Appel = async ({ cle, system, contenu, schema, effort }) => {
+export const appelerAbonnement: Appel = async ({ cle, system, contenu, schema, effort, niveau }) => {
   let r: Response;
   try {
     r = await fetch("/api/ia/travail", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + cle },
-      body: JSON.stringify({ system, contenu, schema, effort })
+      body: JSON.stringify({ system, contenu, schema, effort, modele: MODELES[niveau].abonnement })
     });
   } catch { throw new ErreurIA("Le serveur de l'appli est injoignable. Vérifiez la connexion à internet."); }
   let corps: { donnees?: unknown; erreur?: string; coutIndicatif?: number | null } = {};
@@ -195,7 +205,7 @@ export function contenuBilan(pieces: PieceBilan[]): BetaContentBlockParam[] {
 }
 
 export async function resumerBilan(cle: string, pieces: PieceBilan[], corrections: Correction[], appel: Appel): Promise<Reponse<Resume>> {
-  const r = await appel({ cle, system: systemeBilan(corrections), contenu: contenuBilan(pieces), schema: SCHEMA_RESUME, effort: "high", maxTokens: 16000 });
+  const r = await appel({ cle, system: systemeBilan(corrections), contenu: contenuBilan(pieces), schema: SCHEMA_RESUME, effort: "high", maxTokens: 16000, niveau: "puissant" });
   const resume = normaliserResume(r.donnees);
   if (!resume.coup_oeil && !resume.sections?.length) throw new ErreurIA("L'IA n'a rien pu lire dans ce bilan.");
   return { donnees: resume, usage: r.usage };
@@ -268,7 +278,7 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
   const r = await appel({
     cle, system: "Tu remets au propre les notes de séance d'un kinésithérapeute, sans rien ajouter ni retirer.",
     contenu: [{ type: "text", text: promptSeance(date, contenu, sansPropre) }],
-    schema: SCHEMA_SEANCE, effort: "medium", maxTokens: 8000
+    schema: SCHEMA_SEANCE, effort: "medium", maxTokens: 8000, niveau: "leger"
   });
   return { donnees: lireAnalyse(r.donnees, contenu, sansPropre), usage: r.usage };
 }

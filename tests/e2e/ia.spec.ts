@@ -131,4 +131,7 @@ test("la séance dictée est mise au propre et le rendez-vous dicté se place to
   const envoiSeance = envois.find(e => e.messages[0].content[0].type === "text")!;
   expect(envoiSeance.messages[0].content[0].text).toContain("J+7 :");
   expect(envoiSeance.output_config.effort).toBe("medium");
+  // séance : IA plus légère ; bilan : la plus puissante
+  expect(envoiSeance.model).toBe("claude-sonnet-5-5");
+  expect(envois.find(e => e !== envoiSeance)!.model).toBe("claude-opus-5-5");
 });

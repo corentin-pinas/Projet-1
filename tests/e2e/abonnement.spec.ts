@@ -70,6 +70,8 @@ test("connexion de l'abonnement depuis la tablette, puis résumé et mise au pro
   // Claude Code a été lancé verrouillé : aucun outil, aucun autre connecteur, rien de conservé, et sans clé API ni code d'accès dans son environnement
   const travail = appels().filter(a => a.args[0] === "-p");
   expect(travail).toHaveLength(2);
+  // bilan sur l'IA la plus puissante, séance sur une plus légère
+  expect(travail.map(t => t.args[t.args.indexOf("--model") + 1])).toEqual(["opus", "sonnet"]);
   for (const { args, env } of travail) {
     expect(args[args.indexOf("--tools") + 1]).toBe("");
     expect(args).toContain("--strict-mcp-config");

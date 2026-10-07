@@ -127,6 +127,7 @@ Points ouverts :
 - **D'abord à l'identique** : reproduire la version d'essai, l'utiliser en vrai, puis ajouter les idées une par une.
 - **Dictée groupée** (étape 4) : plusieurs patients dictés d'un bloc ; rangement automatique quand le patient est le seul de ce nom parmi les rendez-vous du jour, validation seulement en cas de doute ; récapitulatif avec « Annuler ». Nom complet dicté réduit automatiquement à l'initiale.
 - **IA par l'abonnement Claude** (7 octobre 2026) : demandé par Corentin, mode principal ; la clé API devient un secours verrouillé.
+- **Niveaux d'IA** (7 octobre 2026, choix de Corentin) : la plus puissante pour les bilans et la dictée groupée (une ou deux fois par jour : midi et/ou soir), une plus légère pour les séances. `MODELES` dans `src/ia.ts` : puissant = `claude-opus-5-5` / `opus`, léger = `claude-sonnet-5-5` / `sonnet` (clé API / abonnement).
 - **Voix** : micro du clavier pour commencer ; transcription audio par un service dédié envisagée plus tard (Corentin prévoit d'autres applis à commande vocale).
 
 ## Décisions prises et pistes écartées
@@ -151,7 +152,8 @@ Points ouverts :
 - Écran Paramètres : sauvegardes, gestion ; sauvegarde hebdomadaire.
 - Lecture automatique d'un dossier de bilans.
 - Conserver le marquage des douleurs sur le schéma corporel (page 1 du bilan).
-- **Transmissions** (7 octobre 2026) : un bouton qui, pour une période choisie (une semaine, quinze jours…), résume tous les patients prévus, pour un remplaçant ou un collègue qui ne les connaît pas : pathologie, état à l'arrivée, traitement en cours.
+- **Transmissions** (7 octobre 2026) : un bouton qui, pour une période choisie (une semaine, quinze jours…), résume tous les patients ayant rendez-vous dans la période, pour un remplaçant : pathologie, état à l'arrivée, traitement en cours. Sortie : un **PDF** que Corentin envoie par message (le remplaçant l'imprime s'il veut).
+- **Agenda** (7 octobre 2026) : une vue d'ensemble de l'emploi du temps dans l'appli (Maiia et Doctolib ne sont pas reliés), pour repérer les trous anormaux et ajouter un patient dans un créneau. Sert à fiabiliser les transmissions sur 15 jours ; de petits écarts ensuite sont acceptables.
 
 ## Lecture des bilans manuscrits
 

@@ -123,6 +123,7 @@ export async function deconnecter() {
 /* ---------- travail : une demande, une réponse au format imposé ---------- */
 
 const EFFORTS = new Set(["low", "medium", "high"]);
+const MODELES = new Set(["opus", "sonnet"]);
 const TYPES_BLOCS = new Set(["text", "image", "document"]);
 
 export function verifierDemande(d) {
@@ -132,6 +133,7 @@ export function verifierDemande(d) {
   if (d.contenu.some(b => !b || !TYPES_BLOCS.has(b.type))) return "Contenu non accepté.";
   if (!d.schema || typeof d.schema !== "object" || d.schema.type !== "object") return "Format de réponse manquant.";
   if (!EFFORTS.has(d.effort)) return "Niveau d'effort non accepté.";
+  if (d.modele !== undefined && !MODELES.has(d.modele)) return "Modèle non accepté.";
   return null;
 }
 
@@ -143,13 +145,13 @@ export function travailler(demande) {
   return tour;
 }
 
-function lancer({ system, contenu, schema, effort }) {
+function lancer({ system, contenu, schema, effort, modele = "opus" }) {
   return new Promise(resolve => {
     const bin = trouverClaude();
     if (!bin) return resolve({ erreur: "Claude Code n'est pas installé sur le serveur." });
     const args = [
       "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-      "--model", "opus", "--effort", effort,
+      "--model", modele, "--effort", effort,
       "--system-prompt", system,
       "--json-schema", JSON.stringify(schema),
       // verrouillage : aucun outil (ni fichiers, ni commandes, ni web), aucun autre connecteur, aucun réglage local, rien de conservé

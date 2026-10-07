@@ -42,7 +42,7 @@ export async function afficherIA() {
     ? `Ce mois-ci : ${pluriel(c.bilans, "bilan")} et ${pluriel(c.seances, "séance")} traités.`
     : "Rien de traité ce mois-ci.";
   const argent = [
-    c.entree || c.sortie ? `Facturé sur la clé API : environ ${dollars(coutDollars(c))}.` : "",
+    c.entree || c.sortie ? `Facturé sur la clé API : environ ${dollars(c.facture ?? coutDollars(c))}.` : "",
     c.indicatif ? `Sur l'abonnement, l'équivalent serait d'environ ${dollars(c.indicatif)} : ce n'est pas facturé, cela compte dans le quota.` : ""
   ].filter(Boolean).join(" ");
   $("#iaetat").textContent = !ia

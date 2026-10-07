@@ -85,7 +85,8 @@ Chaque étape se termine par une version que Corentin ouvre sur la tablette. La 
 4. **Dictée groupée** : bouton micro, répartition par patient, écran de vérification. Validation : une vraie matinée dictée d'un bloc.
 5. **Sauvegarde et paramètres** : copies automatiques, fichier chiffré hebdomadaire, restauration testée sur une tablette vierge, réglages d'affichage et palettes de couleurs.
 6. **Usage réel** : quelques jours au cabinet, liste des retours, corrections.
-7. **Transmissions** (demandée le 7 octobre 2026) : pour une période choisie, résumé de tous les patients prévus (pathologie, état à l'arrivée, traitement en cours), destiné à un remplaçant. Détails à préciser avec Corentin.
+7. **Agenda** (demandé le 7 octobre 2026) : vue de l'emploi du temps (semaine, quinze jours) avec les rendez-vous de l'appli ; repérer les trous et ajouter un patient dans un créneau.
+7 bis. **Transmissions** (demandées le 7 octobre 2026) : pour une période choisie, résumé de chaque patient ayant rendez-vous (pathologie, état à l'arrivée, traitement en cours), produit en PDF à envoyer par message au remplaçant.
 8. **Idées, une par une** : EVA et observance, exercices à domicile, clôture, schéma corporel, lecture d'un dossier de bilans, propositions de séance.
 
 ## 7. Risques et parades

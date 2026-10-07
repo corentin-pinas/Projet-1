@@ -11,8 +11,8 @@ interface Schema extends DBSchema {
   parametres: { key: string; value: { cle: string; valeur: unknown } };
 }
 
-/* entree, sortie : jetons facturés par la clé API ; indicatif : coût annoncé par Claude Code sur l'abonnement (non facturé, c'est le quota) */
-export type Conso = { mois: string; bilans: number; seances: number; entree: number; sortie: number; indicatif?: number };
+/* entree, sortie : jetons de la clé API ; facture : dollars facturés sur la clé API ; indicatif : coût annoncé par Claude Code sur l'abonnement (non facturé, c'est le quota) */
+export type Conso = { mois: string; bilans: number; seances: number; entree: number; sortie: number; facture?: number; indicatif?: number };
 
 export type Donnees = { dossiers: Dossier[]; bilans: Bilan[]; seances: Seance[] };
 
@@ -175,10 +175,11 @@ export async function consoDuMois(): Promise<Conso> {
   return c && c.mois === moisCourant() ? c : { mois: moisCourant(), bilans: 0, seances: 0, entree: 0, sortie: 0 };
 }
 
-export async function ajouterConso(type: "bilans" | "seances", usage: { entree: number; sortie: number; coutIndicatif?: number }) {
+export async function ajouterConso(type: "bilans" | "seances", usage: { entree: number; sortie: number; cout?: number; coutIndicatif?: number }) {
   const c = await consoDuMois();
   await ecrireParametre("conso", {
     ...c, [type]: c[type] + 1, entree: c.entree + usage.entree, sortie: c.sortie + usage.sortie,
+    facture: (c.facture ?? 0) + (usage.cout ?? 0),
     indicatif: (c.indicatif ?? 0) + (usage.coutIndicatif ?? 0)
   });
 }

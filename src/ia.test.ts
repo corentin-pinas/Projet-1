@@ -88,6 +88,14 @@ describe("résumé d'un bilan", () => {
     await expect(resumerBilan("cle", [{ type: "application/pdf", donnees: "x" }], [], faux({}))).rejects.toThrow("rien pu lire");
   });
 
+  it("prend l'IA la plus puissante pour les bilans et une plus légère pour les séances", async () => {
+    const niveaux: string[] = [];
+    const espion: Appel = async req => { niveaux.push(req.niveau); return { donnees: { coup_oeil: "x", propre: null, resume: null, rdv_date: null, rdv_heure: null }, usage: { entree: 0, sortie: 0 } }; };
+    await resumerBilan("cle", [{ type: "image/jpeg", donnees: "x" }], [], espion);
+    await analyserSeance("cle", "2026-10-02", "massage", false, espion);
+    expect(niveaux).toEqual(["puissant", "leger"]);
+  });
+
   it("calcule le coût en dollars", () => {
     expect(coutDollars({ entree: 1_000_000, sortie: 100_000 })).toBeCloseTo(6);
   });
