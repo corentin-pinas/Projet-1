@@ -10,8 +10,9 @@ export default defineConfig({
       ? { executablePath: process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium" }
       : {}
   },
+  workers: 1, // le faux Claude Code garde un état (connecté ou non) partagé entre les tests
   webServer: {
-    command: "PORT=4173 node server.mjs",
+    command: "rm -rf .faux-claude && PORT=4173 CODE_ACCES=code-acces-essai-123 CLAUDE_BIN=tests/faux/claude.mjs CLAUDE_CONFIG_DIR=.faux-claude node server.mjs",
     url: "http://localhost:4173",
     reuseExistingServer: false
   }

@@ -32,11 +32,16 @@ async function simulerIA(page: Page, reponses: { bilan?: unknown; seance?: unkno
   return envois;
 }
 
+/* mode de secours : la clé API doit d'abord être autorisée, puis choisie */
 async function enregistrerCle(page: Page) {
   await page.locator("#etatbtn").click();
+  await page.getByText("Secours : clé API").click();
+  await page.getByLabel("Autoriser l'usage d'une clé API").check();
+  await page.getByLabel("Utiliser la clé API").check();
   await page.locator("#iacle").fill("sk-ant-api03-cle-de-test-pour-les-essais-0000");
   await page.getByRole("button", { name: "Enregistrer la clé" }).click();
   await expect(page.getByRole("status")).toContainText("Clé vérifiée");
+  await expect(page.locator("#iaetat")).toContainText("par la clé API");
   await expect(page.locator('[data-id="ia"]')).toHaveClass(/ok/);
   await page.getByRole("button", { name: "Fermer" }).click();
 }
@@ -52,12 +57,14 @@ async function fairePdf(page: Page): Promise<Buffer> {
 test("sans clé, le bilan attend et l'appli explique quoi faire", async ({ page }) => {
   await page.goto("/");
   await page.locator("#file").setInputFiles([{ name: "Bilan - Marc DUPONT.pdf", mimeType: "application/pdf", buffer: await fairePdf(page) }]);
-  await expect(page.locator(".wait")).toContainText("enregistrez la clé de l'IA");
+  await expect(page.locator(".wait")).toContainText("réglez l'IA");
 });
 
 test("une clé mal copiée est refusée avant tout envoi", async ({ page }) => {
   await page.goto("/");
   await page.locator("#etatbtn").click();
+  await page.getByText("Secours : clé API").click();
+  await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.locator("#iacle").fill("ma-cle");
   await page.getByRole("button", { name: "Enregistrer la clé" }).click();
   await expect(page.getByRole("status")).toContainText("commence par sk-ant-");
@@ -79,7 +86,8 @@ test("le bilan déposé se résume tout seul", async ({ page }) => {
   expect(envois[0].messages[0].content[0].type).toBe("document");
   // la consommation est comptée
   await page.locator("#etatbtn").click();
-  await expect(page.locator("#iaetat")).toContainText("1 bilan résumé");
+  await expect(page.locator("#iaetat")).toContainText("1 bilan et 0 séance traités");
+  await expect(page.locator("#iaetat")).toContainText("Facturé sur la clé API");
 });
 
 test("un échec de l'IA est expliqué et le résumé peut être relancé", async ({ page }) => {

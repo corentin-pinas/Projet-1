@@ -30,17 +30,45 @@
   <section class="iabox" aria-labelledby="iatitre">
     <h3 id="iatitre">IA Claude</h3>
     <p class="note" id="iaetat"></p>
-    <div class="vedit" id="iaform">
-      <input type="password" id="iacle" placeholder="Collez ici la clé (elle commence par sk-ant-)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Clé de l'IA">
-      <button class="primary" id="iasave">Enregistrer la clé</button>
+    <h4>Par votre abonnement Claude</h4>
+    <div class="vedit" id="aboform">
+      <input type="password" id="abocode" placeholder="Code d'accès au serveur (variable CODE_ACCES sur Railway)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Code d'accès au serveur">
+      <button class="primary" id="abosave">Enregistrer le code</button>
     </div>
-    <button id="iadel" hidden>Retirer la clé de cette tablette</button>
+    <p class="note" id="abostatut"></p>
+    <div class="row">
+      <button class="primary" id="aboconnect" hidden>Connecter mon abonnement Claude</button>
+      <button id="abodeco" hidden>Déconnecter l'abonnement</button>
+      <button id="abooubli" hidden>Oublier le code sur cette tablette</button>
+    </div>
+    <div class="sform" id="aboetape" hidden>
+      <p>1. Ouvrez la page de connexion, connectez-vous avec votre compte Claude et autorisez l'accès.</p>
+      <a class="lienbtn" id="abolien" target="_blank" rel="noopener">Ouvrir la page de connexion</a>
+      <p>2. Copiez le code affiché à la fin, revenez ici et collez-le :</p>
+      <div class="vedit">
+        <input type="text" id="abocodeco" placeholder="Code affiché après la connexion" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Code de connexion">
+        <button class="primary" id="abovalider">Valider</button>
+      </div>
+    </div>
+    <details class="secours">
+      <summary>Secours : clé API, facturée à l'usage</summary>
+      <label class="choix"><input type="checkbox" id="apiok"> Autoriser l'usage d'une clé API</label>
+      <div id="apibloc" hidden>
+        <label class="choix"><input type="radio" name="modeia" value="abonnement"> Utiliser l'abonnement</label>
+        <label class="choix"><input type="radio" name="modeia" value="api"> Utiliser la clé API</label>
+        <div class="vedit" id="iaform">
+          <input type="password" id="iacle" placeholder="Clé API (elle commence par sk-ant-)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Clé de l'IA">
+          <button id="iasave">Enregistrer la clé</button>
+        </div>
+        <button id="iadel" hidden>Retirer la clé de cette tablette</button>
+      </div>
+    </details>
   </section>
   <div class="actions">
     <button class="primary" id="persist" hidden>Protéger mes données</button>
     <button id="refresh">Vérifier à nouveau</button>
   </div>
-  <p class="note">Les données restent dans cette tablette. Seuls le bilan à résumer et le texte des séances partent vers l'IA, le temps du traitement.</p>
+  <p class="note">Les données restent dans cette tablette. Seuls le bilan à résumer et le texte des séances partent vers l'IA (en passant par le serveur de l'appli pour l'abonnement), le temps du traitement, sans y être gardés.</p>
 </dialog>
 <script type="module" src="/src/main.ts"></script>
 </body>

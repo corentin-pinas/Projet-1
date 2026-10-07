@@ -1,7 +1,7 @@
 /* Travail de l'IA en arrière-plan : résumé automatique des bilans déposés,
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
-import { analyserSeance, ErreurIA, resumerBilan, parleRdv, type Correction, type PieceBilan } from "./ia";
+import { analyserSeance, appelerAbonnement, appelerClaude, ErreurIA, resumerBilan, parleRdv, type Appel, type Correction, type PieceBilan } from "./ia";
 import { avecRdv, avenirFrom, isoDay, jourLabel, heureFr, rdvsAVenir, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
@@ -15,7 +15,21 @@ const prevenir = () => abonnes.forEach(fn => fn());
 let messages: (t: string) => void = () => {};
 export function surMessage(fn: (t: string) => void) { messages = fn; }
 
-export const cleIA = () => db.lireParametre<string>("cle_ia");
+/* Mode de l'IA : par l'abonnement (Claude Code sur le serveur de l'appli), ou en secours par une clé API.
+   La clé API n'est utilisée que si elle a été autorisée dans les réglages : sinon elle reste verrouillée. */
+export type ConfigIA = { mode: "abonnement" | "api"; secret: string; appel: Appel };
+
+export async function configIA(): Promise<ConfigIA | null> {
+  const apiAutorisee = (await db.lireParametre<boolean>("api_autorisee")) === true;
+  if (apiAutorisee && (await db.lireParametre<string>("mode_ia")) === "api") {
+    const cle = await db.lireParametre<string>("cle_ia");
+    return cle ? { mode: "api", secret: cle, appel: appelerClaude } : null;
+  }
+  const code = await db.lireParametre<string>("code_acces");
+  return code ? { mode: "abonnement", secret: code, appel: appelerAbonnement } : null;
+}
+
+const PAS_REGLE = "Réglez d'abord l'IA dans « État de l'appli », en bas de la liste.";
 
 async function base64(blob: Blob): Promise<string> {
   const url: string = await new Promise((ok, ko) => {
@@ -58,8 +72,8 @@ async function piecesDe(b: Bilan): Promise<PieceBilan[]> {
 
 export async function resumer(bilanId: string, manuel: boolean) {
   if (enCours.has(bilanId)) return;
-  const cle = await cleIA();
-  if (!cle) { if (manuel) messages("Enregistrez d'abord la clé de l'IA dans « État de l'appli »."); return; }
+  const ia = await configIA();
+  if (!ia) { if (manuel) messages(PAS_REGLE); return; }
   if (!navigator.onLine) { if (manuel) messages("Pas de connexion : le résumé se fera dès que la tablette sera en ligne."); return; }
   enCours.add(bilanId); tentes.add(bilanId); prevenir();
   try {
@@ -67,7 +81,7 @@ export async function resumer(bilanId: string, manuel: boolean) {
     const b = bilans.find(x => x.id === bilanId);
     if (!b || b.resume) return;
     const corrections: Correction[] = bilans.flatMap(x => x.corrections.map(c => ({ point: c.point, correction: c.correction })));
-    const r = await resumerBilan(cle, await piecesDe(b), corrections);
+    const r = await resumerBilan(ia.secret, await piecesDe(b), corrections, ia.appel);
     await db.majBilan(b.id, { resume: r.donnees, resume_erreur: undefined });
     await db.ajouterConso("bilans", r.usage);
     if (manuel) messages("Bilan résumé.");
@@ -86,7 +100,7 @@ export async function resumerEnAttente() {
   if (enFile) return;
   enFile = true;
   try {
-    if (!(await cleIA()) || !navigator.onLine) return;
+    if (!(await configIA()) || !navigator.onLine) return;
     for (;;) {
       const { bilans } = await db.tout();
       const b = bilans.find(x => !x.resume && !tentes.has(x.id) && !enCours.has(x.id));
@@ -104,12 +118,12 @@ export async function analyser(se: Seance, manuel: boolean, sansPropre: boolean)
   if (enCours.has(se.id)) return;
   const brut = avenirFrom(se.contenu);
   if (sansPropre && !brut && !parleRdv(se.contenu)) return;
-  const cle = await cleIA();
-  if (!cle) { if (manuel) messages("Enregistrez d'abord la clé de l'IA dans « État de l'appli »."); return; }
+  const ia = await configIA();
+  if (!ia) { if (manuel) messages(PAS_REGLE); return; }
   if (!navigator.onLine) { if (manuel) messages("Pas de connexion : réessayez une fois en ligne."); return; }
   enCours.add(se.id); prevenir();
   try {
-    const { donnees: a, usage } = await analyserSeance(cle, se.date, se.contenu, sansPropre);
+    const { donnees: a, usage } = await analyserSeance(ia.secret, se.date, se.contenu, sansPropre, ia.appel);
     await db.ajouterConso("seances", usage);
     const { seances, dossiers } = await db.tout();
     const actuelle = seances.find(x => x.id === se.id);

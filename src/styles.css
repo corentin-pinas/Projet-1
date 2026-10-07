@@ -151,3 +151,11 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 .iabox h3{margin:0;font-size:1.1rem}
 .iabox .vedit{margin-top:0}
 .wait.encours{background:var(--accent-bg);color:var(--accent)}
+.iabox h4{margin:6px 0 0;font-size:1rem}
+.iabox .sform p{margin:0}
+.lienbtn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 16px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-weight:700;text-decoration:none;justify-self:start}
+.secours{margin-top:6px;border-top:1px solid var(--line);padding-top:8px}
+.secours summary{cursor:pointer;color:var(--soft);padding:6px 0}
+.secours[open]{display:grid;gap:8px}
+.choix{display:flex;align-items:center;gap:10px;min-height:44px}
+.choix input{width:22px;height:22px;accent-color:var(--accent)}

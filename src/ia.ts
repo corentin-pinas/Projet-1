@@ -12,7 +12,7 @@ export const PRIX = { entree: 4, sortie: 20 };
 
 export class ErreurIA extends Error {}
 
-export type Usage = { entree: number; sortie: number };
+export type Usage = { entree: number; sortie: number; coutIndicatif?: number };
 export type Reponse<T> = { donnees: T; usage: Usage };
 
 /* ---------- appel ---------- */
@@ -51,6 +51,23 @@ export const appelerClaude: Appel = async ({ cle, system, contenu, schema, effor
 
 const entreeTotale = (u: BetaMessage["usage"]) =>
   u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+
+/* Appel par l'abonnement : la demande part vers le serveur de l'appli, qui la confie à Claude Code connecté à l'abonnement.
+   « cle » est ici le code d'accès au serveur. Rien n'est facturé à l'usage : c'est le quota de l'abonnement. */
+export const appelerAbonnement: Appel = async ({ cle, system, contenu, schema, effort }) => {
+  let r: Response;
+  try {
+    r = await fetch("/api/ia/travail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + cle },
+      body: JSON.stringify({ system, contenu, schema, effort })
+    });
+  } catch { throw new ErreurIA("Le serveur de l'appli est injoignable. Vérifiez la connexion à internet."); }
+  let corps: { donnees?: unknown; erreur?: string; coutIndicatif?: number | null } = {};
+  try { corps = await r.json(); } catch { /* réponse vide */ }
+  if (!r.ok || corps.erreur) throw new ErreurIA(corps.erreur || `Le serveur a répondu par une erreur (${r.status}).`);
+  return { donnees: corps.donnees, usage: { entree: 0, sortie: 0, coutIndicatif: corps.coutIndicatif ?? undefined } };
+};
 
 export function messageErreur(e: unknown): string {
   if (e instanceof Anthropic.AuthenticationError) return "La clé de l'IA est refusée. Vérifiez-la dans les réglages.";
@@ -173,7 +190,7 @@ export function contenuBilan(pieces: PieceBilan[]): BetaContentBlockParam[] {
   return blocs;
 }
 
-export async function resumerBilan(cle: string, pieces: PieceBilan[], corrections: Correction[], appel: Appel = appelerClaude): Promise<Reponse<Resume>> {
+export async function resumerBilan(cle: string, pieces: PieceBilan[], corrections: Correction[], appel: Appel): Promise<Reponse<Resume>> {
   const r = await appel({ cle, system: systemeBilan(corrections), contenu: contenuBilan(pieces), schema: SCHEMA_RESUME, effort: "high", maxTokens: 16000 });
   const resume = normaliserResume(r.donnees);
   if (!resume.coup_oeil && !resume.sections?.length) throw new ErreurIA("L'IA n'a rien pu lire dans ce bilan.");
@@ -243,7 +260,7 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
   };
 }
 
-export async function analyserSeance(cle: string, date: string, contenu: string, sansPropre: boolean, appel: Appel = appelerClaude): Promise<Reponse<AnalyseSeance>> {
+export async function analyserSeance(cle: string, date: string, contenu: string, sansPropre: boolean, appel: Appel): Promise<Reponse<AnalyseSeance>> {
   const r = await appel({
     cle, system: "Tu remets au propre les notes de séance d'un kinésithérapeute, sans rien ajouter ni retirer.",
     contenu: [{ type: "text", text: promptSeance(date, contenu, sansPropre) }],

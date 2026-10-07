@@ -47,9 +47,9 @@ export async function demarrer() {
   renderMain();
 }
 
-/* à appeler quand la clé de l'IA change : relance les résumés en attente */
+/* à appeler quand les réglages de l'IA changent : relance les résumés en attente */
 export async function rafraichirIA() {
-  aCle = !!(await moteur.cleIA());
+  aCle = !!(await moteur.configIA());
   renderList(); if (!busy()) renderMain();
   moteur.resumerEnAttente();
 }
@@ -121,7 +121,7 @@ export function renderMain() {
     html += moteur.occupe(b.id)
       ? `<div class="wait encours">Résumé en cours… L'IA lit le bilan, cela prend en général moins d'une minute.</div>`
       : !aCle
-        ? `<div class="wait">Ce bilan n'est pas encore résumé. Pour que les résumés se fassent tout seuls, enregistrez la clé de l'IA dans « État de l'appli », en bas de la liste.</div>`
+        ? `<div class="wait">Ce bilan n'est pas encore résumé. Pour que les résumés se fassent tout seuls, réglez l'IA dans « État de l'appli », en bas de la liste.</div>`
         : b.resume_erreur
           ? `<div class="wait">Le résumé n'a pas abouti : ${esc(b.resume_erreur)}<div class="row" style="margin-top:10px"><button class="primary" id="resum">Réessayer le résumé</button></div></div>`
           : `<div class="wait">Ce bilan n'est pas encore résumé. Il le sera dès que la tablette sera connectée à internet.<div class="row" style="margin-top:10px"><button id="resum">Résumer maintenant</button></div></div>`;

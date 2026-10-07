@@ -8,7 +8,7 @@ export type EtatAppareil = {
   espaceLibre: number | null;  // en octets
   protectionRefusee: boolean;  // la protection a été demandée et le navigateur a dit non
   brave: boolean;
-  cleIA: boolean;              // une clé d'IA est enregistrée
+  cleIA: boolean;              // l'IA est réglée (abonnement ou clé API autorisée)
 };
 
 export type Verification = {
@@ -73,7 +73,7 @@ export function verifications(e: EtatAppareil): Verification[] {
       ok: e.cleIA,
       detail: e.cleIA
         ? "Les bilans se résument tout seuls et les séances sont mises au propre."
-        : "Collez la clé de votre compte Anthropic ci-dessous pour que les bilans se résument tout seuls."
+        : "Réglez l'IA ci-dessous : code d'accès au serveur, puis connexion de votre abonnement Claude."
     }
   ];
 }

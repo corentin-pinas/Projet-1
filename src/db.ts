@@ -11,7 +11,8 @@ interface Schema extends DBSchema {
   parametres: { key: string; value: { cle: string; valeur: unknown } };
 }
 
-export type Conso = { mois: string; bilans: number; seances: number; entree: number; sortie: number };
+/* entree, sortie : jetons facturés par la clé API ; indicatif : coût annoncé par Claude Code sur l'abonnement (non facturé, c'est le quota) */
+export type Conso = { mois: string; bilans: number; seances: number; entree: number; sortie: number; indicatif?: number };
 
 export type Donnees = { dossiers: Dossier[]; bilans: Bilan[]; seances: Seance[] };
 
@@ -174,7 +175,10 @@ export async function consoDuMois(): Promise<Conso> {
   return c && c.mois === moisCourant() ? c : { mois: moisCourant(), bilans: 0, seances: 0, entree: 0, sortie: 0 };
 }
 
-export async function ajouterConso(type: "bilans" | "seances", usage: { entree: number; sortie: number }) {
+export async function ajouterConso(type: "bilans" | "seances", usage: { entree: number; sortie: number; coutIndicatif?: number }) {
   const c = await consoDuMois();
-  await ecrireParametre("conso", { ...c, [type]: c[type] + 1, entree: c.entree + usage.entree, sortie: c.sortie + usage.sortie });
+  await ecrireParametre("conso", {
+    ...c, [type]: c[type] + 1, entree: c.entree + usage.entree, sortie: c.sortie + usage.sortie,
+    indicatif: (c.indicatif ?? 0) + (usage.coutIndicatif ?? 0)
+  });
 }

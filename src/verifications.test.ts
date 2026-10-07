@@ -48,9 +48,9 @@ describe("verifications", () => {
 });
 
 describe("IA", () => {
-  it("demande la clé tant qu'elle n'est pas enregistrée", () => {
+  it("demande de régler l'IA tant que ce n'est pas fait", () => {
     const v = verifications({ ...tout, cleIA: false }).find(v => v.id === "ia")!;
     expect(v.ok).toBe(false);
-    expect(v.detail).toContain("Collez la clé");
+    expect(v.detail).toContain("abonnement Claude");
   });
 });
