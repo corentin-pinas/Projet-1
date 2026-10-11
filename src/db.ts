@@ -1,7 +1,7 @@
 /* Rangement des données dans la tablette (IndexedDB). Rien ne part sur internet.
    Remplace les briques db et assets de claude.ai utilisées par la version d'essai. */
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { avecRdv, patientFrom, type Bilan, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
+import { avecRdv, isoDay, patientFrom, type Bilan, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
 
 interface Schema extends DBSchema {
   dossiers: { key: string; value: Dossier };
@@ -9,6 +9,7 @@ interface Schema extends DBSchema {
   seances: { key: string; value: Seance; indexes: { dossierId: string } };
   fichiers: { key: string; value: { id: string; blob: Blob } };
   parametres: { key: string; value: { cle: string; valeur: unknown } };
+  copies: { key: string; value: Copie };
 }
 
 /* entree, sortie : jetons de la clé API ; facture : dollars facturés sur la clé API ; indicatif : coût annoncé par Claude Code sur l'abonnement (non facturé, c'est le quota) */
@@ -16,8 +17,15 @@ export type Conso = { mois: string; bilans: number; seances: number; entree: num
 
 export type Donnees = { dossiers: Dossier[]; bilans: Bilan[]; seances: Seance[] };
 
+/* Copie de sécurité interne : le texte de la base (sans les réglages). Les PDF et photos ne sont pas recopiés :
+   un fichier reste gardé tant qu'un bilan ou une copie y renvoie.
+   id : le jour (AAAA-MM-JJ) pour la copie quotidienne, AVANT_RETOUR pour l'état gardé avant un retour en arrière. */
+export type Copie = { id: string; cree: string; donnees: Donnees; taille: number };
+export const AVANT_RETOUR = "avant-retour";
+export const COPIES_GARDEES = 7;
+
 let base: Promise<IDBPDatabase<Schema>> | null = null;
-const ouvrir = () => base ??= openDB<Schema>("mes-patients", 2, {
+const ouvrir = () => base ??= openDB<Schema>("mes-patients", 3, {
   upgrade(db, ancienne) {
     if (ancienne < 1) {
       db.createObjectStore("dossiers", { keyPath: "id" });
@@ -26,11 +34,12 @@ const ouvrir = () => base ??= openDB<Schema>("mes-patients", 2, {
       db.createObjectStore("fichiers", { keyPath: "id" });
     }
     if (ancienne < 2) db.createObjectStore("parametres", { keyPath: "cle" });   // version 0.3 : clé de l'IA, consommation
+    if (ancienne < 3) db.createObjectStore("copies", { keyPath: "id" });        // version 0.5 : copies de sécurité
   }
 });
 
 /* pour les tests : repartir d'une base neuve */
-export async function fermer() { if (base) (await base).close(); base = null; }
+export async function fermer() { if (base) (await base).close(); base = null; jourCopie = null; }
 
 const nouvelId = () => crypto.randomUUID();
 
@@ -55,6 +64,7 @@ export async function fichierBlob(id: string): Promise<Blob | null> {
    Si un dossier porte déjà ce nom, le bilan va dans un nouveau dossier marqué « homonyme » :
    la question « même personne ? » sera posée une fois le bilan résumé. */
 export async function ajouterBilan(fichiers: File[]): Promise<Bilan> {
+  await copieDuJour();
   const db = await ouvrir();
   const nom = fichiers[0].name.replace(/\.[^.]+$/, "");
   const label = patientFrom(fichiers[0].name);
@@ -74,6 +84,7 @@ export async function ajouterBilan(fichiers: File[]): Promise<Bilan> {
 }
 
 export async function majBilan(id: string, patch: Partial<Bilan>) {
+  await copieDuJour();
   const db = await ouvrir();
   const b = await db.get("bilans", id);
   if (!b) throw new Error("Bilan introuvable");
@@ -83,11 +94,11 @@ export async function majBilan(id: string, patch: Partial<Bilan>) {
 
 /* Supprime un bilan et ses fichiers. Si c'était le dernier bilan du dossier, le dossier part avec ses séances et rendez-vous. */
 export async function supprimerBilan(id: string) {
+  await copieDuJour();
   const db = await ouvrir();
   const tx = db.transaction(["dossiers", "bilans", "seances", "fichiers"], "readwrite");
   const b = await tx.objectStore("bilans").get(id);
   if (b) {
-    for (const f of b.fichiers) await tx.objectStore("fichiers").delete(f.id);
     await tx.objectStore("bilans").delete(id);
     const restants = await tx.objectStore("bilans").index("dossierId").getAllKeys(b.dossierId);
     if (!restants.length) {
@@ -96,12 +107,14 @@ export async function supprimerBilan(id: string) {
     }
   }
   await tx.done;
+  await nettoyerFichiers();   // les fichiers du bilan partent, sauf si une copie y renvoie encore
   prevenir();
 }
 
 /* ---------- dossiers ---------- */
 
 export async function setRdvs(dossierId: string, rdvs: Rdv[]) {
+  await copieDuJour();
   const db = await ouvrir();
   const d = await db.get("dossiers", dossierId);
   if (!d) throw new Error("Dossier introuvable");
@@ -111,6 +124,7 @@ export async function setRdvs(dossierId: string, rdvs: Rdv[]) {
 
 /* « Oui, même personne » : le dossier en attente rejoint l'autre (bilans, séances, rendez-vous). */
 export async function fusionner(depuisId: string, versId: string) {
+  await copieDuJour();
   const db = await ouvrir();
   const tx = db.transaction(["dossiers", "bilans", "seances"], "readwrite");
   const [depuis, vers] = await Promise.all([tx.objectStore("dossiers").get(depuisId), tx.objectStore("dossiers").get(versId)]);
@@ -126,6 +140,7 @@ export async function fusionner(depuisId: string, versId: string) {
 
 /* « Non, deux personnes différentes » : le dossier en attente prend un nouveau nom (« Sylvie Fr. »). */
 export async function renommer(dossierId: string, label: string) {
+  await copieDuJour();
   const db = await ouvrir();
   const d = await db.get("dossiers", dossierId);
   if (!d) throw new Error("Dossier introuvable");
@@ -136,6 +151,7 @@ export async function renommer(dossierId: string, label: string) {
 /* ---------- séances ---------- */
 
 export async function ajouterSeance(dossierId: string, date: string, contenu: string): Promise<Seance> {
+  await copieDuJour();
   const s: Seance = { id: nouvelId(), dossierId, date, contenu, cree: new Date().toISOString() };
   await (await ouvrir()).put("seances", s);
   prevenir();
@@ -143,6 +159,7 @@ export async function ajouterSeance(dossierId: string, date: string, contenu: st
 }
 
 export async function majSeance(id: string, patch: Partial<Seance>) {
+  await copieDuJour();
   const db = await ouvrir();
   const s = await db.get("seances", id);
   if (!s) throw new Error("Séance introuvable");
@@ -151,8 +168,65 @@ export async function majSeance(id: string, patch: Partial<Seance>) {
 }
 
 export async function supprimerSeance(id: string) {
+  await copieDuJour();
   await (await ouvrir()).delete("seances", id);
   prevenir();
+}
+
+/* ---------- copies de sécurité ---------- */
+
+let jourCopie: string | null = null;     // jour de la dernière copie faite ou vérifiée : évite de relire la base à chaque écriture
+
+/* Une copie par jour, faite avant le premier changement de la journée (ou à l'ouverture de l'appli) :
+   elle garde donc l'état de la veille au soir. Les plus anciennes au-delà de 7 s'effacent. */
+export async function copieDuJour(jour = isoDay(new Date())): Promise<boolean> {
+  if (jourCopie === jour) return false;
+  const db = await ouvrir();
+  if (await db.getKey("copies", jour)) { jourCopie = jour; return false; }
+  const donnees = await tout();
+  jourCopie = jour;
+  if (!donnees.dossiers.length && !donnees.seances.length) return false;   // rien à garder
+  await db.put("copies", { id: jour, cree: new Date().toISOString(), donnees, taille: JSON.stringify(donnees).length });
+  const jours = (await db.getAllKeys("copies")).filter(k => k !== AVANT_RETOUR).sort().reverse();
+  for (const k of jours.slice(COPIES_GARDEES)) await db.delete("copies", k);
+  await nettoyerFichiers();
+  return true;
+}
+
+/* les copies, la plus récente d'abord (celle d'avant un retour en arrière en tête) */
+export async function listeCopies(): Promise<Copie[]> {
+  const copies = await (await ouvrir()).getAll("copies");
+  return copies.sort((a, b) => a.id === AVANT_RETOUR ? -1 : b.id === AVANT_RETOUR ? 1 : b.id.localeCompare(a.id));
+}
+
+/* Remet la base dans l'état d'une copie. L'état actuel est d'abord gardé (AVANT_RETOUR) : le retour peut être annulé. */
+export async function revenirA(id: string) {
+  const db = await ouvrir();
+  const copie = await db.get("copies", id);
+  if (!copie) throw new Error("Copie introuvable");
+  const actuel = await tout();
+  const tx = db.transaction(["dossiers", "bilans", "seances", "copies"], "readwrite");
+  if (id !== AVANT_RETOUR) await tx.objectStore("copies").put({ id: AVANT_RETOUR, cree: new Date().toISOString(), donnees: actuel, taille: JSON.stringify(actuel).length });
+  else await tx.objectStore("copies").delete(AVANT_RETOUR);   // annuler le retour : la copie « avant » a servi
+  for (const nom of ["dossiers", "bilans", "seances"] as const) await tx.objectStore(nom).clear();
+  for (const d of copie.donnees.dossiers) await tx.objectStore("dossiers").put(d);
+  for (const b of copie.donnees.bilans) await tx.objectStore("bilans").put(b);
+  for (const s of copie.donnees.seances) await tx.objectStore("seances").put(s);
+  await tx.done;
+  await nettoyerFichiers();
+  prevenir();
+}
+
+/* Efface les PDF et photos auxquels plus aucun bilan ni aucune copie ne renvoie. */
+async function nettoyerFichiers() {
+  const db = await ouvrir();
+  const tx = db.transaction(["bilans", "copies", "fichiers"], "readwrite");
+  const gardes = new Set<string>();
+  const garder = (bilans: Bilan[]) => bilans.forEach(b => b.fichiers.forEach(f => gardes.add(f.id)));
+  garder(await tx.objectStore("bilans").getAll());
+  (await tx.objectStore("copies").getAll()).forEach(c => garder(c.donnees.bilans));
+  for (const k of await tx.objectStore("fichiers").getAllKeys()) if (!gardes.has(k)) await tx.objectStore("fichiers").delete(k);
+  await tx.done;
 }
 
 /* ---------- réglages ---------- */

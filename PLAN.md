@@ -24,7 +24,7 @@ Hors V1 : téléphone, tout ce qui figure dans « Idées pour la suite » du CLA
 | 4 | Ordre | D'abord à l'identique, puis les idées une par une |
 | 5 | Installation | Appli web installable (« Ajouter à l'écran d'accueil »), code publié sur Railway, aucune donnée patient en ligne |
 | 6 | IA | Compte API Anthropic à l'usage, avec plafond mensuel bas ; clé saisie dans les Paramètres |
-| 7 | Sauvegarde | Fichier chiffré par mot de passe, rappel hebdomadaire ; copies automatiques internes à la tablette |
+| 7 | Sauvegarde | Copies automatiques internes à la tablette (7 jours). Fichier externe chiffré abandonné pour l'instant (11 octobre 2026) |
 
 ## 3. Architecture
 

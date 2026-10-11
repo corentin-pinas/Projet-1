@@ -1,6 +1,6 @@
 # CLAUDE.md — Appli de suivi patients (kinésithérapie)
 
-> **Point de reprise le plus récent : `REPRISE.md`** (état au 10 octobre 2026, décisions, prochaines étapes).
+> **Point de reprise le plus récent : `REPRISE.md`** (état au 11 octobre 2026, décisions, prochaines étapes).
 
 Contexte repris du travail fait dans claude.ai (projet « Gestion Patient assistée »), le 2 octobre 2026.
 Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essai : `reference/bilans-seances-essai.html`.
@@ -178,4 +178,5 @@ Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; «
 - Confidentialité : en mode abonnement, le bilan ou le texte de séance transite par le serveur Railway (en mémoire, le temps de la demande, jamais écrit sur disque) avant d'aller chez Anthropic.
 - Clé API : secours, verrouillée par défaut (`api_autorisee`), choisie par `mode_ia`. Réglages dans `src/reglages-ia.ts`.
 - Les tests d'écran simulent l'API Anthropic (`page.route`) et Claude Code (`tests/faux/claude.mjs`, via `CLAUDE_BIN`) : aucune vraie requête n'est faite dans les tests.
+- Copies de sécurité (version 0.5.0) : store `copies` (base version 3), une par jour avant le premier changement, 7 gardées, texte seulement ; fichiers gardés tant qu'un bilan ou une copie y renvoie ; retour en arrière annulable (`avant-retour`). Écran dans `src/copies.ts`. Pas de fichier externe ni de mot de passe pour l'instant (décision du 11 octobre 2026).
 - Avant chaque envoi : `npm test` et `npm run test:e2e` doivent passer.

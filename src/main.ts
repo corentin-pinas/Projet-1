@@ -2,6 +2,7 @@ import "./styles.css";
 import { registerSW } from "virtual:pwa-register";
 import { demarrer, rafraichirIA } from "./app";
 import * as db from "./db";
+import { afficherCopies, brancherCopies, surveillerCopies } from "./copies";
 import { configIA } from "./moteur";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
 import { toast, esc } from "./ui";
@@ -53,13 +54,14 @@ async function afficherEtat() {
       <div><b>${esc(x.titre)}</b><span>${esc(x.detail)}</span></div>
     </li>`).join("");
   $("#persist").hidden = etat.stockageProtege !== false || protectionRefusee;
-  if ($<HTMLDialogElement>("#etatdlg").open) await afficherIA();
+  if ($<HTMLDialogElement>("#etatdlg").open) await Promise.all([afficherIA(), afficherCopies()]);
   const reste = v.filter(x => !x.ok).length;
   $("#etatbtn").classList.toggle("alerte", reste > 0);
   $("#etattxt").textContent = reste ? `État de l'appli : ${reste} point${reste > 1 ? "s" : ""} à voir` : "État de l'appli";
   return v;
 }
 
+brancherCopies();
 brancherReglagesIA(async () => { await afficherEtat(); rafraichirIA(); });
 
 async function demanderProtection() {
@@ -92,6 +94,7 @@ matchMedia("(display-mode: standalone)").addEventListener("change", afficherEtat
   afficherEtat();
 })();
 
+surveillerCopies();
 demarrer().catch(() => {
   $("#list").innerHTML = `<div class="note">Vos données n'ont pas pu être chargées. Fermez l'appli et rouvrez-la.</div>`;
 });

@@ -43,18 +43,20 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 | 1 | Socle installable, hors-connexion | Fait |
 | 2 | Reproduction de la version d'essai | Fait |
 | 3 | IA branchée (abonnement, stylet, niveaux d'IA) | Fait, en usage |
-| 4 | **Sauvegarde** | **Prochaine, en attente du « go » de Corentin** |
+| 4 | Sauvegarde interne (copies de sécurité) | Faite (0.5.0), à valider sur la tablette |
 | 5 | Dictée groupée | À faire |
 | 6 | Agenda | À faire (maquette validée, deux questions ouvertes) |
 | 7 | Transmissions en PDF | À faire |
 | 8 | Ses autres idées, une par une | Plus tard |
 
-## Étape 4 — sauvegarde (conception validée par Corentin)
+## Étape 4 — sauvegarde (version 0.5.0, 11 octobre 2026)
 
-- **Copie automatique chaque jour** dans la tablette, **texte seulement** (dossiers, bilans sans leurs fichiers, résumés, séances, rendez-vous, corrections). **Rotation : 7 copies gardées, la plus ancienne effacée automatiquement.** Place occupée affichée dans « État de l'appli ». Sert à revenir en arrière après une fausse manœuvre.
-- **Fichier hebdomadaire complet** (texte + PDF et photos des bilans) : compressé puis chiffré (AES-GCM, clé dérivée du mot de passe, PBKDF2) avec un **mot de passe choisi par Corentin** (s'il le perd, la sauvegarde est perdue : le lui dire). Nom du type `mes-patients-AAAA-MM-JJ.sauvegarde`. Envoi par le menu de partage Android (Web Share API avec fichier : Drive, messagerie…). Un **bandeau de rappel** apparaît si la dernière sauvegarde a plus de 7 jours.
-- **Restauration** depuis le fichier + mot de passe, sur une tablette neuve, testée de bout en bout avant livraison.
-- Taille annoncée : 1 à 3 Mo par bilan, ~50 Mo à 3 mois, quelques centaines de Mo à un an. Plus tard si besoin : sauvegarde des seules nouveautés.
+- **Décision du 11 octobre** : sauvegarde **interne à la tablette seulement**. Pas de fichier sur Drive pour l'instant, donc **pas de mot de passe** (chiffrer une copie rangée à côté des données ne protège rien). Corentin accepte le risque de tout perdre si la tablette est perdue ou cassée : la future version PC aura sa propre sauvegarde à deux endroits.
+- **Copie automatique chaque jour** (store `copies`, base en version 3), faite avant le premier changement de la journée ou à l'ouverture : elle garde l'état de la veille au soir. Texte seulement (dossiers, bilans, séances ; pas les réglages). **7 copies gardées**, la plus ancienne effacée.
+- Les PDF et photos ne sont pas recopiés : un fichier reste gardé tant qu'un bilan ou une copie y renvoie (`nettoyerFichiers` dans `src/db.ts`). Un bilan supprimé par erreur revient donc avec son PDF.
+- **Retour en arrière** dans « État de l'appli », partie « Copies de sécurité » (`src/copies.ts`) : « Revenir à cette copie ». L'état actuel est d'abord gardé (`avant-retour`), ce qui permet « Annuler le retour en arrière ».
+- Non testé sur la vraie tablette. Limite assumée : effacer les données de Chrome ou désinstaller l'appli efface aussi les copies.
+- Fichier externe chiffré (conception d'origine : AES-GCM, PBKDF2, partage Android) : abandonné pour l'instant, à reprendre si besoin avant le passage au PC.
 
 ## Étape 6 — agenda (maquette validée)
 
@@ -79,5 +81,5 @@ Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à 
 ## Pour reprendre
 
 1. Lire `CLAUDE.md`, `PLAN.md` et ce fichier.
-2. Attendre le « go » de Corentin, puis coder la sauvegarde (étape 4) selon la conception ci-dessus. Mettre `npm test` et `npm run test:e2e` au vert, monter la version (0.5.0), pousser sur la branche de travail, mettre à jour la carte du projet.
+2. Sauvegarde interne faite (0.5.0) sur la branche `ccr-53b733ac-e4ek55` ; à passer sur la branche de production avec l'accord de Corentin, puis à valider sur la tablette. Prochaine étape : dictée groupée.
 3. Lui redemander ses horaires et son accord sur la création de patient depuis l'agenda.
