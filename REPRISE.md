@@ -43,7 +43,7 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 | 1 | Socle installable, hors-connexion | Fait |
 | 2 | Reproduction de la version d'essai | Fait |
 | 3 | IA branchée (abonnement, stylet, niveaux d'IA) | Fait, en usage |
-| 4 | Sauvegarde interne (copies de sécurité) | Faite (0.5.0), à valider sur la tablette |
+| 4 | Sauvegarde interne (copies de sécurité) | Faite (0.5.0), en production depuis le 25 octobre, à valider sur la tablette |
 | 5 | Dictée groupée | À faire |
 | 6 | Agenda | À faire (maquette validée, deux questions ouvertes) |
 | 7 | Transmissions en PDF | À faire |
@@ -81,5 +81,5 @@ Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à 
 ## Pour reprendre
 
 1. Lire `CLAUDE.md`, `PLAN.md` et ce fichier.
-2. Sauvegarde interne faite (0.5.0) sur la branche `ccr-53b733ac-e4ek55` ; à passer sur la branche de production avec l'accord de Corentin, puis à valider sur la tablette. Prochaine étape : dictée groupée.
+2. Sauvegarde interne faite (0.5.0) , en production depuis le 25 octobre 2026 ; à valider sur la tablette. Question ouverte : copie « hors de Chrome » dans Téléchargements. Prochaine étape : dictée groupée.
 3. Lui redemander ses horaires et son accord sur la création de patient depuis l'agenda.
