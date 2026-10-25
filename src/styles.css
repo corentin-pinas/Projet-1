@@ -158,6 +158,8 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 .secours summary{cursor:pointer;color:var(--soft);padding:6px 0}
 .secours[open]{display:grid;gap:8px}
 .sansmarge{margin:0}
+.sform input[type=password]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-height:44px;width:100%;max-width:420px}
+.sform p{margin:0}
 .copies{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .copies li{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
 .copies li.avant{border-color:var(--accent);background:var(--accent-bg)}

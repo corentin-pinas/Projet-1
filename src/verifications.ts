@@ -9,10 +9,12 @@ export type EtatAppareil = {
   protectionRefusee: boolean;  // la protection a été demandée et le navigateur a dit non
   brave: boolean;
   cleIA: boolean;              // l'IA est réglée (abonnement ou clé API autorisée)
+  aDesDonnees: boolean;        // au moins un patient dans l'appli
+  joursCopieExterne: number | null; // jours depuis la dernière copie hors de Chrome (null : jamais)
 };
 
 export type Verification = {
-  id: "installee" | "hors-connexion" | "stockage" | "espace" | "ia";
+  id: "installee" | "hors-connexion" | "stockage" | "espace" | "ia" | "copie-externe";
   titre: string;
   ok: boolean;
   detail: string;
@@ -23,6 +25,10 @@ export function formatOctets(n: number): string {
   if (n >= 1e6) return Math.round(n / 1e6).toLocaleString("fr-FR") + " Mo";
   return Math.max(0, Math.round(n / 1e3)).toLocaleString("fr-FR") + " ko";
 }
+
+/* rappel : une copie hors de Chrome par semaine */
+export const JOURS_ENTRE_COPIES = 7;
+const ilYA = (j: number) => j <= 0 ? "aujourd'hui" : j === 1 ? "hier" : `il y a ${j} jours`;
 
 /* Un bilan PDF scanné pèse en général entre 1 et 5 Mo : 500 Mo laisse de la marge pour des centaines de bilans. */
 const ESPACE_CONFORTABLE = 500e6;
@@ -74,6 +80,16 @@ export function verifications(e: EtatAppareil): Verification[] {
       detail: e.cleIA
         ? "Les bilans se résument tout seuls et les séances sont mises au propre."
         : "Réglez l'IA ci-dessous : code d'accès au serveur, puis connexion de votre abonnement Claude."
+    },
+    {
+      id: "copie-externe",
+      titre: "Copie hors de Chrome",
+      ok: !e.aDesDonnees || (e.joursCopieExterne !== null && e.joursCopieExterne <= JOURS_ENTRE_COPIES),
+      detail: e.joursCopieExterne !== null
+        ? `Dernière copie ${ilYA(e.joursCopieExterne)}, dans « Téléchargements ».${e.joursCopieExterne > JOURS_ENTRE_COPIES ? " Touchez « Copier hors de Chrome », plus bas, pour en refaire une." : ""}`
+        : e.aDesDonnees
+          ? "Pas encore faite. Touchez « Copier hors de Chrome », plus bas : elle protège vos bilans si les données de Chrome étaient effacées."
+          : "Rien à copier pour l'instant."
     }
   ];
 }

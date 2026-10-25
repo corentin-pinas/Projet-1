@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatOctets, verifications, type EtatAppareil } from "./verifications";
 
-const tout: EtatAppareil = { installee: true, horsConnexionPret: true, stockageProtege: true, espaceLibre: 8e9, protectionRefusee: false, brave: false, cleIA: true };
+const tout: EtatAppareil = { installee: true, horsConnexionPret: true, stockageProtege: true, espaceLibre: 8e9, protectionRefusee: false, brave: false, cleIA: true, aDesDonnees: true, joursCopieExterne: 2 };
 
 describe("formatOctets", () => {
   it("écrit les tailles à la française", () => {
@@ -52,5 +52,13 @@ describe("IA", () => {
     const v = verifications({ ...tout, cleIA: false }).find(v => v.id === "ia")!;
     expect(v.ok).toBe(false);
     expect(v.detail).toContain("abonnement Claude");
+  });
+
+  it("rappelle la copie hors de Chrome après une semaine, pas avant", () => {
+    const v = (j: number | null, aDesDonnees = true) => verifications({ ...tout, joursCopieExterne: j, aDesDonnees }).find(v => v.id === "copie-externe")!;
+    expect(v(7).ok).toBe(true);
+    expect(v(8)).toMatchObject({ ok: false, detail: expect.stringContaining("il y a 8 jours") });
+    expect(v(null).ok).toBe(false);
+    expect(v(null, false).ok).toBe(true);    // appli vide : rien à copier
   });
 });

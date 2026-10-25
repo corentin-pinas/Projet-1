@@ -43,7 +43,7 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 | 1 | Socle installable, hors-connexion | Fait |
 | 2 | Reproduction de la version d'essai | Fait |
 | 3 | IA branchée (abonnement, stylet, niveaux d'IA) | Fait, en usage |
-| 4 | Sauvegarde interne (copies de sécurité) | Faite (0.5.0), en production depuis le 25 octobre, à valider sur la tablette |
+| 4 | Sauvegarde : copies internes (0.5.0, en production) + copie hors de Chrome (0.5.1) | Faite, à valider sur la tablette |
 | 5 | Dictée groupée | À faire |
 | 6 | Agenda | À faire (maquette validée, deux questions ouvertes) |
 | 7 | Transmissions en PDF | À faire |
@@ -56,7 +56,8 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 - Les PDF et photos ne sont pas recopiés : un fichier reste gardé tant qu'un bilan ou une copie y renvoie (`nettoyerFichiers` dans `src/db.ts`). Un bilan supprimé par erreur revient donc avec son PDF.
 - **Retour en arrière** dans « État de l'appli », partie « Copies de sécurité » (`src/copies.ts`) : « Revenir à cette copie ». L'état actuel est d'abord gardé (`avant-retour`), ce qui permet « Annuler le retour en arrière ».
 - Non testé sur la vraie tablette. Limite assumée : effacer les données de Chrome ou désinstaller l'appli efface aussi les copies.
-- Fichier externe chiffré (conception d'origine : AES-GCM, PBKDF2, partage Android) : abandonné pour l'instant, à reprendre si besoin avant le passage au PC.
+- **Copie hors de Chrome (version 0.5.1, 25 octobre 2026, demandée par Corentin)** : bouton « Copier hors de Chrome » qui télécharge un fichier complet (texte + PDF et photos) dans « Téléchargements », `mes-patients-AAAA-MM-JJ.sauvegarde`. Chiffré (AES-GCM 256, clé PBKDF2 SHA-256 600 000 tours, morceau par morceau : `src/fichier-copie.ts`) avec un mot de passe choisi une fois et **retenu par la tablette** (option 1 choisie par Corentin), à noter sur papier. Survit à un effacement des données de Chrome, pas à la perte de la tablette. Pas de Drive. Rappel : la ligne « Copie hors de Chrome » de « État de l'appli » passe en orange après 7 jours. « Restaurer depuis un fichier » : essaie le mot de passe retenu, sinon le demande ; l'état actuel est gardé (annulable).
+- Non testé sur la vraie tablette : le téléchargement depuis l'appli installée et le choix du fichier à restaurer dans le sélecteur Android.
 
 ## Étape 6 — agenda (maquette validée)
 
@@ -81,5 +82,5 @@ Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à 
 ## Pour reprendre
 
 1. Lire `CLAUDE.md`, `PLAN.md` et ce fichier.
-2. Sauvegarde interne faite (0.5.0) , en production depuis le 25 octobre 2026 ; à valider sur la tablette. Question ouverte : copie « hors de Chrome » dans Téléchargements. Prochaine étape : dictée groupée.
+2. Sauvegarde interne faite (0.5.0) , en production depuis le 25 octobre 2026. Copie hors de Chrome faite (0.5.1) sur `ccr-53b733ac-e4ek55`, à passer en production avec l'accord de Corentin. À valider sur la tablette. Prochaine étape : dictée groupée.
 3. Lui redemander ses horaires et son accord sur la création de patient depuis l'agenda.

@@ -201,20 +201,48 @@ export async function listeCopies(): Promise<Copie[]> {
 
 /* Remet la base dans l'état d'une copie. L'état actuel est d'abord gardé (AVANT_RETOUR) : le retour peut être annulé. */
 export async function revenirA(id: string) {
-  const db = await ouvrir();
-  const copie = await db.get("copies", id);
+  const copie = await (await ouvrir()).get("copies", id);
   if (!copie) throw new Error("Copie introuvable");
+  await remplacer(copie.donnees, [], id !== AVANT_RETOUR);
+}
+
+/* Remplace dossiers, bilans et séances (les fichiers donnés sont ajoutés). garderActuel : l'état actuel devient AVANT_RETOUR ;
+   sinon (annulation d'un retour) la copie AVANT_RETOUR a servi et disparaît. */
+async function remplacer(donnees: Donnees, fichiers: { id: string; blob: Blob }[], garderActuel: boolean) {
+  const db = await ouvrir();
   const actuel = await tout();
-  const tx = db.transaction(["dossiers", "bilans", "seances", "copies"], "readwrite");
-  if (id !== AVANT_RETOUR) await tx.objectStore("copies").put({ id: AVANT_RETOUR, cree: new Date().toISOString(), donnees: actuel, taille: JSON.stringify(actuel).length });
-  else await tx.objectStore("copies").delete(AVANT_RETOUR);   // annuler le retour : la copie « avant » a servi
+  const tx = db.transaction(["dossiers", "bilans", "seances", "copies", "fichiers"], "readwrite");
+  if (garderActuel) await tx.objectStore("copies").put({ id: AVANT_RETOUR, cree: new Date().toISOString(), donnees: actuel, taille: JSON.stringify(actuel).length });
+  else await tx.objectStore("copies").delete(AVANT_RETOUR);
+  for (const f of fichiers) await tx.objectStore("fichiers").put(f);
   for (const nom of ["dossiers", "bilans", "seances"] as const) await tx.objectStore(nom).clear();
-  for (const d of copie.donnees.dossiers) await tx.objectStore("dossiers").put(d);
-  for (const b of copie.donnees.bilans) await tx.objectStore("bilans").put(b);
-  for (const s of copie.donnees.seances) await tx.objectStore("seances").put(s);
+  for (const d of donnees.dossiers) await tx.objectStore("dossiers").put(d);
+  for (const b of donnees.bilans) await tx.objectStore("bilans").put(b);
+  for (const s of donnees.seances) await tx.objectStore("seances").put(s);
   await tx.done;
   await nettoyerFichiers();
   prevenir();
+}
+
+/* ---------- copie hors de Chrome (fichier complet) ---------- */
+
+export type Export = { donnees: Donnees; fichiers: { id: string; blob: Blob }[] };
+
+/* tout ce qu'il faut pour reconstruire l'appli ailleurs : le texte et les fichiers des bilans actuels (pas les réglages) */
+export async function exporter(): Promise<Export> {
+  const db = await ouvrir();
+  const donnees = await tout();
+  const fichiers: Export["fichiers"] = [];
+  for (const b of donnees.bilans) for (const f of b.fichiers) {
+    const blob = (await db.get("fichiers", f.id))?.blob;
+    if (blob) fichiers.push({ id: f.id, blob });
+  }
+  return { donnees, fichiers };
+}
+
+/* restauration depuis le fichier : l'état actuel est gardé, « Annuler le retour en arrière » le remet */
+export async function importer(e: Export) {
+  await remplacer(e.donnees, e.fichiers, true);
 }
 
 /* Efface les PDF et photos auxquels plus aucun bilan ni aucune copie ne renvoie. */

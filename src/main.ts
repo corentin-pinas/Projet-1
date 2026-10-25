@@ -2,7 +2,7 @@ import "./styles.css";
 import { registerSW } from "virtual:pwa-register";
 import { demarrer, rafraichirIA } from "./app";
 import * as db from "./db";
-import { afficherCopies, brancherCopies, surveillerCopies } from "./copies";
+import { afficherCopies, brancherCopies, joursDepuis, PARAM_COPIE_EXTERNE, surveillerCopies } from "./copies";
 import { configIA } from "./moteur";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
 import { toast, esc } from "./ui";
@@ -39,9 +39,13 @@ async function lireEtat(): Promise<EtatAppareil> {
       if (e.quota != null) espaceLibre = e.quota - (e.usage ?? 0);
     }
   } catch { /* pas de réponse */ }
-  let cleIA = false;
+  let cleIA = false, aDesDonnees = false, joursCopieExterne: number | null = null;
   try { cleIA = !!(await configIA()); } catch { /* base indisponible */ }
-  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave, cleIA };
+  try {
+    aDesDonnees = (await db.tout()).dossiers.length > 0;
+    joursCopieExterne = joursDepuis(await db.lireParametre<string>(PARAM_COPIE_EXTERNE));
+  } catch { /* base indisponible */ }
+  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave, cleIA, aDesDonnees, joursCopieExterne };
 }
 
 /* Le bouton « État de l'appli » en bas de la liste devient orange dès qu'un point demande attention. */
@@ -61,7 +65,7 @@ async function afficherEtat() {
   return v;
 }
 
-brancherCopies();
+brancherCopies(afficherEtat);
 brancherReglagesIA(async () => { await afficherEtat(); rafraichirIA(); });
 
 async function demanderProtection() {

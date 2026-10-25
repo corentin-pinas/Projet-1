@@ -69,6 +69,25 @@
     <p class="note">Une copie par jour, faite toute seule et gardée 7 jours dans cette tablette. Elle permet de revenir en arrière après une fausse manœuvre (un bilan supprimé par erreur, par exemple). Elle ne protège pas contre la perte de la tablette.</p>
     <p class="sansmarge" id="copiesetat"></p>
     <ul class="copies" id="copies"></ul>
+    <h4>Copie hors de Chrome</h4>
+    <p class="note">Un fichier complet, bilans PDF compris, protégé par un mot de passe et rangé dans « Téléchargements ». Il reste là si les données de Chrome sont effacées. Il ne protège pas contre la perte de la tablette. À refaire chaque semaine : la ligne « Copie hors de Chrome », en haut, passe en orange quand c'est le moment.</p>
+    <p class="sansmarge" id="extetat"></p>
+    <div class="row">
+      <button class="primary" id="extcopier">Copier hors de Chrome</button>
+      <button id="extrestaurer">Restaurer depuis un fichier</button>
+    </div>
+    <input type="file" id="extfichier" hidden>
+    <div class="sform" id="mdpform" hidden>
+      <p><b>Choisissez le mot de passe des copies.</b> L'appli le retient pour les prochaines fois. <b>Notez-le sur papier</b> : si les données de Chrome sont effacées, il faudra le taper pour restaurer. Sans lui, la copie ne s'ouvre pas, pour personne.</p>
+      <input type="password" id="mdp1" placeholder="Mot de passe (8 caractères au moins)" autocomplete="new-password" aria-label="Mot de passe des copies">
+      <input type="password" id="mdp2" placeholder="Le même, une deuxième fois" autocomplete="new-password" aria-label="Mot de passe, une deuxième fois">
+      <div class="row"><button class="primary" id="mdpok">Enregistrer et copier</button><button id="mdpannuler">Annuler</button></div>
+    </div>
+    <div class="sform" id="restform" hidden>
+      <p id="restinfo">Tapez le mot de passe des copies.</p>
+      <input type="password" id="restmdp" placeholder="Mot de passe des copies" autocomplete="current-password" aria-label="Mot de passe de la copie">
+      <div class="row"><button class="primary" id="restok">Ouvrir la copie</button><button id="restannuler">Annuler</button></div>
+    </div>
   </section>
   <div class="actions">
     <button class="primary" id="persist" hidden>Protéger mes données</button>

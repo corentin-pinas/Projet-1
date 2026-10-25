@@ -160,3 +160,20 @@ describe("copies de sécurité", () => {
     expect(copie.donnees.seances).toHaveLength(0);
   });
 });
+
+describe("copie hors de Chrome", () => {
+  it("exporter puis importer sur une tablette neuve rend tout, fichiers compris", async () => {
+    const b = await db.ajouterBilan([pdf("Bilan - Paul ROUX.pdf")]);
+    await db.ajouterSeance(b.dossierId, "2026-10-01", "massage");
+    const e = await db.exporter();
+    expect(e.fichiers).toHaveLength(1);
+
+    await db.fermer();
+    globalThis.indexedDB = new IDBFactory();          // tablette neuve
+    await db.importer(e);
+    const { dossiers, bilans, seances } = await db.tout();
+    expect([dossiers.length, bilans.length, seances.length]).toEqual([1, 1, 1]);
+    expect(await (await db.fichierBlob(b.fichiers[0].id))!.text()).toBe("%PDF-1.4");
+    expect((await db.listeCopies()).map(c => c.id)).toEqual([db.AVANT_RETOUR]);   // l'import peut s'annuler
+  });
+});
