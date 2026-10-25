@@ -48,6 +48,8 @@ input:disabled{opacity:.6}
 
 /* liste */
 .list{overflow-y:auto;flex:1;min-height:120px;display:flex;flex-direction:column;gap:2px;padding:6px}
+/* la liste défile : ses lignes gardent leur hauteur au lieu de se tasser (et de se chevaucher) quand il y a beaucoup de patients */
+.list>*{flex-shrink:0}
 .list .note{padding:10px}
 .item{display:block;width:100%;text-align:left;border:0;border-radius:10px;background:transparent;padding:10px 12px;min-height:0}
 .item:hover{background:var(--bg)}

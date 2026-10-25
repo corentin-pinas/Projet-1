@@ -91,3 +91,15 @@ test("la recherche filtre la liste", async ({ page }) => {
   await expect(page.locator("#list .item")).toHaveCount(1);
   await expect(page.locator("#list .item")).toContainText("Paul R.");
 });
+
+test("une longue liste défile sans que les patients se chevauchent (tablette 1000 × 625)", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 625 });
+  await page.goto("/");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  const noms = ["Xavier CA", "Bruno LE", "Brigitte BA", "Claudine TO", "Chantal VI", "Daniele LO", "Elisabeth RO", "Stéphanie VA", "Sylvie FA", "Paul RU", "Marc DU", "Lucie BE"];
+  for (const n of noms) await deposer(page, [{ name: `Bilan - ${n}.png`, mimeType: "image/png", buffer: png }]);   // des photos choisies ensemble feraient un seul bilan
+  await expect(page.locator("#list .item")).toHaveCount(noms.length);
+  const boites = await page.locator("#list > *").evaluateAll(els => els.map(e => { const r = e.getBoundingClientRect(); return { haut: r.top, bas: r.bottom, plein: e.scrollHeight <= e.clientHeight + 1 }; }));
+  for (let i = 1; i < boites.length; i++) expect(boites[i].haut).toBeGreaterThanOrEqual(boites[i - 1].bas - 0.5);
+  expect(boites.every(b => b.plein)).toBe(true);
+});

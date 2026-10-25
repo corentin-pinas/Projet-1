@@ -82,5 +82,5 @@ Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à 
 ## Pour reprendre
 
 1. Lire `CLAUDE.md`, `PLAN.md` et ce fichier.
-2. Sauvegarde interne faite (0.5.0) , en production depuis le 25 octobre 2026. Copie hors de Chrome faite (0.5.1) sur `ccr-53b733ac-e4ek55`, à passer en production avec l'accord de Corentin. À valider sur la tablette. Prochaine étape : dictée groupée.
+2. Sauvegarde interne faite (0.5.0) , en production depuis le 25 octobre 2026. Copie hors de Chrome (0.5.1) et correction de la liste qui se chevauchait (0.5.2) en production le 25 octobre. À valider sur la tablette. Ensuite : dictée groupée, puis un écran Réglages (couleurs, taille du texte). Prochaine étape : dictée groupée.
 3. Lui redemander ses horaires et son accord sur la création de patient depuis l'agenda.
