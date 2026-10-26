@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 /* Mode abonnement : l'appli passe par le serveur, qui lance Claude Code. Ici Claude Code est un faux (tests/faux/claude.mjs). */
 const CODE = "code-acces-essai-123";
@@ -133,4 +134,16 @@ test("la clé API reste verrouillée tant qu'elle n'est pas autorisée", async (
   await page.getByText("Secours : clé API").click();
   await expect(page.locator("#apibloc")).toBeHidden();
   await expect(page.locator("#iacle")).toBeHidden();
+});
+
+/* à la fin : ce lancement s'ajoute au journal des appels que le test de connexion compte */
+test("le serveur reste debout si Claude Code s'arrête avant d'avoir lu un gros bilan", async ({ request }) => {
+  const marque = join(".faux-claude", "quitte-tot");
+  mkdirSync(".faux-claude", { recursive: true });
+  writeFileSync(marque, "1");
+  try {
+    const r = await request.post("/api/ia/travail", { headers: { Authorization: "Bearer " + CODE }, data: { system: "x", contenu: [{ type: "text", text: "bilan ".repeat(3_000_000) }], schema: { type: "object" }, effort: "low" } });
+    expect(r.status()).toBe(502);
+  } finally { rmSync(marque, { force: true }); }
+  expect((await request.get("/api/ia/etat", { headers: { Authorization: "Bearer " + CODE } })).status()).toBe(200);
 });

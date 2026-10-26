@@ -30,6 +30,8 @@ if (args[0] === "auth" && args[1] === "login") {
       console.log("Invalid code."); process.exit(1);
     }
   });
+} else if (args[0] === "-p" && existsSync(join(dir, "quitte-tot"))) {
+  process.exit(1);   // imite un Claude Code qui s'arrête avant d'avoir lu la demande (connexion expirée, quota…)
 } else if (args[0] === "-p") {
   const entree = JSON.parse((await lireTout()).trim().split("\n")[0]);
   const contenu = entree.message.content;

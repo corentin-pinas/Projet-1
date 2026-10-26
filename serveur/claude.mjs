@@ -33,12 +33,17 @@ function environnement() {
   return env;
 }
 
+/* Si Claude Code s'arrête avant d'avoir tout lu (connexion expirée, quota, erreur), l'écriture sur son entrée échoue (EPIPE).
+   Sans écouteur, cette erreur arrêtait tout le serveur ; la fin du processus est déjà traitée par « close ». */
+const ignorerTuyauCasse = p => p.stdin.on("error", () => {});
+
 /* Lance une commande claude et renvoie sa sortie (pour --version, auth status, logout). */
 function executer(args, { entree = "", delai = 20_000 } = {}) {
   return new Promise(resolve => {
     const bin = trouverClaude();
     if (!bin) return resolve({ code: -1, sortie: "", erreurs: "Claude Code n'est pas installé." });
     const p = spawn(bin, args, { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
+    ignorerTuyauCasse(p);
     let sortie = "", erreurs = "";
     p.stdout.on("data", d => sortie += d);
     p.stderr.on("data", d => erreurs += d);
@@ -83,6 +88,7 @@ export function demarrerConnexion() {
     if (!bin) return resolve({ erreur: "Claude Code n'est pas installé sur le serveur." });
     if (connexion) tuer(connexion.p);
     const p = spawn(bin, ["auth", "login", "--claudeai"], { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
+    ignorerTuyauCasse(p);
     const c = { p, texte: "", fini: null, lien: null };
     let t;
     connexion = c;
@@ -159,6 +165,7 @@ function lancer({ system, contenu, schema, effort, modele = "opus" }) {
       "--no-session-persistence"
     ];
     const p = spawn(bin, args, { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
+    ignorerTuyauCasse(p);
     let tampon = "", resultat = null, erreurs = "";
     const lire = ligne => {
       if (!ligne.trim()) return;
