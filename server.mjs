@@ -109,7 +109,7 @@ async function api(req, res, chemin) {
   }
 }
 
-createServer(async (req, res) => {
+const serveur = createServer(async (req, res) => {
   let chemin;
   try { chemin = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname); }
   catch { res.writeHead(400, securite).end(); return; }
@@ -133,3 +133,15 @@ createServer(async (req, res) => {
   });
   res.end(req.method === "HEAD" ? undefined : trouve.contenu);
 }).listen(port, "0.0.0.0", () => console.log(`Appli servie sur le port ${port}`));
+
+/* Railway arrête l'ancienne version (SIGTERM) quand la nouvelle est en ligne : c'est un arrêt normal.
+   On finit proprement et on sort sans erreur, sinon Railway le prend pour un plantage et envoie un mail. */
+let arret = false;
+for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => {
+  if (arret) return;
+  arret = true;
+  console.log("Arrêt demandé : fin propre du serveur.");
+  claude.arreterTout();
+  serveur.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5_000).unref();   // les connexions encore ouvertes n'empêchent pas l'arrêt
+});
