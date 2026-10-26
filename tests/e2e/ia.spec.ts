@@ -135,3 +135,53 @@ test("la séance dictée est mise au propre et le rendez-vous dicté se place to
   expect(envoiSeance.model).toBe("claude-sonnet-5-5");
   expect(envois.find(e => e !== envoiSeance)!.model).toBe("claude-opus-5-5");
 });
+
+test("une correction « à vérifier » est reportée dans le résumé, sans rien changer d'autre", async ({ page }) => {
+  const RESUME_DATE = { ...RESUME, date_bilan: "12/10/2028", a_verifier: ["Date du bilan lue 12/10/2028 : le 6 est peut-être mal écrit", "« RE2 » lu « 30° »"] };
+  await simulerIA(page, { bilan: RESUME_DATE });
+  const corrections: string[] = [];
+  await page.route("https://api.anthropic.com/v1/messages**", async route => {
+    const corps = route.request().postDataJSON() as Envoi;
+    const texte = corps.messages[0].content.map(b => b.text ?? "").join("");
+    if (!texte.includes("Reporte chaque correction")) return route.fallback();
+    corrections.push(texte);
+    return route.fulfill({ json: message({ ...RESUME_DATE, date_bilan: "12/10/2026", a_verifier: [] }) });
+  });
+  await page.goto("/");
+  await enregistrerCle(page);
+  await page.locator("#file").setInputFiles([{ name: "Fiche Bilan Épaule - Marie-Laure DUPONT.pdf", mimeType: "application/pdf", buffer: await fairePdf(page) }]);
+  await expect(page.locator("#main h2")).toHaveText("Marie-Laure D.");
+  await expect(page.locator("#main .meta").first()).toContainText("bilan du 12/10/2028", { timeout: 15_000 });
+
+  const point = page.locator(".vitem", { hasText: "Date du bilan" });
+  await point.getByRole("button", { name: "Corriger" }).click();
+  await point.getByLabel("Correction").fill("12/10/2026");
+  await point.getByRole("button", { name: "Enregistrer" }).click();
+
+  await expect(page.locator("#main .meta").first()).toContainText("bilan du 12/10/2026", { timeout: 15_000 });
+  await expect(page.locator(".vitem")).toHaveCount(1);                  // l'autre point reste à vérifier
+  await expect(page.locator(".vitem")).toContainText("RE2");
+  await expect(page.locator(".wait")).toHaveCount(0);
+  expect(corrections).toHaveLength(1);
+  expect(corrections[0]).toContain("réponse du kiné : « 12/10/2026 »");
+
+  // la correction ne repart pas à la réouverture : elle est notée comme reportée
+  await page.reload();
+  await page.locator("#list .item", { hasText: "Marie-Laure D." }).click();
+  await expect(page.locator("#main .meta").first()).toContainText("bilan du 12/10/2026");
+  await page.waitForTimeout(1000);
+  expect(corrections).toHaveLength(1);
+});
+
+test("modifier le nom d'un patient (prénom composé mal lu)", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#file").setInputFiles([{ name: "Bilan - Laure DUPONT.pdf", mimeType: "application/pdf", buffer: await fairePdf(page) }]);
+  await page.getByRole("button", { name: "Modifier le nom" }).click();
+  await page.locator("#nomval").fill("Marie-Laure Dupont");
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("seulement l'initiale");
+  await page.locator("#nomval").fill("Marie-Laure D.");
+  await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await expect(page.locator("#main h2")).toHaveText("Marie-Laure D.");
+  await expect(page.locator("#list .item")).toContainText("Marie-Laure D.");
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyserSeance, calendrier, decouperDictee, lireDictee, promptDictee, contenuBilan, coutDollars, lireAnalyse, normaliserResume, promptSeance, resumerBilan, systemeBilan, type Appel } from "./ia";
+import { analyserSeance, corrigerResume, promptCorrection, calendrier, decouperDictee, lireDictee, promptDictee, contenuBilan, coutDollars, lireAnalyse, normaliserResume, promptSeance, resumerBilan, systemeBilan, type Appel } from "./ia";
 
 const faux = (donnees: unknown): Appel => async () => ({ donnees, usage: { entree: 1000, sortie: 500 } });
 
@@ -136,5 +136,36 @@ describe("dictée groupée", () => {
     expect(r.donnees).toHaveLength(2);
     expect(appels).toHaveLength(1);
     expect(appels[0].niveau).toBe("puissant");
+  });
+});
+
+describe("correction reportée dans le résumé", () => {
+  const resume = {
+    region: "Épaule D", date_bilan: "12/10/2028", age: 52, coup_oeil: "Douleur antérieure depuis 2 mois.",
+    chiffres: [{ label: "EVA", valeur: "5/10" }], sections: [{ titre: "Examen", items: ["Jobe +", "RE2 30°"] }],
+    a_verifier: ["Autre point encore à vérifier"]
+  };
+  const corr = [{ point: "Date lue 12/10/2028 : le 6 est peut-être mal écrit", correction: "12/10/2026" }];
+
+  it("le prompt donne le résumé, le point et la réponse du kiné, et interdit tout autre changement", () => {
+    const p = promptCorrection(resume, corr);
+    expect(p).toContain('"date_bilan":"12/10/2028"');
+    expect(p).toContain("réponse du kiné : « 12/10/2026 »");
+    expect(p).toContain("Ne change rien d'autre");
+  });
+
+  it("garde le résumé corrigé, avec les points encore à vérifier, par l'IA légère", async () => {
+    let niveau = "";
+    const appel: Appel = async req => { niveau = req.niveau; return { donnees: { ...resume, date_bilan: "12/10/2026", a_verifier: [] }, usage: { entree: 1, sortie: 1 } }; };
+    const r = await corrigerResume("cle", resume, corr, appel);
+    expect(r.donnees.date_bilan).toBe("12/10/2026");
+    expect(r.donnees.sections).toEqual(resume.sections);
+    expect(r.donnees.a_verifier).toEqual(["Autre point encore à vérifier"]);
+    expect(niveau).toBe("leger");
+  });
+
+  it("refuse un résumé corrigé qui a perdu des informations", async () => {
+    const appel: Appel = async () => ({ donnees: { ...resume, date_bilan: "12/10/2026", sections: [], chiffres: [] }, usage: { entree: 1, sortie: 1 } });
+    await expect(corrigerResume("cle", resume, corr, appel)).rejects.toThrow("pas pu être reportée");
   });
 });

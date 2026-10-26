@@ -1,7 +1,7 @@
 /* Travail de l'IA en arrière-plan : résumé automatique des bilans déposés,
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
-import { analyserSeance, appelerAbonnement, appelerClaude, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
+import { analyserSeance, appelerAbonnement, appelerClaude, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { avecRdv, avenirFrom, isoDay, jourLabel, heureFr, rattacher, rdvsAVenir, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
@@ -146,6 +146,60 @@ export async function resumerEnAttente() {
       await resumer(b.id, false);
     }
   } finally { enFile = false; }
+  corrigerEnAttente();
+}
+
+/* ---------- corrections reportées dans le résumé ---------- */
+
+export const cleCorrection = (bilanId: string) => "corr:" + bilanId;
+export const correctionsEnAttente = (b: Bilan) => b.resume ? b.corrections.filter(c => !c.appliquee) : [];
+
+/* Quand Corentin corrige un point « à vérifier », l'IA reporte la correction dans le résumé (date, chiffres, rubriques…). */
+export async function integrerCorrections(bilanId: string, manuel: boolean) {
+  const id = cleCorrection(bilanId);
+  if (enCours.has(id)) return;
+  const ia = await configIA();
+  if (!ia) { if (manuel) messages(PAS_REGLE); return; }
+  if (!navigator.onLine) { if (manuel) messages("Pas de connexion : la correction sera reportée dès que la tablette sera en ligne."); return; }
+  const b = (await db.tout()).bilans.find(x => x.id === bilanId);
+  const aFaire = b ? correctionsEnAttente(b) : [];
+  if (!b?.resume || !aFaire.length) return;
+  enCours.add(id); tentes.add(id); prevenir();
+  try {
+    const r = await corrigerResume(ia.secret, b.resume, aFaire.map(c => ({ point: c.point, correction: c.correction })), ia.appel);
+    await db.ajouterConso("seances", r.usage);
+    const actuel = (await db.tout()).bilans.find(x => x.id === bilanId);
+    if (!actuel?.resume) return;
+    const faites = new Set(aFaire.map(c => c.quand + c.point));
+    /* les points « à vérifier » ont pu changer pendant ce temps : on garde ceux du moment */
+    await db.majBilan(bilanId, {
+      resume: { ...r.donnees, a_verifier: actuel.resume.a_verifier ?? [] },
+      corrections: actuel.corrections.map(c => faites.has(c.quand + c.point) ? { ...c, appliquee: true } : c),
+      correction_erreur: undefined
+    });
+    if (manuel) messages("Correction reportée dans le résumé.");
+  } catch (e) {
+    const texte = e instanceof ErreurIA ? e.message : "Le report de la correction n'a pas abouti.";
+    try { await db.majBilan(bilanId, { correction_erreur: texte }); } catch { /* bilan supprimé entre-temps */ }
+    if (manuel) messages(texte);
+  } finally {
+    enCours.delete(id); prevenir();
+  }
+}
+
+/* corrections pas encore reportées (faites hors connexion, ou avant la version 0.6.2) : une tentative par ouverture de l'appli */
+let corrEnFile = false;
+export async function corrigerEnAttente() {
+  if (corrEnFile) return;
+  corrEnFile = true;
+  try {
+    if (!(await configIA()) || !navigator.onLine) return;
+    for (;;) {
+      const b = (await db.tout()).bilans.find(x => correctionsEnAttente(x).length && !tentes.has(cleCorrection(x.id)) && !enCours.has(cleCorrection(x.id)));
+      if (!b) break;
+      await integrerCorrections(b.id, false);
+    }
+  } finally { corrEnFile = false; }
 }
 
 /* ---------- séances ---------- */

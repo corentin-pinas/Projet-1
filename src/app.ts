@@ -16,7 +16,8 @@ let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
 let selected: string | null = null;      // bilan affiché
 let formOpen = false, editing: string | null = null, rdvOpen = false, homoOpen = false;
 let dicteeVue = false;                    // la dictée groupée occupe la partie droite
-const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue;
+let nomOpen = false;                      // modification du nom du patient en cours
+const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue || nomOpen;
 let aCle = false;                         // une clé d'IA est enregistrée
 
 const aujourdhui = () => isoDay(new Date());
@@ -85,7 +86,7 @@ function renderList() {
   }).join("");
   $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => {
     quitterDictee();
-    selected = el.dataset.id || null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
+    selected = el.dataset.id || null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
     renderList(); renderMain();
     if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
   });
@@ -113,7 +114,10 @@ export function renderMain() {
   if (!b) { $("#main").innerHTML = `<div class="empty">Choisissez un patient dans la liste, ou ajoutez un bilan.</div>`; return; }
   const r = b.resume, D = dossierDe(b), age = ageDe(D), bilans = bilansDe(D);
   const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b.fichier])].filter(Boolean).join(", ");
-  let html = `<div class="head"><div><h2>${esc(D.label)}</h2><div class="meta">${esc(meta)}</div></div>${!formOpen && !editing ? `<button class="primary dict" id="dict">Dicter la séance</button>` : ""}</div>`;
+  const titre = nomOpen
+    ? `<div class="vedit nomedit"><input type="text" id="nomval" value="${esc(D.label)}" aria-label="Nom du patient (prénom et initiale)" autocomplete="off"><button class="primary" id="nomsave">Enregistrer</button><button id="nomcancel">Annuler</button></div>`
+    : `<div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button></div>`;
+  let html = `<div class="head"><div>${titre}<div class="meta">${esc(meta)}</div></div>${!formOpen && !editing ? `<button class="primary dict" id="dict">Dicter la séance</button>` : ""}</div>`;
 
   const autre = questionHomonyme(D, donnees.dossiers, donnees.bilans);
   if (autre) {
@@ -151,6 +155,12 @@ export function renderMain() {
       if (!s.items?.length) return;
       html += `<details class="sec"${i < 2 ? " open" : ""}><summary>${esc(s.titre)}</summary><ul>${s.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></details>`;
     });
+    const enAttente = moteur.correctionsEnAttente(b).length;
+    if (enAttente) html += moteur.occupe(moteur.cleCorrection(b.id))
+      ? `<div class="wait encours">Votre correction est en train d'être reportée dans le résumé…</div>`
+      : b.correction_erreur && aCle
+        ? `<div class="wait">${enAttente > 1 ? "Vos corrections n'ont" : "Votre correction n'a"} pas pu être reportée${enAttente > 1 ? "s" : ""} dans le résumé : ${esc(b.correction_erreur)}<div class="row" style="margin-top:10px"><button class="primary" id="corrbtn">Réessayer</button></div></div>`
+        : `<div class="wait">${enAttente > 1 ? enAttente + " corrections enregistrées seront reportées" : "Votre correction est enregistrée ; elle sera reportée"} dans le résumé dès que l'IA sera disponible.</div>`;
     if (r.a_verifier?.length) html += `<div class="check"><b>À vérifier</b><ul class="vlist">${r.a_verifier.map((x, i) => `<li class="vitem" data-i="${i}"><p>${esc(x)}</p>
         <div class="vbtns"><button class="ok" data-act="ok">C'est juste</button><button data-act="fix">Corriger</button></div></li>`).join("")}</ul></div>`;
   }
@@ -161,12 +171,14 @@ export function renderMain() {
 
   wireSeances(D);
   wireRdv(D);
+  wireNom(D);
   if (autre) wireHomonyme(D, autre);
   $("#main").querySelectorAll<HTMLElement>("[data-bil]").forEach(el => el.onclick = () => {
     selected = el.dataset.bil!; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
   });
   $("#open").onclick = () => ouvrirVisionneuse(b);
   const resum = $("#resum"); if (resum) resum.onclick = () => moteur.resumer(b.id, true);
+  const corrb = $("#corrbtn"); if (corrb) corrb.onclick = () => moteur.integrerCorrections(b.id, true);
   const avb = $("#avsum"); if (avb && av) avb.onclick = () => moteur.analyser(av.s, true, false);
   $("#del").onclick = () => supprimer(b);
   $("#main").querySelectorAll<HTMLElement>(".vitem").forEach(li => {
@@ -184,6 +196,28 @@ export function renderMain() {
       d.querySelector<HTMLElement>("button:last-child")!.onclick = () => d.remove();
     };
   });
+}
+
+/* Modifier le nom affiché (prénom et initiale seulement, règle de confidentialité) */
+function wireNom(D: Dossier) {
+  const ouvrir = $("#renom");
+  if (ouvrir) ouvrir.onclick = () => { nomOpen = true; renderMain(); const i = $<HTMLInputElement>("#nomval"); i.focus(); i.select(); };
+  const annuler = $("#nomcancel");
+  if (annuler) annuler.onclick = () => { nomOpen = false; renderMain(); };
+  const save = $<HTMLButtonElement>("#nomsave");
+  if (!save) return;
+  const enregistrer = async () => {
+    const v = $<HTMLInputElement>("#nomval").value.trim().replace(/\s+/g, " ");
+    if (!v) { toast("Écrivez le prénom et l'initiale."); return; }
+    if (v.split(" ").slice(1).some(m => m.replace(/\.$/, "").length > 3)) { toast("Gardez seulement l'initiale du nom de famille (« Marie-Laure D. »)."); return; }
+    save.disabled = true;
+    nomOpen = false;
+    try { if (v !== D.label) await db.renommer(D.id, v); toast("Nom modifié."); }
+    catch { toast("L'enregistrement a échoué. Réessayez."); }
+    renderList(); renderMain();
+  };
+  save.onclick = enregistrer;
+  $<HTMLInputElement>("#nomval").onkeydown = e => { if (e.key === "Enter") enregistrer(); };
 }
 
 /* réponse à « même personne ? » : oui = on réunit les deux dossiers ; non = on ajoute la 2e lettre du nom au nouveau */
@@ -361,7 +395,11 @@ async function verifier(b: Bilan, i: number, correction: string | null) {
   const patch: Partial<Bilan> = { resume: { ...r, a_verifier: r.a_verifier!.filter((_, k) => k !== i) } };
   if (correction) patch.corrections = [...b.corrections, { point, correction, quand: new Date().toISOString() }];
   else patch.valides = [...b.valides, point];
-  try { await db.majBilan(b.id, patch); toast(correction ? "Correction enregistrée." : "Validé."); }
+  try {
+    await db.majBilan(b.id, patch);
+    toast(correction ? "Correction enregistrée. Elle est reportée dans le résumé." : "Validé.");
+    if (correction) moteur.integrerCorrections(b.id, false);
+  }
   catch { toast("L'enregistrement a échoué. Réessayez."); }
 }
 

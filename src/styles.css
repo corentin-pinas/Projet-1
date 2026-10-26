@@ -190,3 +190,8 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 .doute .cand small{font-weight:400;color:var(--soft)}
 .doute select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px;flex:1;min-width:200px}
 .doute .ignorer{justify-self:start;color:var(--soft)}
+
+/* lien discret (« Modifier le nom ») */
+button.lien{background:none;border:0;padding:4px 6px;min-height:0;font-size:.85rem;font-weight:400;color:var(--accent);text-decoration:underline;vertical-align:middle}
+.nomedit{margin-top:0}
+.titre{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}

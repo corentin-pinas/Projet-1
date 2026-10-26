@@ -23,8 +23,21 @@ describe("patientFrom", () => {
     expect(patientFrom("Fiche Bilan Épaule - Stéphanie V.pdf")).toBe("Stéphanie V.");
   });
   it("réduit un nom long en minuscules à son initiale", () => {
-    expect(patientFrom("bilan_marc_dupontel.pdf")).toBe("Bilan D."); // comme la version d'essai : sans « - », le premier mot est pris pour le prénom
+    expect(patientFrom("bilan_marc_dupontel.pdf")).toBe("Marc D.");   // sans « - », le mot « bilan » n'est pas pris pour le prénom
     expect(patientFrom("Marc Dupontel.jpg")).toBe("Marc D.");
+  });
+});
+
+describe("patientFrom : prénoms composés", () => {
+  it("garde le prénom composé en entier, avec ses majuscules", () => {
+    expect(patientFrom("Fiche Bilan Épaule - Marie-Laure D.pdf")).toBe("Marie-Laure D.");
+    expect(patientFrom("Fiche Bilan Épaule - Marie-Laure DUPONT.pdf")).toBe("Marie-Laure D.");
+    expect(patientFrom("Fiche Bilan Épaule - Marie Laure D.pdf")).toBe("Marie-Laure D.");
+    expect(patientFrom("Fiche Bilan Épaule - Marie - Laure D.pdf")).toBe("Marie-Laure D.");
+    expect(patientFrom("Fiche Bilan Épaule - MARIE-LAURE DUPONT.pdf")).toBe("Marie-Laure D.");
+    expect(patientFrom("Fiche Bilan Épaule - jean-pierre Fr.pdf")).toBe("Jean-Pierre Fr.");
+    expect(patientFrom("Fiche Bilan Épaule - Anne-Sophie Le Goff.pdf")).toBe("Anne-Sophie L.");
+    expect(patientFrom("Fiche Bilan Épaule - Anne-Sophie LE GOFF.pdf")).toBe("Anne-Sophie L.");
   });
 });
 
@@ -139,6 +152,10 @@ describe("dictée groupée : rattacher un patient nommé", () => {
     expect(nomCorrespond("Claudine T", "ClaudineT")).toBe(true);
     expect(nomCorrespond("Claudine", "ClaudineT")).toBe(true);
     expect(nomCorrespond("Marc", "Marcel D.")).toBe(false);
+    expect(nomCorrespond("Marie Laure", "Marie-Laure D.")).toBe(true);
+    expect(nomCorrespond("Marie-Laure D", "Marie-Laure D.")).toBe(true);
+    expect(nomCorrespond("Marie", "Marie-Laure D.")).toBe(false);
+    expect(nomCorrespond("Laure", "Marie-Laure D.")).toBe(false);
   });
 
   it("un seul Marc vu ce jour-là : rangé chez lui, même s'il y a un autre Marc dans l'appli", () => {

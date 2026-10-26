@@ -211,6 +211,31 @@ export async function resumerBilan(cle: string, pieces: PieceBilan[], correction
   return { donnees: resume, usage: r.usage };
 }
 
+/* ---------- report d'une correction dans le résumé ---------- */
+
+const longueurResume = (r: Resume) => JSON.stringify({ ...r, a_verifier: [] }).length;
+
+export function promptCorrection(resume: Resume, corrections: Correction[]): string {
+  return "Voici le résumé d'un bilan de kinésithérapie, au format JSON, puis des corrections faites par le kinésithérapeute sur des points de lecture incertains.\n" +
+    "Reporte chaque correction dans le résumé, partout où l'information corrigée apparaît (date du bilan, âge, coup d'œil, chiffres, rubriques). " +
+    "Ne change rien d'autre : garde mot pour mot tout ce qui n'est pas concerné, n'ajoute rien, ne retire rien, ne reformule pas. " +
+    "Renvoie le résumé complet dans le même format, avec a_verifier inchangé.\n\n" +
+    "Résumé :\n" + JSON.stringify(resume) + "\n\n" +
+    "Corrections :\n" + corrections.map(c => `- Point à vérifier : « ${c.point} » ; réponse du kiné : « ${c.correction} »`).join("\n");
+}
+
+/* Garde-fou : un résumé corrigé bien plus court que l'original a perdu des informations, on ne le retient pas. */
+export async function corrigerResume(cle: string, resume: Resume, corrections: Correction[], appel: Appel): Promise<Reponse<Resume>> {
+  const r = await appel({
+    cle, system: "Tu reportes les corrections d'un kinésithérapeute dans le résumé de son bilan, sans rien changer d'autre.",
+    contenu: [{ type: "text", text: promptCorrection(resume, corrections) }],
+    schema: SCHEMA_RESUME, effort: "low", maxTokens: 16000, niveau: "leger"
+  });
+  const corrige = { ...normaliserResume(r.donnees), a_verifier: resume.a_verifier ?? [] };
+  if (!corrige.coup_oeil || longueurResume(corrige) < longueurResume(resume) * 0.7) throw new ErreurIA("La correction n'a pas pu être reportée proprement dans le résumé.");
+  return { donnees: corrige, usage: r.usage };
+}
+
 /* ---------- analyse d'une séance (reprise de la version d'essai) ---------- */
 
 /* repère de dates donné à l'IA pour qu'elle n'ait aucun calcul à faire */

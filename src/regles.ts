@@ -32,7 +32,8 @@ export type Bilan = {
   resume: Resume | null;
   resume_erreur?: string;                             // dernier échec du résumé automatique
   valides: string[];
-  corrections: { point: string; correction: string; quand: string }[];
+  corrections: { point: string; correction: string; quand: string; appliquee?: boolean }[];   // appliquee : reportée dans le résumé
+  correction_erreur?: string;                         // dernier échec du report d'une correction dans le résumé
 };
 
 export type Seance = {
@@ -51,19 +52,32 @@ export type Seance = {
 
 /* ---------- nom du patient tiré du nom du fichier ---------- */
 
-/* « Fiche Bilan ÉPAULE - Sylvie F » -> « Sylvie F. » ; « … - Sylvie Fr » -> « Sylvie Fr. » */
+/* « Fiche Bilan ÉPAULE - Sylvie F » -> « Sylvie F. » ; « … - Sylvie Fr » -> « Sylvie Fr. »
+   Prénom composé gardé en entier : « … - Marie-Laure D », « … - Marie Laure D » ou « … - Marie - Laure D » -> « Marie-Laure D. » */
+const majuscule = (mot: string) => mot.toLowerCase().replace(/(^|[-'’])(\p{L})/gu, (_, sep: string, l: string) => sep + l.toUpperCase());
+
 export function patientFrom(name: string): string {
   name = name.replace(/\.[^.]+$/, "").replace(/_/g, " ").trim();
-  const part = name.includes(" - ") ? name.split(" - ").pop()! : name;
-  const w = part.trim().split(/\s+/);
+  /* le patient est après le titre du fichier (« Fiche Bilan Épaule - ») ; un « - » entouré d'espaces dans le prénom n'est pas un séparateur */
+  const morceaux = name.split(/\s+-\s+/);
+  const titre = morceaux.findIndex(m => /bilan|fiche/i.test(m));
+  const part = morceaux.length < 2 ? name : titre >= 0 && titre < morceaux.length - 1 ? morceaux.slice(titre + 1).join("-") : morceaux[morceaux.length - 1];
+  let w = part.trim().split(/\s+/);
+  if (morceaux.length < 2) w = w.filter((x, i) => i >= w.length - 2 || !/bilan|fiche/i.test(x));   // « Bilan Marc Dupont » : le titre n'est pas le prénom
   if (w.length >= 2) {
     const up = w.filter(x => x === x.toUpperCase() && /[A-ZÀ-Ý]/.test(x));
-    const nom = up[0] || w[w.length - 1], prenom = w.find(x => x !== nom) || w[0];
+    /* le nom : le mot en majuscules, sinon le dernier ; tous les mots avant lui forment le prénom */
+    const iNom = up.length ? w.indexOf(up[up.length - 1]) : w.length - 1;
+    /* une particule (« Le Goff », « de Lattre ») fait partie du nom */
+    let debut = iNom;
+    while (debut > 1 && /^(le|la|les|de|du|des|van|von|di|da|del|d'|l')$/i.test(w[debut - 1])) debut--;
+    const nom = w[debut], avant = w.slice(0, debut);
+    const prenom = (avant.length ? avant : w.filter((_, i) => i !== iNom).slice(0, 1)).join("-");
     const n = nom.replace(/\.$/, "");
     /* un nom entier (en majuscules, ou long) est réduit à son initiale ; une abréviation de 1 à 3 lettres est conservée */
-    const abrege = n.length === 1 || (n.length <= 3 && n !== n.toUpperCase());
+    const abrege = debut === iNom && (n.length === 1 || (n.length <= 3 && n !== n.toUpperCase()));
     const fin = abrege ? n.charAt(0).toUpperCase() + n.slice(1).toLowerCase() : n.charAt(0).toUpperCase();
-    return prenom.charAt(0).toUpperCase() + prenom.slice(1).toLowerCase() + " " + fin + ".";
+    return majuscule(prenom) + " " + fin + ".";
   }
   return part;
 }
@@ -218,21 +232,25 @@ export function lignesListe(dossiers: Dossier[], bilans: Bilan[], recherche: str
 
 /* ---------- dictée groupée : à quel dossier rattacher un patient nommé dans la dictée ---------- */
 
-/* « Élisabeth G. » -> { prenom: "elisabeth", reste: "g", compact: "elisabethg" } (sans accents, casse ni ponctuation) */
-function decomposerNom(nom: string) {
-  const mots = nom.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z\s-]/g, " ").trim().split(/\s+/).filter(Boolean);
-  return { prenom: mots[0] ?? "", reste: mots.slice(1).join(""), compact: mots.join("").replace(/-/g, "") };
-}
+const sansAccents = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const mots = (t: string) => sansAccents(t).replace(/[^a-z\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
 
-/* Le nom dicté désigne-t-il ce dossier ? Même prénom ; l'initiale dictée, si elle est dite, doit concorder
-   (« Marc Dupont » ou « Marc D. » pour « Marc D. », « Sylvie F. » pour « Sylvie Fr. »). Un prénom seul convient. */
+/* Le nom dicté désigne-t-il ce dossier ? Même prénom (composé compris : « Marie Laure » ou « Marie-Laure ») ;
+   l'initiale dictée, si elle est dite, doit concorder (« Marc Dupont » ou « Marc D. » pour « Marc D. », « Sylvie F. » pour « Sylvie Fr. »).
+   Un prénom seul convient. */
 export function nomCorrespond(dicte: string, label: string): boolean {
-  const d = decomposerNom(dicte), l = decomposerNom(label);
-  if (!d.prenom) return false;
-  if (d.compact === l.compact) return true;
-  if (!l.reste) return !d.reste && l.prenom.startsWith(d.prenom) && l.prenom.length - d.prenom.length <= 3;   // libellé collé (« ClaudineT »)
-  if (d.prenom !== l.prenom) return false;
-  return !d.reste || d.reste.startsWith(l.reste) || l.reste.startsWith(d.reste);
+  const d = mots(dicte), l = mots(label);
+  if (!d.length || !l.length) return false;
+  if (d.join("") === l.join("")) return true;
+  const espace = label.trim().indexOf(" ");
+  if (espace < 0) {   // libellé collé (« ClaudineT ») : prénom dicté seul, à 3 lettres près
+    const c = l.join(""), p = d.join("");
+    return d.length === 1 && c.startsWith(p) && c.length - p.length <= 3;
+  }
+  const prenom = mots(label.slice(0, espace)), reste = mots(label.slice(espace)).join("");
+  if (d.length < prenom.length || prenom.some((m, i) => d[i] !== m)) return false;
+  const dit = d.slice(prenom.length).join("");
+  return !dit || dit.startsWith(reste) || reste.startsWith(dit);
 }
 
 export type Rattachement = { dossier: Dossier | null; candidats: Dossier[] };
