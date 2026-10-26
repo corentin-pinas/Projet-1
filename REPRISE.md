@@ -44,7 +44,7 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 | 2 | Reproduction de la version d'essai | Fait |
 | 3 | IA branchée (abonnement, stylet, niveaux d'IA) | Fait, en usage |
 | 4 | Sauvegarde : copies internes (0.5.0, en production) + copie hors de Chrome (0.5.1) | Faite, à valider sur la tablette |
-| 5 | Dictée groupée | À faire |
+| 5 | Dictée groupée | Faite (0.6.0), à valider sur une vraie matinée |
 | 6 | Agenda | À faire (maquette validée, deux questions ouvertes) |
 | 7 | Transmissions en PDF | À faire |
 | 8 | Ses autres idées, une par une | Plus tard |
@@ -71,9 +71,14 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 
 - Pour une période choisie, tous les patients ayant rendez-vous : pathologie, état à l'arrivée (bilan), traitement en cours (séances). **Sortie : un PDF** envoyé par message au remplaçant. L'agenda sert à vérifier qu'aucun patient ne manque. Maquette sur la carte du projet.
 
-## Étape 5 — dictée groupée (rappel)
+## Étape 5 — dictée groupée (version 0.6.0, 26 octobre 2026)
 
-- Une ou deux fois par jour (midi et/ou soir), tous les patients dictés d'un bloc. Rangement automatique quand le patient est le seul de ce nom parmi les rendez-vous du jour ; question seulement en cas de doute ; récapitulatif avec « Annuler ». Nom complet dicté réduit à l'initiale. IA la plus puissante, une seule demande pour toute la dictée.
+- Bouton « 🎙️ Dictée groupée » sous « Ajouter des bilans » : grande zone de texte (micro du clavier), date « Aujourd'hui / Hier / autre » (Corentin dicte parfois le lendemain matin). Brouillon gardé dans la tablette à chaque mot (`dictee_brouillon`).
+- **Une seule demande à l'IA la plus puissante** (`decouperDictee` dans `src/ia.ts`) : découpe par patient, extrait mot pour mot, mise au propre, « À venir », rendez-vous dicté. La liste des patients de l'appli (prénom + initiale, « rendez-vous ce jour-là ») est fournie pour corriger les prénoms mal reconnus. Garde-fou : si les extraits font moins de 60 % de la dictée, rien n'est rangé.
+- **Rattachement fait par l'appli, pas par l'IA** (`rattacher` dans `src/regles.ts`, règle souple choisie par Corentin) : un seul dossier possible parmi les rendez-vous du jour, sinon un seul dossier à ce nom dans toute l'appli → rangé seul. Sinon question : candidats par heure de rendez-vous, ou tous les dossiers si le nom est inconnu ; « Ne pas ranger ce passage » possible. Passages en attente gardés (`dictee_doutes`).
+- Corentin dicte prénom seul ou prénom + initiale, jamais le nom de famille (identitovigilance) ; un nom complet est de toute façon réduit à l'initiale.
+- Récapitulatif « N séances rangées » avec « Annuler cette dictée » : séances retirées, rendez-vous remis, texte dicté rendu pour correction.
+- Non testé en vrai : qualité du découpage sur une vraie matinée, durée de la demande (limite de 5 minutes du serveur).
 
 ## Autres idées notées (plus tard)
 

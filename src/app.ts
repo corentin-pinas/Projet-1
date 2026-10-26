@@ -6,6 +6,7 @@ import {
   prochainRdv, propreOk, questionHomonyme, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Dossier, type Seance
 } from "./regles";
+import * as dictee from "./dictee";
 import * as moteur from "./moteur";
 import { confirmer, esc, toast } from "./ui";
 
@@ -14,7 +15,8 @@ const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySele
 let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
 let selected: string | null = null;      // bilan affiché
 let formOpen = false, editing: string | null = null, rdvOpen = false, homoOpen = false;
-const busy = () => formOpen || !!editing || rdvOpen || homoOpen;
+let dicteeVue = false;                    // la dictée groupée occupe la partie droite
+const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue;
 let aCle = false;                         // une clé d'IA est enregistrée
 
 const aujourdhui = () => isoDay(new Date());
@@ -39,6 +41,7 @@ export async function demarrer() {
   addEventListener("online", () => moteur.resumerEnAttente());
   await rafraichirIA();
   $("#add").addEventListener("click", () => $("#file").click());
+  $("#dicteebtn").addEventListener("click", ouvrirDictee);
   $<HTMLInputElement>("#file").addEventListener("change", ajouter);
   $("#q").addEventListener("input", renderList);
   /* la liste se reclasse quand on revient sur l'appli (le jour a pu changer) */
@@ -81,15 +84,31 @@ function renderList() {
       <b>${rdv?.heure ? `<i class="hr">${esc(heureFr(rdv.heure))}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
   }).join("");
   $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => {
+    quitterDictee();
     selected = el.dataset.id || null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
     renderList(); renderMain();
     if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
   });
 }
 
+/* ---------- dictée groupée ---------- */
+
+function ouvrirDictee() {
+  dicteeVue = true; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
+  $("#dicteebtn").setAttribute("aria-pressed", "true");
+  dictee.ouvrir($("#main"), () => { dicteeVue = false; $("#dicteebtn").setAttribute("aria-pressed", "false"); renderList(); renderMain(); });
+  if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
+}
+
+function quitterDictee() {
+  if (!dicteeVue) return;
+  dictee.quitter(); dicteeVue = false; $("#dicteebtn").setAttribute("aria-pressed", "false");
+}
+
 /* ---------- fiche ---------- */
 
 export function renderMain() {
+  if (dicteeVue) return;   // la dictée groupée gère son propre affichage
   const b = donnees.bilans.find(x => x.id === selected);
   if (!b) { $("#main").innerHTML = `<div class="empty">Choisissez un patient dans la liste, ou ajoutez un bilan.</div>`; return; }
   const r = b.resume, D = dossierDe(b), age = ageDe(D), bilans = bilansDe(D);
@@ -329,6 +348,7 @@ async function ajouter(e: Event) {
   }
   btn.disabled = false;
   if (ok) {
+    quitterDictee();
     formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
     toast((ok > 1 ? `${ok} bilans ajoutés.` : "Bilan ajouté.") + (aCle && navigator.onLine ? " Le résumé est en cours." : ""));
     moteur.resumerEnAttente();

@@ -170,3 +170,23 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 .copies span{color:var(--soft);font-size:.92rem}
 .choix{display:flex;align-items:center;gap:10px;min-height:44px}
 .choix input{width:22px;height:22px;accent-color:var(--accent)}
+
+/* dictée groupée */
+.dicteebtn{font-weight:700;border:2px solid var(--accent);color:var(--accent);min-height:52px}
+.dicteebtn[aria-pressed="true"]{background:var(--accent-bg)}
+.dictee{display:grid;gap:14px}
+.dictee h2,.dictee h3{margin:0}
+.dictee textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;width:100%;min-height:45vh;resize:vertical;line-height:1.5}
+.dictee .note{margin:0}
+.jours{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.jours button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.jours input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px}
+.recap{background:var(--accent-bg);border-radius:12px;padding:14px;display:grid;gap:8px}
+.recap p{margin:0}
+.doute{border:1px solid var(--warn);background:var(--warn-bg);border-radius:12px;padding:14px;display:grid;gap:10px}
+.doute p{margin:0}
+.doute blockquote{margin:0;padding:8px 12px;border-left:3px solid var(--line);background:var(--panel);border-radius:6px;color:var(--ink);white-space:pre-wrap}
+.doute .cand{flex-direction:column;align-items:flex-start;font-weight:700;min-width:140px}
+.doute .cand small{font-weight:400;color:var(--soft)}
+.doute select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px;flex:1;min-width:200px}
+.doute .ignorer{justify-self:start;color:var(--soft)}

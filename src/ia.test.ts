@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyserSeance, calendrier, contenuBilan, coutDollars, lireAnalyse, normaliserResume, promptSeance, resumerBilan, systemeBilan, type Appel } from "./ia";
+import { analyserSeance, calendrier, decouperDictee, lireDictee, promptDictee, contenuBilan, coutDollars, lireAnalyse, normaliserResume, promptSeance, resumerBilan, systemeBilan, type Appel } from "./ia";
 
 const faux = (donnees: unknown): Appel => async () => ({ donnees, usage: { entree: 1000, sortie: 500 } });
 
@@ -98,5 +98,43 @@ describe("résumé d'un bilan", () => {
 
   it("calcule le coût en dollars", () => {
     expect(coutDollars({ entree: 1_000_000, sortie: 100_000 })).toBeCloseTo(6);
+  });
+});
+
+describe("dictée groupée", () => {
+  const dictee = "avec marque D douleur 3 sur 10 renforcement des rotateurs externes pour la prochaine séance tester la force ensuite Élisabeth G massage cervical et étirements";
+  const reponse = { seances: [
+    { nom: "Marc D.", extrait: "douleur 3 sur 10 renforcement des rotateurs externes pour la prochaine séance tester la force", propre: "État du patient : douleur 3/10.\nFait en séance : renforcement des rotateurs externes.\nÀ venir : tester la force.", resume: "Tester la force.", rdv_date: null, rdv_heure: null },
+    { nom: "Élisabeth G.", extrait: "massage cervical et étirements", propre: "Fait en séance : massage cervical et étirements.", resume: "Inventé", rdv_date: null, rdv_heure: null }
+  ] };
+
+  it("le prompt donne les patients, ceux vus ce jour-là, le calendrier et les règles de mise au propre", () => {
+    const p = promptDictee("2026-10-26", dictee, [{ label: "Marc D.", vuCeJour: true }, { label: "Élisabeth G.", vuCeJour: false }]);
+    expect(p).toContain("- Marc D. (rendez-vous ce jour-là)\n- Élisabeth G.\n");
+    expect(p).toContain("J+7 : lundi 2 novembre 2026 = 2026-11-02");
+    expect(p).toContain("n'ajoute aucune information");
+    expect(p).toContain("Jamais de nom de famille complet");
+  });
+
+  it("lit une séance par patient, avec les garde-fous d'une séance seule", () => {
+    const s = lireDictee(reponse, dictee);
+    expect(s.map(x => x.nom)).toEqual(["Marc D.", "Élisabeth G."]);
+    expect(s[0].propre).toContain("À venir : tester la force.");
+    expect(s[0].resume).toBe("Tester la force.");
+    expect(s[1].resume).toBe("");   // pas de « pour la prochaine séance » dans son extrait : rien d'inventé
+  });
+
+  it("refuse tout si une partie de la dictée a été perdue", () => {
+    expect(() => lireDictee({ seances: [reponse.seances[1]] }, dictee)).toThrow("laissé de côté");
+    expect(() => lireDictee({}, dictee)).toThrow();
+  });
+
+  it("passe par l'IA la plus puissante, en une seule demande", async () => {
+    const appels: Parameters<Appel>[0][] = [];
+    const appel: Appel = async req => { appels.push(req); return { donnees: reponse, usage: { entree: 1, sortie: 1 } }; };
+    const r = await decouperDictee("cle", "2026-10-26", dictee, [], appel);
+    expect(r.donnees).toHaveLength(2);
+    expect(appels).toHaveLength(1);
+    expect(appels[0].niveau).toBe("puissant");
   });
 });

@@ -179,4 +179,5 @@ Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; «
 - Clé API : secours, verrouillée par défaut (`api_autorisee`), choisie par `mode_ia`. Réglages dans `src/reglages-ia.ts`.
 - Les tests d'écran simulent l'API Anthropic (`page.route`) et Claude Code (`tests/faux/claude.mjs`, via `CLAUDE_BIN`) : aucune vraie requête n'est faite dans les tests.
 - Copies de sécurité (version 0.5.0) : store `copies` (base version 3), une par jour avant le premier changement, 7 gardées, texte seulement ; fichiers gardés tant qu'un bilan ou une copie y renvoie ; retour en arrière annulable (`avant-retour`). Écran dans `src/copies.ts`. Copie hors de Chrome (0.5.1) : fichier chiffré téléchargé dans « Téléchargements » (`src/fichier-copie.ts`, mot de passe retenu dans `parametres`), restauration depuis le fichier, rappel après 7 jours dans les vérifications. Pas de Drive.
+- Dictée groupée (0.6.0) : `src/dictee.ts` (écran), `moteur.rangerDictee` / `rangerSeance`, `decouperDictee` et `lireDictee` dans `src/ia.ts`, `rattacher` dans `src/regles.ts`. Détails dans `REPRISE.md`.
 - Avant chaque envoi : `npm test` et `npm run test:e2e` doivent passer.

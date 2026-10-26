@@ -1,8 +1,8 @@
 /* Travail de l'IA en arrière-plan : résumé automatique des bilans déposés,
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
-import { analyserSeance, appelerAbonnement, appelerClaude, ErreurIA, resumerBilan, parleRdv, type Appel, type Correction, type PieceBilan } from "./ia";
-import { avecRdv, avenirFrom, isoDay, jourLabel, heureFr, rdvsAVenir, type Bilan, type Seance } from "./regles";
+import { analyserSeance, appelerAbonnement, appelerClaude, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
+import { avecRdv, avenirFrom, isoDay, jourLabel, heureFr, rattacher, rdvsAVenir, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -150,6 +150,22 @@ export async function resumerEnAttente() {
 
 /* ---------- séances ---------- */
 
+/* Range le résultat de l'IA dans la séance : mise au propre, « À venir », et rendez-vous dicté.
+   Renvoie le message du rendez-vous posé, ou null. */
+async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<string | null> {
+  const patch: Partial<Seance> = { ia_ok: true };
+  if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = brut; }
+  if (a.propre) { patch.propre = a.propre; patch.propre_source = se.contenu; }
+  await db.majSeance(se.id, patch);
+  /* on ne pose le rendez-vous que s'il est à venir et que cette séance est bien la dernière du patient */
+  const { seances, dossiers } = await db.tout();
+  const derniere = !seances.some(x => x.dossierId === se.dossierId && x.id !== se.id && x.date > se.date);
+  const dossier = dossiers.find(d => d.id === se.dossierId);
+  if (!(a.rdvDate && a.rdvDate >= isoDay(new Date()) && derniere && dossier)) return null;
+  await db.setRdvs(dossier.id, avecRdv(rdvsAVenir(dossier.rdvs, isoDay(new Date())), a.rdvDate, a.rdvHeure));
+  return "Rendez-vous repéré pour " + dossier.label + " : " + jourLabel(a.rdvDate, new Date()).toLowerCase() + (a.rdvHeure ? " à " + heureFr(a.rdvHeure) : "") + ".";
+}
+
 /* Après l'enregistrement d'une séance : mise au propre de la dictée, résumé du « À venir » et,
    si la note le dit, date du prochain rendez-vous. sansPropre = le texte a été corrigé à la main, on n'y retouche pas. */
 export async function analyser(se: Seance, manuel: boolean, sansPropre: boolean) {
@@ -163,24 +179,49 @@ export async function analyser(se: Seance, manuel: boolean, sansPropre: boolean)
   try {
     const { donnees: a, usage } = await analyserSeance(ia.secret, se.date, se.contenu, sansPropre, ia.appel);
     await db.ajouterConso("seances", usage);
-    const { seances, dossiers } = await db.tout();
+    const { seances } = await db.tout();
     const actuelle = seances.find(x => x.id === se.id);
     if (!actuelle || actuelle.contenu !== se.contenu) return;   // séance supprimée ou modifiée pendant l'analyse
-    const patch: Partial<Seance> = { ia_ok: true };
-    if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = brut; }
-    if (a.propre) { patch.propre = a.propre; patch.propre_source = se.contenu; }
-    await db.majSeance(se.id, patch);
-    /* on ne pose le rendez-vous que s'il est à venir et que cette séance est bien la dernière du patient */
-    const derniere = !seances.some(x => x.dossierId === se.dossierId && x.id !== se.id && x.date > se.date);
-    const dossier = dossiers.find(d => d.id === se.dossierId);
-    if (a.rdvDate && a.rdvDate >= isoDay(new Date()) && derniere && dossier) {
-      await db.setRdvs(dossier.id, avecRdv(rdvsAVenir(dossier.rdvs, isoDay(new Date())), a.rdvDate, a.rdvHeure));
-      messages("Rendez-vous repéré : " + jourLabel(a.rdvDate, new Date()).toLowerCase() + (a.rdvHeure ? " à " + heureFr(a.rdvHeure) : "") + ".");
-    } else if (manuel) messages(a.propre ? "Séance mise au propre." : a.resume ? "Résumé mis à jour." : "Rien à reformuler dans cette note.");
+    const rdv = await appliquer(se, a, brut);
+    if (rdv) messages(rdv);
+    else if (manuel) messages(a.propre ? "Séance mise au propre." : a.resume ? "Résumé mis à jour." : "Rien à reformuler dans cette note.");
   } catch (e) {
     if (manuel || !(e instanceof ErreurIA)) messages(e instanceof ErreurIA ? e.message : "La mise au propre n'a pas abouti. Réessayez.");
     else messages("Séance enregistrée, mais la mise au propre n'a pas abouti : " + e.message.charAt(0).toLowerCase() + e.message.slice(1));
   } finally {
     enCours.delete(se.id); prevenir();
   }
+}
+
+/* ---------- dictée groupée ---------- */
+
+/* Un passage que l'appli n'a pas pu ranger seule : Corentin choisit le dossier parmi les candidats. */
+export type Doute = { id: string; date: string; seance: SeanceDictee; candidats: string[] };
+export type Range = { seanceId: string; dossierId: string };
+
+/* Une seule demande à l'IA pour toute la dictée, puis rangement : automatique si un seul dossier convient
+   (règle de rattacher), sinon le passage devient un doute. Lève une ErreurIA si rien n'a pu être fait. */
+export async function rangerDictee(date: string, texte: string): Promise<{ ranges: Range[]; doutes: Doute[]; rdvs: string[] }> {
+  const ia = await configIA();
+  if (!ia) throw new ErreurIA(PAS_REGLE);
+  if (!navigator.onLine) throw new ErreurIA("Pas de connexion : votre dictée est gardée, réessayez une fois en ligne.");
+  const { dossiers } = await db.tout();
+  const patients = dossiers.map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));
+  const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel);
+  await db.ajouterConso("seances", usage);
+  const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [];
+  for (const m of morceaux) {
+    const { dossier, candidats } = rattacher(m.nom, dossiers, date);
+    if (!dossier) { doutes.push({ id: crypto.randomUUID(), date, seance: m, candidats: candidats.map(d => d.id) }); continue; }
+    const r = await rangerSeance(dossier.id, date, m);
+    ranges.push(r.range); if (r.rdv) rdvs.push(r.rdv);
+  }
+  return { ranges, doutes, rdvs };
+}
+
+/* enregistre un passage de la dictée comme une séance normale du dossier choisi */
+export async function rangerSeance(dossierId: string, date: string, m: SeanceDictee): Promise<{ range: Range; rdv: string | null }> {
+  const se = await db.ajouterSeance(dossierId, date, m.contenu);
+  const rdv = await appliquer(se, m, avenirFrom(m.contenu));
+  return { range: { seanceId: se.id, dossierId }, rdv };
 }

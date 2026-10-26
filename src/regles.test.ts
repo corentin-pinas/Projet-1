@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   agesCompatibles, avecRdv, avenirDe, avenirFrom, heureFr, jourLabel, lignesListe, nomAffiche,
-  patientFrom, prochainRdv, questionHomonyme, rdvsAVenir,
-  type Bilan, type Dossier, type Seance
+  nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
+  type Bilan, type Dossier, type Rdv, type Seance
 } from "./regles";
 
 const bilan = (o: Partial<Bilan>): Bilan => ({
@@ -117,5 +117,57 @@ describe("liste des patients", () => {
     const ds = [dossier({ id: "1", label: "Anne T." }), dossier({ id: "2", label: "Paul R." })];
     const bs = [bilan({ dossierId: "2", fichier: "Bilan coude - Paul R" })];
     expect(lignesListe(ds, bs, "coude", "2026-10-02").map(l => l.dossier.label)).toEqual(["Paul R."]);
+  });
+});
+
+describe("dictée groupée : rattacher un patient nommé", () => {
+  const dos = (id: string, label: string, rdvs: Rdv[] = []): Dossier => ({ id, label, rdvs, homonyme: false, cree: "" });
+  const jour = "2026-10-26";
+  const marc = dos("m1", "Marc D.", [{ d: jour, h: "09:00" }]);
+  const marc2 = dos("m2", "Marc L.");
+  const elisa = dos("e", "Élisabeth G.");
+  const sylvie = dos("s", "Sylvie Fr.");
+  const claudine = dos("c", "ClaudineT");
+
+  it("reconnaît le prénom avec ou sans initiale, nom complet compris, sans souci d'accents", () => {
+    expect(nomCorrespond("Marc D.", "Marc D.")).toBe(true);
+    expect(nomCorrespond("marc dupont", "Marc D.")).toBe(true);
+    expect(nomCorrespond("Marc", "Marc D.")).toBe(true);
+    expect(nomCorrespond("Marc L", "Marc D.")).toBe(false);
+    expect(nomCorrespond("Elisabeth G", "Élisabeth G.")).toBe(true);
+    expect(nomCorrespond("Sylvie F", "Sylvie Fr.")).toBe(true);
+    expect(nomCorrespond("Claudine T", "ClaudineT")).toBe(true);
+    expect(nomCorrespond("Claudine", "ClaudineT")).toBe(true);
+    expect(nomCorrespond("Marc", "Marcel D.")).toBe(false);
+  });
+
+  it("un seul Marc vu ce jour-là : rangé chez lui, même s'il y a un autre Marc dans l'appli", () => {
+    expect(rattacher("Marc", [marc, marc2, elisa], jour).dossier?.id).toBe("m1");
+  });
+
+  it("règle souple : un seul dossier à ce nom, rangé même sans rendez-vous ce jour-là", () => {
+    expect(rattacher("Élisabeth", [marc, marc2, elisa], jour).dossier?.id).toBe("e");
+  });
+
+  it("deux Marc possibles et aucun vu ce jour-là : on pose la question", () => {
+    const r = rattacher("Marc", [dos("m1", "Marc D."), marc2, elisa], jour);
+    expect(r.dossier).toBeNull();
+    expect(r.candidats.map(d => d.id)).toEqual(["m1", "m2"]);
+  });
+
+  it("deux Marc vus le même jour : on pose la question entre ces deux-là", () => {
+    const r = rattacher("Marc", [dos("m2", "Marc L.", [{ d: jour, h: "08:00" }]), marc, dos("m3", "Marc P.")], jour);
+    expect(r.dossier).toBeNull();
+    expect(r.candidats.map(d => d.id)).toEqual(["m2", "m1"]);   // par heure de rendez-vous
+  });
+
+  it("nom inconnu : tous les dossiers sont proposés, ceux vus ce jour-là en tête", () => {
+    const r = rattacher("Bernard", [elisa, marc2, marc], jour);
+    expect(r.dossier).toBeNull();
+    expect(r.candidats.map(d => d.id)).toEqual(["m1", "e", "m2"]);
+  });
+
+  it("passage sans patient : question aussi", () => {
+    expect(rattacher(null, [marc], jour).dossier).toBeNull();
   });
 });

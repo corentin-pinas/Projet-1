@@ -215,3 +215,41 @@ export function lignesListe(dossiers: Dossier[], bilans: Bilan[], recherche: str
       return (a < c ? -1 : a > c ? 1 : 0) || x.dossier.label.localeCompare(y.dossier.label, "fr") || (x.age || 0) - (y.age || 0);
     });
 }
+
+/* ---------- dictée groupée : à quel dossier rattacher un patient nommé dans la dictée ---------- */
+
+/* « Élisabeth G. » -> { prenom: "elisabeth", reste: "g", compact: "elisabethg" } (sans accents, casse ni ponctuation) */
+function decomposerNom(nom: string) {
+  const mots = nom.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z\s-]/g, " ").trim().split(/\s+/).filter(Boolean);
+  return { prenom: mots[0] ?? "", reste: mots.slice(1).join(""), compact: mots.join("").replace(/-/g, "") };
+}
+
+/* Le nom dicté désigne-t-il ce dossier ? Même prénom ; l'initiale dictée, si elle est dite, doit concorder
+   (« Marc Dupont » ou « Marc D. » pour « Marc D. », « Sylvie F. » pour « Sylvie Fr. »). Un prénom seul convient. */
+export function nomCorrespond(dicte: string, label: string): boolean {
+  const d = decomposerNom(dicte), l = decomposerNom(label);
+  if (!d.prenom) return false;
+  if (d.compact === l.compact) return true;
+  if (!l.reste) return !d.reste && l.prenom.startsWith(d.prenom) && l.prenom.length - d.prenom.length <= 3;   // libellé collé (« ClaudineT »)
+  if (d.prenom !== l.prenom) return false;
+  return !d.reste || d.reste.startsWith(l.reste) || l.reste.startsWith(d.reste);
+}
+
+export type Rattachement = { dossier: Dossier | null; candidats: Dossier[] };
+
+/* Règle choisie par Corentin : rangement automatique quand un seul dossier convient, en priorité parmi les patients
+   qui ont rendez-vous ce jour-là (deux « Marc » dans l'appli, un seul vu ce jour-là : c'est lui).
+   Sinon, doute : candidats = les dossiers possibles (tous les dossiers, rendez-vous du jour en tête, si aucun ne convient). */
+export function rattacher(dicte: string | null, dossiers: Dossier[], date: string): Rattachement {
+  const vuCeJour = (d: Dossier) => d.rdvs.some(r => r.d === date);
+  const heure = (d: Dossier) => d.rdvs.find(r => r.d === date)?.h || "99:99";
+  /* ordre affiché : rendez-vous du jour par heure, puis ordre alphabétique */
+  const ordre = (a: Dossier, b: Dossier) => heure(a).localeCompare(heure(b)) || a.label.localeCompare(b.label, "fr");
+  const possibles = dicte ? dossiers.filter(d => nomCorrespond(dicte, d.label)).sort(ordre) : [];
+  const duJour = possibles.filter(vuCeJour);
+  if (duJour.length === 1) return { dossier: duJour[0], candidats: duJour };
+  if (!duJour.length && possibles.length === 1) return { dossier: possibles[0], candidats: possibles };
+  const candidats = duJour.length > 1 ? duJour : possibles.length ? possibles
+    : [...dossiers].sort(ordre);
+  return { dossier: null, candidats };
+}

@@ -223,6 +223,14 @@ export function calendrier(depuis: string, avant: number, apres: number): string
   return out.join("\n");
 }
 
+/* règles de mise au propre, communes à la séance seule et à la dictée groupée */
+const REGLES_PROPRE =
+  "Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. " +
+  "Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : " +
+  "« État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). " +
+  "Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ». " +
+  "Si un nom de famille complet apparaît, réduis-le à son initiale suivie d'un point.";
+
 export const parleRdv = (t: string) => /rendez[- ]?vous|\brdv\b|prochain|revoi|suivante/i.test(t);
 
 export const SCHEMA_SEANCE = {
@@ -238,12 +246,7 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     "Une dictée peut contenir des mots mal reconnus, peu de ponctuation, des hésitations et des répétitions.\n\n" +
     "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\n" +
     "Réponds uniquement par un objet JSON à quatre champs :\n" +
-    '- "propre" : ' + (sansPropre ? "null" :
-      "la note remise au propre. Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. " +
-      "Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : " +
-      "« État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). " +
-      "Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ». " +
-      "Si un nom de famille complet apparaît, réduis-le à son initiale suivie d'un point.") + "\n" +
+    '- "propre" : ' + (sansPropre ? "null" : "la note remise au propre. " + REGLES_PROPRE) + "\n" +
     '- "resume" : ' + (brut ? "résumé très court (25 mots maximum, français correct, style télégraphique) de ce qui est prévu pour la prochaine séance, d'après le passage « Prévu » ci-dessous. N'ajoute rien, n'interprète pas, ne retire rien d'important. N'y mets ni la date ni l'heure du rendez-vous. null s'il n'y a rien d'autre que la date." : "null") + "\n" +
     '- "rdv_date" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
@@ -281,4 +284,63 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
     schema: SCHEMA_SEANCE, effort: "medium", maxTokens: 8000, niveau: "leger"
   });
   return { donnees: lireAnalyse(r.donnees, contenu, sansPropre), usage: r.usage };
+}
+
+/* ---------- dictée groupée : plusieurs patients dictés d'un bloc ---------- */
+
+const SEANCE_DICTEE = {
+  type: "object", additionalProperties: false,
+  required: ["nom", "extrait", "propre", "resume", "rdv_date", "rdv_heure"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul }
+};
+export const SCHEMA_DICTEE = {
+  type: "object", additionalProperties: false, required: ["seances"],
+  properties: { seances: { type: "array", items: SEANCE_DICTEE } }
+};
+
+/* patients : libellés de l'appli (« Marc D. »), avec vuCeJour si un rendez-vous est noté à la date des séances */
+export function promptDictee(date: string, texte: string, patients: { label: string; vuCeJour: boolean }[]): string {
+  return "Tu aides un kinésithérapeute. Voici une dictée groupée : il a dicté à la suite les séances de plusieurs patients, toutes du " + date + " (J). " +
+    "Une dictée peut contenir des mots mal reconnus (les prénoms aussi : « marque » pour « Marc »), peu de ponctuation, des hésitations et des répétitions.\n\n" +
+    "Patients enregistrés dans son appli (prénom et initiale) :\n" +
+    (patients.length ? patients.slice(0, 400).map(p => "- " + p.label + (p.vuCeJour ? " (rendez-vous ce jour-là)" : "")).join("\n") : "(aucun)") + "\n\n" +
+    "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\n" +
+    "Découpe la dictée en une entrée par patient, dans l'ordre de la dictée. Il annonce chaque patient par son prénom, parfois suivi d'une initiale (« Avec Marc D. », « ensuite Élisabeth G. », « pour Lucie »). " +
+    "Si le même patient revient plus loin, réunis ses passages dans une seule entrée. Un passage qui ne concerne aucun patient nommé forme une entrée avec nom null. Aucun passage de la dictée ne doit être perdu.\n" +
+    "Pour chaque entrée, six champs :\n" +
+    '- "nom" : le patient tel qu\'il est annoncé. S\'il correspond manifestement à un patient de la liste, écris-le exactement comme dans la liste ; sinon le prénom, et l\'initiale si elle est dite. Jamais de nom de famille complet. null si aucun patient n\'est nommé.\n' +
+    '- "extrait" : le texte dicté pour ce patient, mot pour mot, sans l\'annonce de son nom (« Avec Marc D., » disparaît). Ne corrige rien, mais réduis tout nom de famille complet à son initiale suivie d\'un point.\n' +
+    '- "propre" : cet extrait remis au propre. ' + REGLES_PROPRE + "\n" +
+    '- "resume" : si l\'extrait contient ce qui est prévu pour la prochaine séance (après « pour la prochaine séance », « pour la prochaine », « la prochaine fois » ou « à venir : »), un résumé très court (25 mots maximum, style télégraphique) de ce qui est prévu, sans la date ni l\'heure du rendez-vous. N\'ajoute rien. Sinon null.\n' +
+    '- "rdv_date" : si l\'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
+    '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","rdv_date":"2026-01-15","rdv_heure":"08:00"}]}\n\n' +
+    "Dictée :\n" + texte.slice(0, 60000);
+}
+
+export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string };
+
+/* Garde-fous : chaque extrait passe par les mêmes contrôles qu'une séance seule (mise au propre trop courte rejetée…),
+   et si l'ensemble des extraits est bien plus court que la dictée, une partie a été perdue : rien n'est retenu. */
+export function lireDictee(x: unknown, texte: string): SeanceDictee[] {
+  const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+  const liste = Array.isArray(o.seances) ? o.seances : [];
+  const seances = liste.map(e => {
+    const it = (e && typeof e === "object" ? e : {}) as Record<string, unknown>;
+    const contenu = typeof it.extrait === "string" ? it.extrait.trim() : "";
+    const nom = typeof it.nom === "string" && it.nom.trim() ? it.nom.trim() : null;
+    return { nom, contenu, ...lireAnalyse(it, contenu, false) };
+  }).filter(s => s.contenu);
+  const total = seances.reduce((n, s) => n + s.contenu.length, 0);
+  if (!seances.length || total < texte.trim().length * 0.6) throw new ErreurIA("L'IA a laissé de côté une partie de la dictée. Rien n'a été rangé : réessayez.");
+  return seances;
+}
+
+export async function decouperDictee(cle: string, date: string, texte: string, patients: { label: string; vuCeJour: boolean }[], appel: Appel): Promise<Reponse<SeanceDictee[]>> {
+  const r = await appel({
+    cle, system: "Tu ranges la dictée groupée d'un kinésithérapeute, patient par patient, sans rien ajouter ni retirer.",
+    contenu: [{ type: "text", text: promptDictee(date, texte, patients) }],
+    schema: SCHEMA_DICTEE, effort: "medium", maxTokens: 32000, niveau: "puissant"
+  });
+  return { donnees: lireDictee(r.donnees, texte), usage: r.usage };
 }
