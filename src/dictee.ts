@@ -4,6 +4,7 @@
 import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
+import * as voix from "./transcription";
 import { ageDossier, heureFr, isoDay, nomAffiche, nomCorrespond, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
@@ -21,6 +22,13 @@ let dernier: Recap | null = null;       // dernière dictée rangée : récapitu
 let charge = false;
 let ecran: HTMLElement | null = null;   // zone où la dictée est affichée, null si elle est fermée
 let fermer: () => void = () => {};
+
+/* dictée enregistrée (Whisper) : micro en cours, enregistrement en attente de transcription, transcription en cours */
+let voixOk = false;
+let enCours: voix.Enregistrement | null = null;
+let audioEnAttente: Blob | null = null;
+let transcription = false;
+let chrono: ReturnType<typeof setInterval> | undefined;
 
 const aujourdhui = () => isoDay(new Date());
 const hier = () => { const d = new Date(); d.setDate(d.getDate() - 1); return isoDay(d); };
@@ -50,6 +58,7 @@ export async function ouvrir(zone: HTMLElement, surFermeture: () => void) {
   await charger();
   if (phase === "fini" && !doutes.length && !dernier) phase = "saisie";
   await afficher();
+  voix.disponible().then(ok => { if (ok !== voixOk) { voixOk = ok; afficher(); } });
   const ta = zone.querySelector<HTMLTextAreaElement>("#dtexte");
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
@@ -97,6 +106,7 @@ async function afficher() {
           <button data-jour="${hier()}" aria-pressed="${date === hier()}">Hier</button>
           <input type="date" id="ddate" value="${esc(date)}" max="${aujourdhui()}" aria-label="Autre date">
         </div>
+        ${blocVoix()}
         <textarea id="dtexte" placeholder="Touchez le micro du clavier et dictez tous vos patients à la suite : « Avec Marc D., … Ensuite Élisabeth G., … ». Rien à toucher entre deux patients.">${esc(texte)}</textarea>
         <p class="note">Séances du ${esc(jourFr(date))}. Votre dictée est gardée pendant que vous parlez : si le micro s'arrête, touchez-le à nouveau et continuez.</p>
         <div class="row"><button class="primary" id="dranger">Ranger la dictée</button></div>`;
@@ -107,7 +117,51 @@ async function afficher() {
   brancher(z);
 }
 
+const duree = (ms: number) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+function blocVoix(): string {
+  if (!voixOk && !enCours && !audioEnAttente) return "";
+  if (enCours) return `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="vchrono">${duree(Date.now() - enCours.debut)}</span>
+    <button class="primary" id="varreter">Arrêter et transcrire</button><button id="vannuler">Annuler</button></div>`;
+  if (transcription) return `<div class="wait encours" role="status">Transcription de votre voix…</div>`;
+  if (audioEnAttente) return `<div class="wait">L'enregistrement n'a pas pu être transcrit. Il est gardé.<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
+  return `<div class="row"><button class="primary voixbtn" id="venreg">🎙️ Enregistrer ma dictée</button></div>`;
+}
+
+async function envoyerVoix() {
+  if (!audioEnAttente) return;
+  transcription = true; afficher();
+  try {
+    const t = await voix.transcrire(audioEnAttente);
+    texte = texte.trim() ? texte.trimEnd() + "\n" + t : t;
+    audioEnAttente = null;
+    await garderBrouillon(true);
+    toast("Dictée transcrite. Relisez-la si besoin, puis touchez « Ranger la dictée ».");
+  } catch (e) { toast(e instanceof ErreurIA ? e.message : "La transcription a échoué."); }
+  transcription = false; afficher();
+}
+
 function brancher(z: HTMLElement) {
+  const venreg = z.querySelector<HTMLElement>("#venreg");
+  if (venreg) venreg.onclick = async () => {
+    try { enCours = await voix.enregistrer(); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
+    chrono = setInterval(() => { const c = document.querySelector("#vchrono"); if (c && enCours) c.textContent = duree(Date.now() - enCours.debut); }, 1000);
+    afficher();
+  };
+  const varreter = z.querySelector<HTMLElement>("#varreter");
+  if (varreter) varreter.onclick = async () => {
+    const e = enCours; if (!e) return;
+    clearInterval(chrono); enCours = null;
+    audioEnAttente = await e.arreter();
+    envoyerVoix();
+  };
+  const vannuler = z.querySelector<HTMLElement>("#vannuler");
+  if (vannuler) vannuler.onclick = () => { clearInterval(chrono); enCours?.annuler(); enCours = null; afficher(); };
+  const vre = z.querySelector<HTMLElement>("#vreessayer");
+  if (vre) vre.onclick = envoyerVoix;
+  const voub = z.querySelector<HTMLElement>("#voublier");
+  if (voub) voub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { audioEnAttente = null; afficher(); } };
+
   z.querySelector<HTMLElement>("#dfermer")!.onclick = () => { quitter(); fermer(); };
   const ta = z.querySelector<HTMLTextAreaElement>("#dtexte");
   if (ta) ta.oninput = () => { texte = ta.value; garderBrouillon(); };

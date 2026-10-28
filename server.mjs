@@ -7,6 +7,7 @@ import { timingSafeEqual, createHash } from "node:crypto";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as claude from "./serveur/claude.mjs";
+import * as transcription from "./serveur/transcription.mjs";
 
 const racine = join(fileURLToPath(new URL(".", import.meta.url)), "dist");
 const port = Number(process.env.PORT) || 3000;
@@ -29,7 +30,7 @@ const securite = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   "X-Frame-Options": "DENY",
-  "Permissions-Policy": "camera=(), geolocation=(), microphone=()"
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=(self)"   // micro : dictée enregistrée (transcription par Whisper)
 };
 
 /* Les fichiers de assets/ portent une empreinte dans leur nom : on peut les garder longtemps.
@@ -73,6 +74,10 @@ function autorise(req, res) {
 }
 
 function lireCorps(req, max) {
+  return lireOctets(req, max).then(b => { try { return JSON.parse(b.toString("utf8") || "{}"); } catch { throw new Error("illisible"); } });
+}
+
+function lireOctets(req, max) {
   return new Promise((ok, ko) => {
     let taille = 0; const morceaux = [];
     req.on("data", d => {
@@ -80,7 +85,7 @@ function lireCorps(req, max) {
       if (taille > max) { ko(new Error("trop gros")); req.destroy(); return; }
       morceaux.push(d);
     });
-    req.on("end", () => { try { ok(JSON.parse(Buffer.concat(morceaux).toString("utf8") || "{}")); } catch { ko(new Error("illisible")); } });
+    req.on("end", () => ok(Buffer.concat(morceaux)));
     req.on("error", ko);
   });
 }
@@ -88,7 +93,13 @@ function lireCorps(req, max) {
 async function api(req, res, chemin) {
   if (!autorise(req, res)) return;
   try {
-    if (req.method === "GET" && chemin === "/api/ia/etat") return json(res, 200, await claude.etat());
+    if (req.method === "GET" && chemin === "/api/ia/etat") return json(res, 200, { ...await claude.etat(), transcription: transcription.disponible() });
+    if (req.method === "POST" && chemin === "/api/ia/transcrire") {
+      const audio = await lireOctets(req, 25e6);
+      if (!audio.length) return json(res, 400, { erreur: "Enregistrement vide." });
+      const r = await transcription.transcrire(audio, String(req.headers["content-type"] || "audio/webm"));
+      return json(res, r.erreur ? 502 : 200, r);
+    }
     if (req.method === "POST" && chemin === "/api/ia/connexion") return json(res, 200, await claude.demarrerConnexion());
     if (req.method === "POST" && chemin === "/api/ia/connexion/code") {
       const { code } = await lireCorps(req, 4_000);
@@ -105,7 +116,7 @@ async function api(req, res, chemin) {
     }
     json(res, 404, { erreur: "Introuvable." });
   } catch (e) {
-    json(res, e?.message === "trop gros" ? 413 : 400, { erreur: e?.message === "trop gros" ? "Bilan trop volumineux." : "Demande illisible." });
+    json(res, e?.message === "trop gros" ? 413 : 400, { erreur: e?.message === "trop gros" ? (chemin === "/api/ia/transcrire" ? "Enregistrement trop long : coupez-le en plusieurs." : "Bilan trop volumineux.") : "Demande illisible." });
   }
 }
 

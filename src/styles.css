@@ -195,3 +195,47 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 button.lien{background:none;border:0;padding:4px 6px;min-height:0;font-size:.85rem;font-weight:400;color:var(--accent);text-decoration:underline;vertical-align:middle}
 .nomedit{margin-top:0}
 .titre{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+
+/* créer un patient sans bilan depuis la recherche */
+.creer{margin:8px 10px;font-weight:700;color:var(--accent);border-color:var(--accent);white-space:normal;text-align:left}
+.choix-type{display:flex;gap:18px;flex-wrap:wrap}
+
+/* agenda */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.agenda{position:fixed;inset:0;z-index:6;background:var(--bg);display:flex;flex-direction:column;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.abar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.abar h2{margin:0;font-size:1.25rem}
+.alegende{margin:6px 0 8px}
+.trous{color:var(--warn);font-weight:700}
+.agrille{flex:1;overflow:auto;display:grid;grid-template-columns:44px repeat(6,minmax(110px,1fr));gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
+.agrille .entete{position:sticky;top:0;z-index:2;background:var(--panel);height:74px;overflow:auto;padding:4px 2px;display:grid;gap:3px;align-content:start;border-bottom:1px solid var(--line);margin-bottom:6px}
+.agrille .entete small{color:var(--soft);font-size:.78rem}
+.jour.auj .entete b{color:var(--accent)}
+.agrille .col{position:relative}
+.heures span{position:absolute;right:4px;font-size:.75rem;color:var(--soft);transform:translateY(-50%)}
+.heures span:first-child{transform:none}
+.plage{position:absolute;left:0;right:0;background:var(--bg);border-radius:6px}
+.agrille .libre,.agrille .rdvb{position:absolute;left:0;width:100%;min-height:0;padding:2px 6px;border-radius:6px;font-size:.78rem;justify-content:flex-start;align-items:flex-start;overflow:hidden;text-align:left}
+.agrille .libre{background:var(--warn-bg);border:1px dashed var(--warn);color:var(--warn)}
+.agrille .rdvb{flex-direction:column;gap:0;background:var(--accent-bg);border:1px solid var(--accent);color:var(--ink);line-height:1.15}
+.agrille .rdvb.bilan{background:var(--accent);color:var(--accent-ink)}
+.agrille .rdvb.bilan small{color:inherit}
+.agrille .rdvb b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.agrille .rdvb small{color:var(--soft);font-size:.72rem}
+.agrille .rdvb.sansheure{position:static;padding:1px 6px;flex-direction:row;gap:6px;align-items:baseline}
+dialog.placer{border:0;border-radius:16px;padding:20px;width:min(520px,calc(100vw - 32px));display:grid;gap:12px;background:var(--panel);color:var(--ink)}
+dialog.placer:not([open]){display:none}
+dialog.placer h3{margin:0}
+dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;width:100%}
+.presultats{display:flex;flex-wrap:wrap;gap:8px;max-height:40vh;overflow:auto}
+.presultats .note{width:100%;margin:0}
+.presultats .cand{font-weight:700}
+.horaires .hligne{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
+.horaires .hligne .choix{min-width:120px}
+.horaires input[type=time]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 6px}
+
+/* dictée enregistrée (Whisper) */
+.voix{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--warn-bg);color:var(--warn);border-radius:12px;padding:10px 14px;font-weight:700}
+.voix .point{width:14px;height:14px;border-radius:50%;background:var(--warn);animation:clignote 1s infinite}
+@keyframes clignote{50%{opacity:.25}}
+.voixbtn{min-height:56px;font-size:1.05rem}

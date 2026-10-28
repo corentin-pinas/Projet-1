@@ -45,7 +45,7 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 | 3 | IA branchée (abonnement, stylet, niveaux d'IA) | Fait, en usage |
 | 4 | Sauvegarde : copies internes (0.5.0, en production) + copie hors de Chrome (0.5.1) | Faite, à valider sur la tablette |
 | 5 | Dictée groupée | Faite (0.6.0), à valider sur une vraie matinée |
-| 6 | Agenda | À faire (maquette validée, deux questions ouvertes) |
+| 6 | Agenda + patients sans bilan | Fait (0.7.0), à valider sur la tablette |
 | 7 | Transmissions en PDF | À faire |
 | 8 | Ses autres idées, une par une | Plus tard |
 
@@ -59,13 +59,12 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 - **Copie hors de Chrome (version 0.5.1, 25 octobre 2026, demandée par Corentin)** : bouton « Copier hors de Chrome » qui télécharge un fichier complet (texte + PDF et photos) dans « Téléchargements », `mes-patients-AAAA-MM-JJ.sauvegarde`. Chiffré (AES-GCM 256, clé PBKDF2 SHA-256 600 000 tours, morceau par morceau : `src/fichier-copie.ts`) avec un mot de passe choisi une fois et **retenu par la tablette** (option 1 choisie par Corentin), à noter sur papier. Survit à un effacement des données de Chrome, pas à la perte de la tablette. Pas de Drive. Rappel : la ligne « Copie hors de Chrome » de « État de l'appli » passe en orange après 7 jours. « Restaurer depuis un fichier » : essaie le mot de passe retenu, sinon le demande ; l'état actuel est gardé (annulable).
 - Non testé sur la vraie tablette : le téléchargement depuis l'appli installée et le choix du fichier à restaurer dans le sélecteur Android.
 
-## Étape 6 — agenda (maquette validée)
+## Étape 6 — agenda (version 0.7.0, 28 octobre 2026)
 
-- Vue semaine en colonnes. **Séance = 20 minutes ; bilan = 40 minutes** (deux créneaux). Au moment d'ajouter un rendez-vous : « Séance » ou « Bilan ».
-- **Toucher un patient ouvre sa fiche** ; toucher un trou permet d'y placer un patient.
-- Trous anormaux en orange, d'après ses horaires habituels.
-- Le modèle de rendez-vous doit gagner une durée ou un type (aujourd'hui `{d, h}`, un par jour et par patient au plus).
-- **Questions en attente** : (1) ses horaires jour par jour avec la pause de midi ; (2) accord pour **créer un patient depuis l'agenda** (prénom + initiale, « bilan à venir »), le PDF déposé ensuite rejoignant son dossier.
+- **Patients sans bilan** (demande du 28 octobre : patients déjà en soins dont le bilan n'est pas arrivé) : création depuis la recherche (« Créer le patient « Paul G. » (bilan à venir) ») ou depuis un créneau de l'agenda. Le nom tapé passe par `patientFrom` (nom complet réduit à l'initiale). Fiche sans bilan : séances, rendez-vous, « Ajouter le bilan », « Supprimer ce patient ». Un bilan déposé au même nom rejoint le seul patient sans bilan de ce nom. La sélection de l'écran se fait par dossier (`selD`), plus par bilan.
+- **Agenda** (`src/agenda.ts`, bouton « 📅 Agenda ») : semaine du lundi au samedi en colonnes, plein écran ; séance 20 min, bilan 40 min (`t: "bilan"` sur le rendez-vous, choix « Séance / Bilan » aussi sur la fiche). Créneaux libres en orange (`creneauxLibres`) d'après les horaires habituels (« Mes horaires », paramètre `horaires`, défaut lun.–ven. 8 h–12 h / 14 h–19 h, samedi non travaillé), à venir seulement. Toucher un patient ouvre sa fiche ; toucher un créneau : patient existant (suggestions : patients sans rendez-vous à venir) ou nouveau patient. Déplacement dans la journée confirmé (un rendez-vous par jour et par patient).
+- Corentin doit régler ses vrais horaires dans « Mes horaires » (question jamais tranchée : il les saisit lui-même).
+- **Dictée enregistrée, prête pour Whisper** : bouton « 🎙️ Enregistrer ma dictée » dans la dictée groupée, visible seulement si le serveur a `WHISPER_URL` (et le code d'accès réglé). La tablette enregistre (MediaRecorder), `/api/ia/transcrire` relaie à un service compatible avec l'API audio/transcriptions d'OpenAI (`serveur/transcription.mjs`, variables `WHISPER_URL`, `WHISPER_CLE`, `WHISPER_MODELE`, vocabulaire de kiné en prompt), le texte s'ajoute à la dictée. Micro autorisé (`microphone=(self)`). Pour un Whisper sur le PC : le serveur Railway doit pouvoir le joindre (adresse publique ou tunnel), à voir avec le PC.
 
 ## Étape 7 — transmissions
 

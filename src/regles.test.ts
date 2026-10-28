@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agesCompatibles, avecRdv, avenirDe, avenirFrom, heureFr, jourLabel, lignesListe, nomAffiche,
-  nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
+  creneauxLibres, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
 } from "./regles";
 
@@ -76,7 +76,7 @@ describe("rendez-vous", () => {
   });
   it("donne le prochain et compte les suivants", () => {
     expect(prochainRdv([{ d: "2026-10-09", h: "" }, { d: "2026-10-03", h: "08:30" }], "2026-10-02"))
-      .toEqual({ k: "2026-10-03 08:30", date: "2026-10-03", heure: "08:30", autres: 1 });
+      .toEqual({ k: "2026-10-03 08:30", date: "2026-10-03", heure: "08:30", bilan: false, autres: 1 });
   });
   it("écrit l'heure et le jour à la française", () => {
     expect(heureFr("08:30")).toBe("8 h 30");
@@ -186,5 +186,33 @@ describe("dictée groupée : rattacher un patient nommé", () => {
 
   it("passage sans patient : question aussi", () => {
     expect(rattacher(null, [marc], jour).dossier).toBeNull();
+  });
+});
+
+describe("agenda", () => {
+  it("la semaine va du lundi au samedi", () => {
+    expect(semaine("2026-10-28")).toEqual(["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31"]);
+    expect(semaine("2026-11-01")[0]).toBe("2026-10-26");   // dimanche : semaine qui se termine
+    expect(numeroJour("2026-10-26")).toBe(1);
+    expect(decalerJours("2026-10-26", 7)).toBe("2026-11-02");
+  });
+
+  it("une séance dure 20 minutes, un bilan 40", () => {
+    expect(dureeRdv({ d: "2026-10-28", h: "08:00" })).toBe(20);
+    expect(dureeRdv({ d: "2026-10-28", h: "08:00", t: "bilan" })).toBe(40);
+    expect(avecRdv([], "2026-10-28", "08:00", "bilan")).toEqual([{ d: "2026-10-28", h: "08:00", t: "bilan" }]);
+    expect(rdvsAVenir([{ d: "2026-10-28", h: "08:00", t: "bilan" }], "2026-10-01")[0].t).toBe("bilan");
+  });
+
+  it("les créneaux libres sont ce qui reste des horaires, pause de midi exclue", () => {
+    const l = creneauxLibres([["08:00", "10:00"], ["14:00", "15:00"]], [{ debut: 8 * 60 + 20, fin: 9 * 60 }, { debut: 14 * 60 + 10, fin: 14 * 60 + 30 }]);
+    const h = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+    expect(l.map(c => h(c.debut))).toEqual(["08:00", "09:00", "09:20", "09:40", "14:30"]);   // 14:00-14:10 : trop court
+  });
+
+  it("les rendez-vous du jour, à l'heure, avec leur fin", () => {
+    const d = (id: string, label: string, rdvs: Rdv[]): Dossier => ({ id, label, rdvs, homonyme: false, cree: "" });
+    const r = rdvsDuJour([d("a", "Paul G.", [{ d: "2026-10-28", h: "10:00", t: "bilan" }]), d("b", "Marc D.", [{ d: "2026-10-28", h: "08:00" }, { d: "2026-10-29", h: "08:00" }])], "2026-10-28");
+    expect(r.map(x => [x.dossier.label, x.debut, x.fin])).toEqual([["Marc D.", 480, 500], ["Paul G.", 600, 640]]);
   });
 });

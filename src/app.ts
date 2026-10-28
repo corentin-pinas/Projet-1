@@ -2,10 +2,11 @@
    Reprise de la version d'essai ; l'IA (résumés, mise au propre) arrive à l'étape 3. */
 import * as db from "./db";
 import {
-  ageOf, avecRdv, avenirDe, avenirFrom, frDate, heureFr, isoDay, jourLabel, lignesListe, nomAffiche,
+  ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, frDate, heureFr, isoDay, jourLabel, lignesListe, nomAffiche,
   prochainRdv, propreOk, questionHomonyme, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Dossier, type Seance
 } from "./regles";
+import * as agenda from "./agenda";
 import * as dictee from "./dictee";
 import * as moteur from "./moteur";
 import { confirmer, esc, toast } from "./ui";
@@ -13,7 +14,9 @@ import { confirmer, esc, toast } from "./ui";
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 
 let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
-let selected: string | null = null;      // bilan affiché
+let selD: string | null = null;          // patient (dossier) affiché
+let selB: string | null = null;          // bilan affiché dans ce dossier (null : le plus récent)
+let bilanPour: string | null = null;     // « Ajouter le bilan » depuis une fiche : le fichier choisi va dans ce dossier
 let formOpen = false, editing: string | null = null, rdvOpen = false, homoOpen = false;
 let dicteeVue = false;                    // la dictée groupée occupe la partie droite
 let nomOpen = false;                      // modification du nom du patient en cours
@@ -33,7 +36,7 @@ export async function demarrer() {
   donnees = await db.tout();
   db.abonner(async () => {
     donnees = await db.tout();
-    if (selected && !donnees.bilans.some(b => b.id === selected)) selected = null;
+    if (selD && !donnees.dossiers.some(d => d.id === selD)) selD = null;
     renderList();
     if (!busy()) renderMain();
   });
@@ -41,12 +44,13 @@ export async function demarrer() {
   moteur.surMessage(toast);
   addEventListener("online", () => moteur.resumerEnAttente());
   await rafraichirIA();
-  $("#add").addEventListener("click", () => $("#file").click());
+  $("#add").addEventListener("click", () => { bilanPour = null; $("#file").click(); });
   $("#dicteebtn").addEventListener("click", ouvrirDictee);
+  $("#agendabtn").addEventListener("click", () => agenda.ouvrir(ouvrirPatient));
   $<HTMLInputElement>("#file").addEventListener("change", ajouter);
   $("#q").addEventListener("input", renderList);
   /* la liste se reclasse quand on revient sur l'appli (le jour a pu changer) */
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { renderList(); if (selected && !busy()) renderMain(); } });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { renderList(); if (selD && !busy()) renderMain(); } });
   renderList();
   renderMain();
 }
@@ -70,7 +74,14 @@ function renderList() {
   const t = aujourdhui();
   const lignes = lignesListe(donnees.dossiers, donnees.bilans, $<HTMLInputElement>("#q").value, t);
   if (!donnees.dossiers.length) { $("#list").innerHTML = `<div class="note">Aucun bilan pour l'instant.</div>`; return; }
-  if (!lignes.length) { $("#list").innerHTML = `<div class="note">Aucun patient ne correspond.</div>`; return; }
+  if (!lignes.length) {
+    /* patient déjà en soins, sans bilan : on peut le créer d'ici, avec le nom cherché */
+    const q = $<HTMLInputElement>("#q").value.trim(), nom = q.includes(" ") ? patientFrom(q) : "";
+    $("#list").innerHTML = `<div class="note">Aucun patient ne correspond.</div>` + (nom ? `<button class="creer" id="creerq">Créer le patient « ${esc(nom)} » (bilan à venir)</button>` : "");
+    const c = $("#creerq");
+    if (c) c.onclick = () => creerPatient(nom);
+    return;
+  }
   let grp: string | null = null;
   $("#list").innerHTML = lignes.map(({ dossier: d, bilans, age, rdv }) => {
     const b = bilans[0], r = b?.resume;
@@ -78,15 +89,15 @@ function renderList() {
     const g = rdv ? rdv.date : "";
     let head = "";
     if (g !== grp) { grp = g; head = `<div class="grp${g === t ? " now" : ""}">${g ? esc(jourLabel(g, new Date())) : "Sans rendez-vous prévu"}</div>`; }
-    const cur = bilans.some(x => x.id === selected);
+    const cur = d.id === selD;
     const n = donnees.seances.filter(s => s.dossierId === d.id).length;
     const ask = !!questionHomonyme(d, donnees.dossiers, donnees.bilans);
-    return head + `<button class="item${g === t ? " now" : ""}" data-id="${esc(cur ? selected! : b?.id ?? "")}" aria-current="${cur}">
-      <b>${rdv?.heure ? `<i class="hr">${esc(heureFr(rdv.heure))}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
+    return head + `<button class="item${g === t ? " now" : ""}" data-id="${esc(d.id)}" aria-current="${cur}">
+      <b>${rdv?.heure ? `<i class="hr">${esc(heureFr(rdv.heure))}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${!bilans.length ? `<span class="pending">Bilan à venir</span>` : bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
   }).join("");
   $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => {
     quitterDictee();
-    selected = el.dataset.id || null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
+    selD = el.dataset.id || null; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
     renderList(); renderMain();
     if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
   });
@@ -110,10 +121,11 @@ function quitterDictee() {
 
 export function renderMain() {
   if (dicteeVue) return;   // la dictée groupée gère son propre affichage
-  const b = donnees.bilans.find(x => x.id === selected);
-  if (!b) { $("#main").innerHTML = `<div class="empty">Choisissez un patient dans la liste, ou ajoutez un bilan.</div>`; return; }
-  const r = b.resume, D = dossierDe(b), age = ageDe(D), bilans = bilansDe(D);
-  const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b.fichier])].filter(Boolean).join(", ");
+  const D = donnees.dossiers.find(d => d.id === selD);
+  if (!D) { $("#main").innerHTML = `<div class="empty">Choisissez un patient dans la liste, ou ajoutez un bilan.</div>`; return; }
+  const bilans = bilansDe(D), age = ageDe(D);
+  const b = bilans.find(x => x.id === selB) ?? bilans[0] as Bilan | undefined, r = b?.resume;
+  const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b ? b.fichier : "Bilan à venir"])].filter(Boolean).join(", ");
   const titre = nomOpen
     ? `<div class="vedit nomedit"><input type="text" id="nomval" value="${esc(D.label)}" aria-label="Nom du patient (prénom et initiale)" autocomplete="off"><button class="primary" id="nomsave">Enregistrer</button><button id="nomcancel">Annuler</button></div>`
     : `<div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button></div>`;
@@ -131,16 +143,19 @@ export function renderMain() {
   html += rdvOpen ? `<div class="sform" style="margin-top:12px">
       <label for="rdate">Date du prochain rendez-vous</label><input type="date" id="rdate" value="${esc(rv ? rv.date : aujourdhui())}">
       <label for="rtime">Heure</label><input type="time" id="rtime" value="${esc(rv ? rv.heure : "")}">
+      <div class="choix-type" role="radiogroup" aria-label="Type de rendez-vous"><label class="choix"><input type="radio" name="rtype" value="seance"${rv?.bilan ? "" : " checked"}> Séance (20 min)</label><label class="choix"><input type="radio" name="rtype" value="bilan"${rv?.bilan ? " checked" : ""}> Bilan (40 min)</label></div>
       <div class="row"><button class="primary" id="rsave">Enregistrer</button>${rv ? `<button id="rclear">Effacer le rendez-vous</button>` : ""}<button id="rcancel">Annuler</button></div></div>`
-    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.heure ? " à " + heureFr(rv.heure) : ""))}</b>${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span><button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
+    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.heure ? " à " + heureFr(rv.heure) : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span><button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
     <div class="avmeta"><span>Noté à la séance du ${esc(frDate(av.s.date))}</span>${!av.resume && aCle ? `<button id="avsum"${moteur.occupe(av.s.id) ? " disabled" : ""}>${moteur.occupe(av.s.id) ? "Reformulation…" : "Reformuler en bref"}</button>` : ""}</div></div>`;
 
-  if (bilans.length > 1) html += `<div class="bils" role="group" aria-label="Bilans de ce dossier">${bilans.map(x => `<button data-bil="${esc(x.id)}" aria-pressed="${x.id === b.id}">${esc(x.resume ? ["Bilan du " + (x.resume.date_bilan || frDate(x.ajoute.slice(0, 10))), x.resume.region].filter(Boolean).join(", ") : "Bilan du " + frDate(x.ajoute.slice(0, 10)) + ", en attente de résumé")}</button>`).join("")}</div>`;
+  if (bilans.length > 1) html += `<div class="bils" role="group" aria-label="Bilans de ce dossier">${bilans.map(x => `<button data-bil="${esc(x.id)}" aria-pressed="${x.id === b?.id}">${esc(x.resume ? ["Bilan du " + (x.resume.date_bilan || frDate(x.ajoute.slice(0, 10))), x.resume.region].filter(Boolean).join(", ") : "Bilan du " + frDate(x.ajoute.slice(0, 10)) + ", en attente de résumé")}</button>`).join("")}</div>`;
 
-  if (!r) {
+  if (!b) {
+    html += `<div class="wait">Pas encore de bilan pour ce patient. Vous pouvez déjà noter ses séances et ses rendez-vous.<div class="row" style="margin-top:10px"><button class="primary" id="addbil">Ajouter le bilan</button></div></div>`;
+  } else if (!r) {
     html += moteur.occupe(b.id)
       ? `<div class="wait encours">Résumé en cours… L'IA lit le bilan, cela prend en général moins d'une minute.</div>`
       : !aCle
@@ -164,8 +179,10 @@ export function renderMain() {
     if (r.a_verifier?.length) html += `<div class="check"><b>À vérifier</b><ul class="vlist">${r.a_verifier.map((x, i) => `<li class="vitem" data-i="${i}"><p>${esc(x)}</p>
         <div class="vbtns"><button class="ok" data-act="ok">C'est juste</button><button data-act="fix">Corriger</button></div></li>`).join("")}</ul></div>`;
   }
-  html += `<div class="actions"><button class="primary" id="open">Voir le bilan complet</button><button id="del">Supprimer ce bilan</button></div>
-    <p class="note" style="margin-top:14px">Fichier : ${esc(b.fichier)}</p>`;
+  html += b
+    ? `<div class="actions"><button class="primary" id="open">Voir le bilan complet</button><button id="addbil2">Ajouter un autre bilan</button><button id="del">Supprimer ce bilan</button></div>
+    <p class="note" style="margin-top:14px">Fichier : ${esc(b.fichier)}</p>`
+    : `<div class="actions"><button id="delpat">Supprimer ce patient</button></div>`;
   html += seancesHtml(D);
   $("#main").innerHTML = html;
 
@@ -174,8 +191,11 @@ export function renderMain() {
   wireNom(D);
   if (autre) wireHomonyme(D, autre);
   $("#main").querySelectorAll<HTMLElement>("[data-bil]").forEach(el => el.onclick = () => {
-    selected = el.dataset.bil!; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
+    selB = el.dataset.bil!; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
   });
+  for (const id of ["#addbil", "#addbil2"]) { const a = $(id); if (a) a.onclick = () => { bilanPour = D.id; $("#file").click(); }; }
+  const delpat = $("#delpat"); if (delpat) delpat.onclick = () => supprimerPatient(D);
+  if (!b) return;
   $("#open").onclick = () => ouvrirVisionneuse(b);
   const resum = $("#resum"); if (resum) resum.onclick = () => moteur.resumer(b.id, true);
   const corrb = $("#corrbtn"); if (corrb) corrb.onclick = () => moteur.integrerCorrections(b.id, true);
@@ -225,7 +245,7 @@ function wireHomonyme(D: Dossier, autre: Dossier) {
   const box = $("#hbox");
   $("#hyes").onclick = async () => {
     $<HTMLButtonElement>("#hyes").disabled = true;
-    try { await db.fusionner(D.id, autre.id); toast("Les deux bilans sont réunis dans un seul dossier."); }
+    try { selD = autre.id; await db.fusionner(D.id, autre.id); toast("Les deux bilans sont réunis dans un seul dossier."); }
     catch { toast("L'enregistrement a échoué. Réessayez."); renderMain(); }
   };
   $("#hno").onclick = () => {
@@ -250,11 +270,11 @@ function wireHomonyme(D: Dossier, autre: Dossier) {
 }
 
 /* « Modifier » remplace le prochain rendez-vous, « Effacer » le retire ; les suivants sont gardés */
-async function saveRdv(D: Dossier, date: string, heure: string) {
+async function saveRdv(D: Dossier, date: string, heure: string, type?: "seance" | "bilan") {
   try {
     const suite = rdvsAVenir(D.rdvs, aujourdhui()).slice(1);
     rdvOpen = false;
-    await db.setRdvs(D.id, date ? avecRdv(suite, date, heure) : suite);
+    await db.setRdvs(D.id, date ? avecRdv(suite, date, heure, type) : suite);
     toast(date ? "Rendez-vous enregistré." : "Rendez-vous effacé.");
   } catch {
     rdvOpen = true; toast("L'enregistrement a échoué. Réessayez.");
@@ -271,7 +291,8 @@ function wireRdv(D: Dossier) {
     const date = $<HTMLInputElement>("#rdate").value, heure = $<HTMLInputElement>("#rtime").value;
     if (!date) { toast("Indiquez la date du rendez-vous."); return; }
     if (date < aujourdhui()) { toast("Cette date est déjà passée."); return; }
-    save.disabled = true; saveRdv(D, date, heure);
+    const type = document.querySelector<HTMLInputElement>('input[name="rtype"]:checked')?.value === "bilan" ? "bilan" : "seance";
+    save.disabled = true; saveRdv(D, date, heure, type);
   };
 }
 
@@ -370,12 +391,13 @@ async function ajouter(e: Event) {
   if (imgs.length) groupes.push(imgs);   // les photos choisies ensemble = un seul bilan
   if (!groupes.length) { toast("Choisissez des fichiers PDF ou des photos."); return; }
   const btn = $<HTMLButtonElement>("#add"); btn.disabled = true;
+  const pour = bilanPour; bilanPour = null;
   let ok = 0;
   for (const g of groupes) {
     try {
       if (g.some(f => f.size > 50e6)) { toast(`${g[0].name} est trop lourd (50 Mo maximum).`); continue; }
-      const b = await db.ajouterBilan(g);
-      selected = b.id; ok++;
+      const b = await db.ajouterBilan(g, pour ?? undefined);
+      selD = b.dossierId; selB = b.id; ok++;
     } catch (err) {
       toast((err as DOMException)?.name === "QuotaExceededError" ? "La tablette n'a plus assez de place." : `${g[0].name} n'a pas pu être ajouté.`);
     }
@@ -409,7 +431,34 @@ async function supprimer(b: Bilan) {
     ? `Supprimer le bilan de ${D.label} ? C'est son seul bilan : le patient disparaît de la liste${n ? `, avec ses ${n} séance${n > 1 ? "s" : ""}` : ""} et ses rendez-vous. Cette action est définitive.`
     : `Supprimer ce bilan de ${D.label} ? Ses autres bilans et ses séances sont gardés. Cette action est définitive.`;
   if (!await confirmer(texte, "Supprimer")) return;
-  try { await db.supprimerBilan(b.id); selected = seul ? null : bilansDe(D).find(x => x.id !== b.id)?.id ?? null; renderMain(); toast("Bilan supprimé."); }
+  try { await db.supprimerBilan(b.id); if (seul) selD = null; selB = null; renderMain(); toast("Bilan supprimé."); }
+  catch { toast("La suppression a échoué."); }
+}
+
+/* ---------- patient sans bilan ---------- */
+
+/* ouvre la fiche d'un patient (depuis l'agenda, par exemple) */
+export function ouvrirPatient(id: string) {
+  quitterDictee();
+  selD = id; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
+  renderList(); renderMain();
+}
+
+async function creerPatient(nom: string) {
+  try {
+    const d = await db.creerPatient(nom);
+    $<HTMLInputElement>("#q").value = "";
+    ouvrirPatient(d.id);
+    toast("Patient créé. Notez ses séances dès maintenant ; le bilan pourra être ajouté plus tard.");
+  } catch (e) {
+    toast(/existe déjà/.test(String((e as Error)?.message)) ? "Un patient porte déjà ce nom. Ajoutez la 2e lettre du nom de famille (« Paul Ga. »)." : "La création a échoué. Réessayez.");
+  }
+}
+
+async function supprimerPatient(D: Dossier) {
+  const n = seancesDe(D).length;
+  if (!await confirmer(`Supprimer ${D.label} ?${n ? ` Ses ${n} séance${n > 1 ? "s" : ""} et` : " Ses"} rendez-vous disparaissent aussi. Cette action est définitive.`, "Supprimer le patient")) return;
+  try { await db.supprimerPatient(D.id); selD = null; renderMain(); toast("Patient supprimé."); }
   catch { toast("La suppression a échoué."); }
 }
 

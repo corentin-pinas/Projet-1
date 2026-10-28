@@ -61,26 +61,56 @@ export async function fichierBlob(id: string): Promise<Blob | null> {
 /* ---------- bilans ---------- */
 
 /* Un groupe de fichiers = un bilan (un PDF seul, ou plusieurs photos choisies ensemble).
-   Si un dossier porte déjà ce nom, le bilan va dans un nouveau dossier marqué « homonyme » :
-   la question « même personne ? » sera posée une fois le bilan résumé. */
-export async function ajouterBilan(fichiers: File[]): Promise<Bilan> {
+   dossierId : le bilan rejoint ce dossier (« Ajouter le bilan » sur la fiche d'un patient créé sans bilan).
+   Sinon, un patient créé sans bilan au même nom le reçoit (il n'y en a qu'un) ; si un dossier avec bilan porte déjà ce nom,
+   le bilan va dans un nouveau dossier marqué « homonyme » : la question « même personne ? » sera posée une fois le bilan résumé. */
+export async function ajouterBilan(fichiers: File[], dossierId?: string): Promise<Bilan> {
   await copieDuJour();
   const db = await ouvrir();
   const nom = fichiers[0].name.replace(/\.[^.]+$/, "");
   const label = patientFrom(fichiers[0].name);
   const existants = await db.getAll("dossiers");
-  const dossier: Dossier = { id: nouvelId(), label, rdvs: [], homonyme: existants.some(d => d.label === label), cree: new Date().toISOString() };
+  const tousBilans = await db.getAll("bilans");
+  const sansBilan = existants.filter(d => d.label === label && !tousBilans.some(b => b.dossierId === d.id));
+  const cible = dossierId ? existants.find(d => d.id === dossierId) : sansBilan.length === 1 && existants.filter(d => d.label === label).length === 1 ? sansBilan[0] : undefined;
+  if (dossierId && !cible) throw new Error("Dossier introuvable");
+  const dossier: Dossier = cible ?? { id: nouvelId(), label, rdvs: [], homonyme: existants.some(d => d.label === label), cree: new Date().toISOString() };
   const refs: FichierBilan[] = fichiers.map(f => ({ id: nouvelId(), nom: f.name, type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : "") }));
   const bilan: Bilan = { id: nouvelId(), dossierId: dossier.id, fichier: nom, fichiers: refs, ajoute: new Date().toISOString(), resume: null, valides: [], corrections: [] };
   const tx = db.transaction(["dossiers", "bilans", "fichiers"], "readwrite");
   await Promise.all([
     ...fichiers.map((f, i) => tx.objectStore("fichiers").put({ id: refs[i].id, blob: f })),
-    tx.objectStore("dossiers").put(dossier),
+    ...(cible ? [] : [tx.objectStore("dossiers").put(dossier)]),
     tx.objectStore("bilans").put(bilan),
     tx.done
   ]);
   prevenir();
   return bilan;
+}
+
+/* Patient créé sans bilan (déjà en soins, bilan à venir) : prénom et initiale seulement. */
+export async function creerPatient(label: string, rdvs: Rdv[] = []): Promise<Dossier> {
+  await copieDuJour();
+  const db = await ouvrir();
+  const existants = await db.getAll("dossiers");
+  const d: Dossier = { id: nouvelId(), label, rdvs, homonyme: false, cree: new Date().toISOString() };
+  if (existants.some(x => x.label === label)) throw new Error("Ce nom existe déjà");
+  await db.put("dossiers", d);
+  prevenir();
+  return d;
+}
+
+/* Supprime un patient entier : dossier, bilans (et leurs fichiers), séances, rendez-vous. */
+export async function supprimerPatient(dossierId: string) {
+  await copieDuJour();
+  const db = await ouvrir();
+  const tx = db.transaction(["dossiers", "bilans", "seances"], "readwrite");
+  for (const k of await tx.objectStore("bilans").index("dossierId").getAllKeys(dossierId)) await tx.objectStore("bilans").delete(k);
+  for (const k of await tx.objectStore("seances").index("dossierId").getAllKeys(dossierId)) await tx.objectStore("seances").delete(k);
+  await tx.objectStore("dossiers").delete(dossierId);
+  await tx.done;
+  await nettoyerFichiers();
+  prevenir();
 }
 
 export async function majBilan(id: string, patch: Partial<Bilan>) {

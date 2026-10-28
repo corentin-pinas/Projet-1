@@ -131,3 +131,44 @@ test("deux patients au même prénom vus le même jour : l'appli demande lequel"
   await doute.locator(".cand", { hasText: "Marc L." }).click();
   await expect(page.locator(".recap")).toContainText("Marc L.");
 });
+
+test("dictée enregistrée : la voix part vers Whisper (simulé) et le texte revient dans la dictée", async ({ page, request }) => {
+  await page.goto("/");
+  await page.locator("#file").setInputFiles([{ name: "Bilan - Marc DUPONT.png", mimeType: "image/png", buffer: png }]);
+  // sans code d'accès au serveur, pas de bouton d'enregistrement
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await expect(page.locator(".dictee textarea")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Enregistrer ma dictée/ })).toHaveCount(0);
+  await page.locator("#dfermer").click();
+
+  await page.locator("#etatbtn").click();
+  await page.locator("#abocode").fill("code-acces-essai-123");
+  await page.getByRole("button", { name: "Enregistrer le code" }).click();
+  await page.locator("#etatclose").click();
+
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await page.locator("#dtexte").fill("début tapé à la main");
+  await page.getByRole("button", { name: /Enregistrer ma dictée/ }).click();
+  await expect(page.locator(".voix")).toContainText("Enregistrement");
+  await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
+  await expect(page.locator("#dtexte")).toHaveValue("début tapé à la main\navec Marc douleur 3 sur 10 renforcement des rotateurs externes");
+  await expect(page.getByRole("button", { name: /Enregistrer ma dictée/ })).toBeVisible();
+
+  const recu = await (await request.get("http://localhost:4181/dernier")).json();
+  expect(recu).toMatchObject({ model: "whisper-1", language: "fr", fichier: "dictee.webm" });
+  expect(recu.prompt).toContain("coiffe des rotateurs");
+  expect(recu.taille).toBeGreaterThan(1000);
+
+  // le texte transcrit est gardé comme une dictée tapée
+  await page.waitForTimeout(600);
+  await page.reload();
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await expect(page.locator("#dtexte")).toHaveValue(/rotateurs externes$/);
+});
+
+test("la transcription est réservée à qui connaît le code d'accès", async ({ request }) => {
+  expect((await request.post("/api/ia/transcrire", { data: Buffer.from("x") })).status()).toBe(401);
+  const r = await request.get("/api/ia/etat", { headers: { Authorization: "Bearer code-acces-essai-123" } });
+  expect((await r.json()).transcription).toBe(true);
+});

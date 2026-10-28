@@ -177,3 +177,37 @@ describe("copie hors de Chrome", () => {
     expect((await db.listeCopies()).map(c => c.id)).toEqual([db.AVANT_RETOUR]);   // l'import peut s'annuler
   });
 });
+
+describe("patient sans bilan", () => {
+  it("se crée avec prénom et initiale, puis reçoit son bilan au même nom", async () => {
+    const d = await db.creerPatient("Paul G.", [{ d: "2026-10-28", h: "08:00" }]);
+    await db.ajouterSeance(d.id, "2026-10-27", "mobilisation");
+    const b = await db.ajouterBilan([pdf("Fiche Bilan Épaule - Paul GARCIA.pdf")]);
+    expect(b.dossierId).toBe(d.id);
+    const t = await db.tout();
+    expect(t.dossiers).toHaveLength(1);
+    expect(t.dossiers[0].homonyme).toBe(false);
+    expect(t.seances[0].dossierId).toBe(d.id);
+  });
+
+  it("le bilan peut être ajouté depuis la fiche, quel que soit le nom du fichier", async () => {
+    const d = await db.creerPatient("Marie-Laure D.");
+    const b = await db.ajouterBilan([pdf("scan 12.pdf")], d.id);
+    expect(b.dossierId).toBe(d.id);
+    expect((await db.tout()).dossiers).toHaveLength(1);
+  });
+
+  it("refuse un deuxième patient au même nom", async () => {
+    await db.creerPatient("Paul G.");
+    await expect(db.creerPatient("Paul G.")).rejects.toThrow("existe déjà");
+  });
+
+  it("supprimer un patient retire tout, fichiers compris", async () => {
+    const d = await db.creerPatient("Paul G.");
+    const b = await db.ajouterBilan([pdf("x.pdf")], d.id);
+    await db.ajouterSeance(d.id, "2026-10-27", "massage");
+    await db.supprimerPatient(d.id);
+    expect(await db.tout()).toEqual({ dossiers: [], bilans: [], seances: [] });
+    expect(await db.fichierBlob(b.fichiers[0].id)).toBeNull();
+  });
+});

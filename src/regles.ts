@@ -1,7 +1,7 @@
 /* Règles métier reprises à l'identique de la version d'essai (reference/bilans-seances-essai.html).
    Fonctions pures : aucune lecture de la base ni de l'écran, pour pouvoir les tester une à une. */
 
-export type Rdv = { d: string; h: string };          // d : AAAA-MM-JJ, h : HH:MM ou ""
+export type Rdv = { d: string; h: string; t?: "bilan" };   // d : AAAA-MM-JJ, h : HH:MM ou "", t : « bilan » (40 min), sinon séance (20 min)
 
 export type Resume = {
   region?: string;
@@ -190,16 +190,16 @@ export const rdvKey = (r: Rdv) => r.d + " " + (r.h || "99:99");
 /* rendez-vous à venir (un par jour au plus), du plus proche au plus lointain ; les passés ne comptent plus */
 export function rdvsAVenir(rdvs: Rdv[], aujourdhui: string): Rdv[] {
   const vus = new Map<string, Rdv>();
-  for (const r of rdvs) if (r && r.d && r.d >= aujourdhui) vus.set(r.d, { d: r.d, h: r.h || "" });
+  for (const r of rdvs) if (r && r.d && r.d >= aujourdhui) vus.set(r.d, { d: r.d, h: r.h || "", ...(r.t === "bilan" ? { t: "bilan" as const } : {}) });
   return [...vus.values()].sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
 }
 
-export const avecRdv = (list: Rdv[], d: string, h: string) =>
-  list.filter(r => r.d !== d).concat([{ d, h: h || "" }]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+export const avecRdv = (list: Rdv[], d: string, h: string, t?: "bilan" | "seance") =>
+  list.filter(r => r.d !== d).concat([{ d, h: h || "", ...(t === "bilan" ? { t: "bilan" as const } : {}) }]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
 
 export function prochainRdv(rdvs: Rdv[], aujourdhui: string) {
   const l = rdvsAVenir(rdvs, aujourdhui);
-  return l.length ? { k: rdvKey(l[0]), date: l[0].d, heure: l[0].h, autres: l.length - 1 } : null;
+  return l.length ? { k: rdvKey(l[0]), date: l[0].d, heure: l[0].h, bilan: l[0].t === "bilan", autres: l.length - 1 } : null;
 }
 
 export function jourLabel(iso: string, maintenant: Date): string {
@@ -270,4 +270,61 @@ export function rattacher(dicte: string | null, dossiers: Dossier[], date: strin
   const candidats = duJour.length > 1 ? duJour : possibles.length ? possibles
     : [...dossiers].sort(ordre);
   return { dossier: null, candidats };
+}
+
+/* ---------- agenda ---------- */
+
+/* Durées choisies par Corentin : séance 20 minutes, bilan 40 minutes. */
+export const PAS = 20;
+export const dureeRdv = (r: Rdv) => r.t === "bilan" ? 40 : PAS;
+
+export const minutes = (h: string) => { const [a, b] = h.split(":").map(Number); return a * 60 + (b || 0); };
+export const hhmm = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+
+/* Horaires habituels : pour chaque jour (1 = lundi … 6 = samedi), les plages de travail, pause de midi exclue. */
+export type Plage = [string, string];
+export type Horaires = Record<string, Plage[]>;
+export const HORAIRES_DEFAUT: Horaires = {
+  "1": [["08:00", "12:00"], ["14:00", "19:00"]], "2": [["08:00", "12:00"], ["14:00", "19:00"]],
+  "3": [["08:00", "12:00"], ["14:00", "19:00"]], "4": [["08:00", "12:00"], ["14:00", "19:00"]],
+  "5": [["08:00", "12:00"], ["14:00", "19:00"]], "6": []
+};
+
+const dateDe = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12); };
+export const numeroJour = (iso: string) => dateDe(iso).getDay() || 7;   // 1 = lundi … 7 = dimanche
+
+/* les six jours (lundi à samedi) de la semaine qui contient ce jour */
+export function semaine(iso: string): string[] {
+  const d = dateDe(iso);
+  d.setDate(d.getDate() - (numeroJour(iso) - 1));
+  return Array.from({ length: 6 }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() + i); return isoDay(x); });
+}
+export const decalerJours = (iso: string, n: number) => { const d = dateDe(iso); d.setDate(d.getDate() + n); return isoDay(d); };
+
+export type RdvDuJour = { dossier: Dossier; rdv: Rdv; debut: number | null; fin: number | null };
+
+export function rdvsDuJour(dossiers: Dossier[], iso: string): RdvDuJour[] {
+  return dossiers.flatMap(d => d.rdvs.filter(r => r.d === iso).map(r => {
+    const debut = r.h ? minutes(r.h) : null;
+    return { dossier: d, rdv: r, debut, fin: debut == null ? null : debut + dureeRdv(r) };
+  })).sort((a, b) => (a.debut ?? -1) - (b.debut ?? -1) || a.dossier.label.localeCompare(b.dossier.label, "fr"));
+}
+
+/* Créneaux libres de 20 minutes dans les horaires du jour : ce qui reste des plages une fois les rendez-vous posés.
+   Chaque trou est découpé en créneaux à partir de son début ; un reste de moins de 20 minutes n'est pas un créneau. */
+export function creneauxLibres(plages: Plage[], occupes: { debut: number; fin: number }[]): { debut: number; fin: number }[] {
+  const pris = [...occupes].sort((a, b) => a.debut - b.debut);
+  const libres: { debut: number; fin: number }[] = [];
+  for (const [a, b] of plages) {
+    let t = minutes(a);
+    const fin = minutes(b);
+    const couper = (jusqua: number) => { for (; t + PAS <= jusqua; t += PAS) libres.push({ debut: t, fin: t + PAS }); };
+    for (const o of pris) {
+      if (o.fin <= t || o.debut >= fin) continue;
+      couper(Math.min(o.debut, fin));
+      t = Math.max(t, o.fin);
+    }
+    couper(fin);
+  }
+  return libres;
 }
