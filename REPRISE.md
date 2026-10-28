@@ -79,6 +79,8 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 - Corentin dicte prénom seul ou prénom + initiale, jamais le nom de famille (identitovigilance) ; un nom complet est de toute façon réduit à l'initiale.
 - Récapitulatif « N séances rangées » avec « Annuler cette dictée » : séances retirées, rendez-vous remis, texte dicté rendu pour correction.
 - Non testé en vrai : qualité du découpage sur une vraie matinée, durée de la demande (limite de 5 minutes du serveur).
+- **Essai du 26 octobre** : la dictée groupée fonctionne, mais la dictée du clavier Samsung fait perdre trop de temps en corrections. La dictée de l'appli Claude n'est pas utilisable par une autre appli.
+- **Décision du 28 octobre** : on laisse la dictée telle quelle pour l'instant. À l'arrivée du PC de Corentin : **Whisper** (comme l'appli d'un ami). L'appli enregistre la voix (bouton micro), Whisper transcrit l'audio en texte, le texte part ensuite dans le rangement actuel (`rangerDictee`). À trancher à ce moment-là : Whisper sur le PC (gratuit, la voix ne sort pas du cabinet) ou par l'API d'OpenAI (voix envoyée aux États-Unis). Penser à autoriser le micro : `Permissions-Policy: microphone=()` dans `server.mjs` le bloque aujourd'hui.
 
 ## Autres idées notées (plus tard)
 
