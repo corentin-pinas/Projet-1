@@ -81,6 +81,12 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 - **Essai du 26 octobre** : la dictée groupée fonctionne, mais la dictée du clavier Samsung fait perdre trop de temps en corrections. La dictée de l'appli Claude n'est pas utilisable par une autre appli.
 - **Décision du 28 octobre** : on laisse la dictée telle quelle pour l'instant. À l'arrivée du PC de Corentin : **Whisper** (comme l'appli d'un ami). L'appli enregistre la voix (bouton micro), Whisper transcrit l'audio en texte, le texte part ensuite dans le rangement actuel (`rangerDictee`). À trancher à ce moment-là : Whisper sur le PC (gratuit, la voix ne sort pas du cabinet) ou par l'API d'OpenAI (voix envoyée aux États-Unis). Penser à autoriser le micro : `Permissions-Policy: microphone=()` dans `server.mjs` le bloque aujourd'hui.
 
+## Idée notée le 28 octobre 2026 : écran d'accueil « Ma journée »
+
+- À l'ouverture de l'appli, à la place de « Choisissez un patient » : les patients du jour en **petites fiches**, dans l'ordre des rendez-vous. Sur chacune : heure, nom, séance ou bilan, **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**, pathologie (région du bilan).
+- Toucher une petite fiche ouvre la vraie fiche du patient.
+- Retour de Corentin sur l'agenda (0.7.0) : fonctionne, pas de bug constaté.
+
 ## Autres idées notées (plus tard)
 
 Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, couleurs et palettes d'affichage, transcription audio par un service dédié (il prévoit d'autres applis vocales).
