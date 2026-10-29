@@ -19,6 +19,8 @@ test("réglages : noir et violet, texte plus grand, écriture arrondie, gardés 
   await expect(page.locator('#regchoix [data-cle="couleur"][aria-pressed="true"]')).toHaveText("Violet");
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim().toUpperCase())).toBe("#B48CF0");
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(18, 14, 23)");
+  // la barre d'Android (heure, batterie) prend la couleur du fond de l'appli
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", "#120E17");
   expect(await taille()).toBeGreaterThan(avant);
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Nunito");
   await expect(page.locator('#regchoix [data-cle="couleur"]')).toHaveCount(12);

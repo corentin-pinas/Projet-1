@@ -46,11 +46,17 @@ export function appliquer(r: Reglages, maintenant = new Date()) {
   h.dataset.contraste = r.contraste ? "fort" : "";
   h.dataset.taille = r.taille;
   h.dataset.police = r.police;
-  /* la barre du navigateur suit la couleur principale */
-  const accent = getComputedStyle(h).getPropertyValue("--accent").trim();
-  if (accent) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", accent);
+  barres();
   if (document.body) decorer(saisonDu(maintenant), r.saisons);
 }
+
+/* La barre du haut d'Android (heure, batterie) prend la couleur du fond de l'appli, en clair comme en sombre. */
+function barres() {
+  const fond = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (fond) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", fond);
+}
+/* « comme la tablette » : la tablette peut passer seule du clair au sombre */
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", barres);
 
 export function enregistrer(r: Reglages) {
   try { localStorage.setItem(CLE, JSON.stringify(r)); } catch { /* sans stockage : réglage valable jusqu'à la fermeture */ }

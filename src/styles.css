@@ -404,12 +404,14 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .jtype.bilan{background:var(--warn-bg);color:var(--warn)}
 .jsuivant{position:absolute;top:-10px;right:12px;font-size:.75rem;font-weight:700;background:var(--accent);color:var(--accent-ink);padding:1px 9px;border-radius:999px}
 .jregion{color:var(--soft);font-size:.92rem}
-.jcarte p{margin:0;font-size:.92rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.jcarte p{margin:0;font-size:.92rem}
+/* coupe à 3 lignes sur le texte lui-même, pour qu'aucun bout de 4e ligne ne dépasse dans la marge intérieure */
+.jcarte p .l{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .jprevu{background:var(--accent-bg);border-radius:8px;padding:6px 9px}
 .jprevu b{color:var(--accent)}
 .javant{color:var(--soft)}
 .javant b{color:var(--ink)}
 .jfait{color:var(--soft)}
-.jfait span{color:var(--accent);font-weight:700}
+.jfait .ok{color:var(--accent);font-weight:700}
 .jvide .row{justify-content:center;margin-top:12px}
 .jnote{margin-top:16px}

@@ -16,11 +16,11 @@ function carte(c: Carte, suivant: boolean): string {
   const quoi = bilan ? (c.bilan ? "Bilan" : "Premier bilan") : "Séance";
   let corps = "";
   if (c.faite) {
-    corps = `<p class="jfait"><span aria-hidden="true">✓</span> Séance notée${c.faite.contenu ? " : " + esc(brefDe(c.faite)) : ""}</p>`;
+    corps = `<p class="jfait"><span class="l"><span class="ok" aria-hidden="true">✓</span> Séance notée${c.faite.contenu ? " : " + esc(brefDe(c.faite)) : ""}</span></p>`;
   } else {
-    if (c.avenir) corps += `<p class="jprevu"><b>Prévu :</b> ${esc(c.avenir.texte)}</p>`;
-    if (c.avant) corps += `<p class="javant"><b>Séance du ${esc(frDate(c.avant.date).slice(0, 5))} :</b> ${esc(brefDe(c.avant))}</p>`;
-    else if (r?.coup_oeil) corps += `<p class="javant"><b>Bilan :</b> ${esc(r.coup_oeil)}</p>`;
+    if (c.avenir) corps += `<p class="jprevu"><span class="l"><b>Prévu :</b> ${esc(c.avenir.texte)}</span></p>`;
+    if (c.avant) corps += `<p class="javant"><span class="l"><b>Séance du ${esc(frDate(c.avant.date).slice(0, 5))} :</b> ${esc(brefDe(c.avant))}</span></p>`;
+    else if (r?.coup_oeil) corps += `<p class="javant"><span class="l"><b>Bilan :</b> ${esc(r.coup_oeil)}</span></p>`;
     else if (!c.bilan) corps += `<p class="javant">Bilan à venir.</p>`;
   }
   return `<button class="jcarte${c.faite ? " faite" : ""}${suivant ? " suivant" : ""}" data-patient="${esc(c.dossier.id)}">

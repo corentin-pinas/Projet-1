@@ -64,6 +64,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.9.2 | 29 oct. | Corbeau redessiné (bec long et droit, gorge ébouriffée, queue en pointe) ; **Muninn, le petit corbeau, remplace le petit kiné** comme mascotte toute l'année (chapeaux de saison, écharpe aux couleurs choisies) : gestes tout seuls toutes les 20 à 50 s (penche la tête, regarde derrière, sautille, s'ébroue, parfois un tour en vol au-dessus du titre), et au toucher : « Croâ ! », saut, battement d'ailes. En production le 29 oct. |
 | 0.9.3 | 29 oct. | Sur les images choisies par Corentin : **corbeau rond « kawaii »** de face (grands yeux brillants, bec jaune, joues roses, pattes orange) pour l'icône et la mascotte ; **le petit kiné revient**, plus grand, avec le corbeau posé sur son épaule (deux personnages qui réagissent chacun au toucher) ; en paysage sur grand écran, les deux s'installent dans la marge vide à gauche (150 px). Chauve-souris d'Halloween réparée (cassée par erreur en 0.9.2). En production le 29 oct. |
 | 0.9.4 | 29 oct. | **Le corbeau seul** (le petit kiné est retiré, choix de Corentin : « c'est le corbeau, notre emblème ») sur un **perchoir** en bois, avec les chapeaux de saison ; tour en vol à travers l'appli puis retour au perchoir ; **nouvelle couleur « Muninn »** (bleu nuit en clair, nuit et lune dorée en sombre), couleur d'origine à la place du vert ; icône « nuit et lune » avec le corbeau sur sa branche. En production le 29 oct. |
+| 0.9.5 | 29 oct. | Barre du haut d'Android (heure, batterie) à la couleur du fond de l'appli (et non plus de la couleur principale) ; couleurs de l'appli installée (barres, écran de démarrage) en nuit `#110F1A` ; « Ma journée » : plus de demi-ligne qui dépasse sous les « … ». Pas encore en production |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 
@@ -77,6 +78,8 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 8. Volume : 3 à 8 bilans et 80 à 110 séances par semaine.
 
 ## 6. Pas encore testé en conditions réelles
+
+- Icône, nom et barre du bas de l'appli installée : Android ne les met à jour qu'au moment où Chrome régénère l'appli (vérification au plus une fois par jour au lancement depuis l'icône, avec parfois une question « mettre à jour ? »). Au 29 octobre au soir : encore l'ancienne icône verte « Mes patients » et la barre du bas verte.
 
 - Copie hors de Chrome : le fichier arrive-t-il bien dans « Téléchargements », et le sélecteur Android permet-il de le choisir pour restaurer ?
 - Dictée groupée sur une vraie matinée : qualité du découpage, durée (limite serveur 5 min), consommation du quota Pro.
