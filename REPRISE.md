@@ -1,6 +1,6 @@
 # Reprise du projet — appli de suivi patients (kiné)
 
-Point de reprise du **29 octobre 2026**, à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
+Point de reprise du **29 octobre 2026** (mis à jour le soir : version 0.9.4 en production), à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
 À lire ensuite : `CLAUDE.md` (contexte détaillé, règles de travail, technique ; certaines parties décrivent encore la version d'essai claude.ai) et `PLAN.md` (plan d'origine).
 Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb — pas mise à jour depuis plusieurs étapes.
 
@@ -24,9 +24,9 @@ Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb �
   4. présenter à Corentin (captures) et **attendre son « oui »** ;
   5. relancer les tests, puis avancer la production en avance rapide : `git push origin HEAD:claude/patient-management-planning-xg8y6k` (vérifier d'abord `git merge-base --is-ancestor`).
 - Pas de pull request sans demande.
-- **Les deux branches sont au même commit** au 29 octobre (version 0.8.1 en production), à part ce fichier.
+- **Les deux branches sont au même commit** au 29 octobre au soir (version **0.9.4** en production : Ma journée, nom Muninn, corbeau sur son perchoir, couleur Muninn), à part ce fichier.
 
-## 3. Ce que fait l'appli (version 0.8.1, en production)
+## 3. Ce que fait l'appli (version 0.9.4, en production)
 
 PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedDB), serveur Railway sans aucune donnée patient.
 
@@ -59,11 +59,11 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.7.0 | 28 oct. | Agenda, patients sans bilan, dictée enregistrée prête pour Whisper |
 | 0.8.0 | 29 oct. | Réglages, 11 couleurs, 8 écritures, petit kiné, Halloween |
 | 0.8.1 | 29 oct. | Noël progressif, Pâques, anniversaire, chapeaux du petit kiné |
-| 0.9.0 | 29 oct. | Écran d'accueil « Ma journée » (branche de travail, **pas encore en production**) |
-| 0.9.1 | 29 oct. | L'appli s'appelle **Muninn** (« la mémoire du cabinet », corbeau d'Odin) : titre, nom à l'installation, icône corbeau ; araignée d'Halloween décalée (elle cachait le titre). Pas encore en production |
-| 0.9.2 | 29 oct. | Corbeau redessiné (bec long et droit, gorge ébouriffée, queue en pointe) ; **Muninn, le petit corbeau, remplace le petit kiné** comme mascotte toute l'année (chapeaux de saison, écharpe aux couleurs choisies) : gestes tout seuls toutes les 20 à 50 s (penche la tête, regarde derrière, sautille, s'ébroue, parfois un tour en vol au-dessus du titre), et au toucher : « Croâ ! », saut, battement d'ailes. Pas encore en production |
-| 0.9.3 | 29 oct. | Sur les images choisies par Corentin : **corbeau rond « kawaii »** de face (grands yeux brillants, bec jaune, joues roses, pattes orange) pour l'icône et la mascotte ; **le petit kiné revient**, plus grand, avec le corbeau posé sur son épaule (deux personnages qui réagissent chacun au toucher) ; en paysage sur grand écran, les deux s'installent dans la marge vide à gauche (150 px). Chauve-souris d'Halloween réparée (cassée par erreur en 0.9.2). Pas encore en production |
-| 0.9.4 | 29 oct. | **Le corbeau seul** (le petit kiné est retiré, choix de Corentin : « c'est le corbeau, notre emblème ») sur un **perchoir** en bois, avec les chapeaux de saison ; tour en vol à travers l'appli puis retour au perchoir ; **nouvelle couleur « Muninn »** (bleu nuit en clair, nuit et lune dorée en sombre), couleur d'origine à la place du vert ; icône « nuit et lune » avec le corbeau sur sa branche. Pas encore en production |
+| 0.9.0 | 29 oct. | Écran d'accueil « Ma journée »  |
+| 0.9.1 | 29 oct. | L'appli s'appelle **Muninn** (« la mémoire du cabinet », corbeau d'Odin) : titre, nom à l'installation, icône corbeau ; araignée d'Halloween décalée (elle cachait le titre). En production le 29 oct. |
+| 0.9.2 | 29 oct. | Corbeau redessiné (bec long et droit, gorge ébouriffée, queue en pointe) ; **Muninn, le petit corbeau, remplace le petit kiné** comme mascotte toute l'année (chapeaux de saison, écharpe aux couleurs choisies) : gestes tout seuls toutes les 20 à 50 s (penche la tête, regarde derrière, sautille, s'ébroue, parfois un tour en vol au-dessus du titre), et au toucher : « Croâ ! », saut, battement d'ailes. En production le 29 oct. |
+| 0.9.3 | 29 oct. | Sur les images choisies par Corentin : **corbeau rond « kawaii »** de face (grands yeux brillants, bec jaune, joues roses, pattes orange) pour l'icône et la mascotte ; **le petit kiné revient**, plus grand, avec le corbeau posé sur son épaule (deux personnages qui réagissent chacun au toucher) ; en paysage sur grand écran, les deux s'installent dans la marge vide à gauche (150 px). Chauve-souris d'Halloween réparée (cassée par erreur en 0.9.2). En production le 29 oct. |
+| 0.9.4 | 29 oct. | **Le corbeau seul** (le petit kiné est retiré, choix de Corentin : « c'est le corbeau, notre emblème ») sur un **perchoir** en bois, avec les chapeaux de saison ; tour en vol à travers l'appli puis retour au perchoir ; **nouvelle couleur « Muninn »** (bleu nuit en clair, nuit et lune dorée en sombre), couleur d'origine à la place du vert ; icône « nuit et lune » avec le corbeau sur sa branche. En production le 29 oct. |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 
@@ -86,7 +86,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 
 ## 7. Prochaines étapes (dans l'ordre conseillé)
 
-1. **Écran d'accueil « Ma journée »** — fait en 0.9.0, en attente du « oui » de Corentin pour la production. `src/journee.ts`, règles `journee`, `prochaineJournee`, `brefDe` ; champ `bref` (+ `bref_source`) demandé à l'IA avec la mise au propre (séance seule et dictée groupée) ; sans lui, « État du patient » + « Fait en séance » coupés à 160 caractères. Boutons Aujourd'hui / Demain, fiche « À suivre », fiches déjà notées grisées, « ← Ma journée » en haut de chaque fiche. Idée d'origine : à l'ouverture, à la place de « Choisissez un patient », les patients du jour en **petites fiches** dans l'ordre des rendez-vous : heure, nom, séance ou bilan, pathologie (région du bilan), **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**. Toucher une petite fiche → la vraie fiche. Pas d'IA en plus, sauf un résumé court de chaque séance à produire en même temps que la mise au propre.
+1. **Écran d'accueil « Ma journée »** — fait en 0.9.0, en production depuis le 29 octobre (avec 0.9.4). `src/journee.ts`, règles `journee`, `prochaineJournee`, `brefDe` ; champ `bref` (+ `bref_source`) demandé à l'IA avec la mise au propre (séance seule et dictée groupée) ; sans lui, « État du patient » + « Fait en séance » coupés à 160 caractères. Boutons Aujourd'hui / Demain, fiche « À suivre », fiches déjà notées grisées, « ← Ma journée » en haut de chaque fiche. Idée d'origine : à l'ouverture, à la place de « Choisissez un patient », les patients du jour en **petites fiches** dans l'ordre des rendez-vous : heure, nom, séance ou bilan, pathologie (région du bilan), **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**. Toucher une petite fiche → la vraie fiche. Pas d'IA en plus, sauf un résumé court de chaque séance à produire en même temps que la mise au propre.
 2. **Transmissions en PDF** pour un remplaçant : pour une période choisie (une semaine, quinze jours…), tous les patients ayant rendez-vous : pathologie, état à l'arrivée (bilan), traitement en cours (séances). PDF envoyé par message. L'agenda sert à vérifier qu'aucun patient ne manque.
 3. **Whisper**, quand le PC est là : choisir Whisper sur le PC (gratuit, la voix ne sort pas du cabinet ; il faudra que le serveur Railway puisse le joindre : adresse publique ou tunnel) ou l'API d'OpenAI (voix envoyée aux États-Unis). Il suffira de régler les variables Railway `WHISPER_URL` (+ `WHISPER_CLE`, `WHISPER_MODELE`) : le bouton « Enregistrer ma dictée » apparaîtra tout seul.
 4. Idées proposées, non demandées : le petit kiné comme **icône de l'appli** sur l'écran d'accueil de la tablette ; d'autres fêtes.
