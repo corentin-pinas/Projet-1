@@ -289,8 +289,7 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 .saison .chauve .ailes{width:100%;height:100%;animation:battre .25s ease-in-out infinite alternate}
 @keyframes descend{from{transform:translateY(-70px)}}
 @keyframes remonte{0%{transform:translateY(0)}25%,55%{transform:translateY(-62px)}80%{transform:translateY(8px)}100%{transform:translateY(0)}}
-@keyframes vol{0%,100%{transform:translate(0,0)}10%{transform:translate(10px,-14px) rotate(-10deg)}40%{transform:translate(230px,-22px) scale(.8)}50%{transform:translate(250px,-8px) scale(.8)}85%{transform:translate(30px,-18px) scale(.9) rotate(8deg)}}
-@keyframes demi-tour{0%,46%,96%,100%{transform:scaleX(1)}47%,95%{transform:scaleX(-1)}}
+@keyframes vol{0%{transform:translate(-60px,40px)}10%{transform:translate(30vw,8px)}20%{transform:translate(65vw,34px)}30%{transform:translate(105vw,6px)}30.01%,100%{transform:translate(-60px,40px)}}
 @keyframes battre{to{transform:scaleY(.45)}}
 :root[data-saison="halloween"] .side h1::after{content:"🎃"}
 :root[data-noel="1"] .side h1::after,:root[data-noel="2"] .side h1::after{content:"❄️"}
@@ -302,51 +301,86 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 @keyframes neige{to{transform:translateY(110vh) rotate(180deg)}}
 @media (prefers-reduced-motion: reduce){.saison *{animation:none!important}.saison .flocon,.saison .confetti,.saison .ballon{display:none}}
 
-/* mascotte : Muninn, le petit corbeau ; lueur et écharpe aux couleurs choisies, pour qu'il se voie aussi sur fond sombre */
+/* compagnons : le petit kiné (corps clair, col aux couleurs choisies) et Muninn, le petit corbeau, sur son épaule */
 .side h1{display:flex;align-items:center;gap:10px}
 .nomappli{display:flex;flex-direction:column;line-height:1.1;letter-spacing:.02em}
 .nomappli small{font-size:.55em;font-weight:400;color:var(--soft);letter-spacing:0;margin-top:3px}
-.mascotte{position:relative;width:54px;height:54px;flex:none;padding:0;min-height:0;border:0;background:none;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent;z-index:4}
-.mascotte svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 55%,transparent)) drop-shadow(0 2px 2px rgb(0 0 0 / .2))}
-.mascotte .m-plume{fill:#1F2A28;stroke:rgb(255 255 255 / .22);stroke-width:.9}
-.mascotte .m-aile{fill:#33423F}
-.mascotte .m-patte{fill:none;stroke:#3A4A47;stroke-width:2.2;stroke-linecap:round}
-.mascotte .m-bec-haut{fill:#2E3B38}
-.mascotte .m-bec-bas{fill:#26322F}
-.mascotte .m-echarpe{fill:none;stroke:var(--accent);stroke-width:4.5;stroke-linecap:round}
-.mascotte .m-corps{transform-origin:28px 58px;animation:respire 3.6s ease-in-out infinite}
-.mascotte .m-oeil{transform-origin:42.5px 20px;animation:cligne 4.5s infinite}
-.mascotte .m-tete{transform-origin:36px 30px}
-.mascotte .m-aile{transform-origin:22px 38px}
-.mascotte .m-bec-bas{transform-origin:47.5px 25px}
-.mascotte .m-sens{transform-origin:32px 32px}
-.mascotte .m-bulle{position:absolute;left:40px;top:-17px;padding:1px 8px;border-radius:10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:.75rem;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
-.mascotte.croasse .m-bulle{opacity:1}
-.mascotte.croasse .m-bec-bas{animation:croa .3s ease-in-out 4 alternate}
-.mascotte.croasse .m-tete{animation:tete-croa 1.2s ease-in-out}
+.compagnon{position:relative;flex:none;width:var(--compagnon,78px);aspect-ratio:1;z-index:4}
+.compagnon button{position:absolute;padding:0;min-height:0;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.compagnon svg{display:block;width:100%;height:100%;overflow:visible}
+/* écran large (tablette en paysage) : les deux compagnons, plus grands, dans la marge vide à gauche de l'appli */
+@media (min-width:1620px) and (min-height:600px){
+  .side{position:relative}
+  .side h1 .compagnon{position:absolute;--compagnon:150px;right:calc(100% + 30px);top:46px}
+  .side h1 .corbeau .c-bulle{left:auto;right:75%}
+  .side h1{font-size:1.8rem}
+}
+.mascotte{inset:0;border-radius:50%}
+.mascotte svg{filter:drop-shadow(0 0 7px color-mix(in srgb,var(--accent) 45%,transparent)) drop-shadow(0 2px 2px rgb(0 0 0 / .18))}
+.mascotte .m-peau,.mascotte .m-bras,.mascotte .m-pied{fill:#FFF3E4}
+.mascotte .m-pied{fill:#F3E2CC}
+.mascotte .m-trait{fill:none;stroke:#2A2522;stroke-linecap:round}
+.mascotte .m-yeux{fill:#2A2522;transform-origin:32px 29.5px;animation:cligne 4.5s infinite}
+.mascotte .m-bouche{fill:#2A2522}
+.mascotte .m-joue{fill:#F49C9C;opacity:.55}
+.mascotte .m-col{fill:none;stroke:var(--accent);stroke-width:4.5;stroke-linecap:round}
+.mascotte .m-lunettes{fill:#FFFFFF;fill-opacity:.25;stroke:#2A2522;stroke-width:2.2}
+.mascotte .m-joie{display:none}
+.mascotte .m-corps{transform-origin:32px 60px;animation:flotte 3.6s ease-in-out infinite}
+.mascotte.rit .m-normal,.mascotte.saute .m-normal,.mascotte.etire .m-normal{display:none}
+.mascotte.rit .m-joie,.mascotte.saute .m-joie,.mascotte.etire .m-joie{display:inline}
+.mascotte.rit .m-corps{animation:rire .18s ease-in-out 8 alternate}
 .mascotte.saute .m-corps{animation:saut .9s cubic-bezier(.3,1.6,.5,1) 2}
-.mascotte.ailes .m-aile,.mascotte.vol .m-aile{animation:bat .16s ease-in-out infinite alternate}
-.mascotte.ailes .m-corps{animation:saut 1.4s ease-in-out}
-.mascotte.penche .m-tete{animation:penche 2.2s ease-in-out}
-.mascotte.regarde .m-sens{animation:regarde 2.4s steps(1,end)}
-.mascotte.sautille .m-corps{animation:sautille 1.6s ease-in-out}
-.mascotte.ebroue .m-corps{animation:ebroue .12s linear 8 alternate}
-.mascotte.ebroue .m-aile{animation:bat .12s linear 8 alternate}
-.mascotte.vol .m-vol{animation:vol 5.2s ease-in-out}
-.mascotte.vol .m-sens{animation:demi-tour 5.2s linear}
-@keyframes respire{0%,100%{transform:scale(1,1)}50%{transform:scale(1.03,.97)}}
+.mascotte.etire .m-corps{animation:etirement 1.7s ease-in-out}
+.mascotte.etire .m-bras{animation:bras-haut 1.7s ease-in-out}
+/* le corbeau, posé sur l'épaule droite du kiné */
+.corbeau{width:48%;height:48%;left:57%;top:-16%;border-radius:50%}
+.corbeau svg{filter:drop-shadow(0 0 5px color-mix(in srgb,var(--accent) 40%,transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / .25))}
+.corbeau .c-plume{fill:#2A2638}
+.corbeau .c-corps-plume{fill:#363247}
+.corbeau .c-ventre{fill:#4A4560}
+.corbeau .c-ecaille{fill:none;stroke:#5E5878;stroke-width:1.6;stroke-linecap:round}
+.corbeau .c-patte{fill:none;stroke:#E8913A;stroke-width:2.6;stroke-linecap:round}
+.corbeau .c-joue{fill:#F49C9C;opacity:.6}
+.corbeau .c-bec-haut{fill:#F5BC4A}
+.corbeau .c-bec-bas{fill:#E08A2E;transform-origin:50px 55px}
+.corbeau .c-yeux{transform-origin:50px 45px;animation:cligne 5.3s infinite}
+.corbeau .c-corps{transform-origin:50px 92px;animation:respire 3.2s ease-in-out infinite}
+.corbeau .c-aile.g{transform-origin:24px 50px}
+.corbeau .c-aile.d{transform-origin:76px 50px}
+.corbeau .c-sens{transform-origin:50px 50px}
+.corbeau .c-bulle{position:absolute;left:70%;top:-30%;padding:1px 8px;border-radius:10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:.75rem;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
+.corbeau.croasse .c-bulle{opacity:1}
+.corbeau.croasse .c-bec-bas{animation:croa .3s ease-in-out 4 alternate}
+.corbeau.croasse .c-corps{animation:saut-leger .6s ease-in-out 2}
+.corbeau.ailes .c-aile.g,.corbeau.vol .c-aile.g,.corbeau.ebroue .c-aile.g{animation:bat-g .14s ease-in-out infinite alternate}
+.corbeau.ailes .c-aile.d,.corbeau.vol .c-aile.d,.corbeau.ebroue .c-aile.d{animation:bat-d .14s ease-in-out infinite alternate}
+.corbeau.ailes .c-corps{animation:envol-court 1.4s ease-in-out}
+.corbeau.penche .c-corps{animation:penche 2.2s ease-in-out}
+.corbeau.regarde .c-sens{animation:regarde 2.4s steps(1,end)}
+.corbeau.ebroue .c-corps{animation:ebroue .11s linear 10 alternate}
+.corbeau.sautille .c-corps{animation:sautille 1.5s ease-in-out}
+.corbeau.vol .c-vol{animation:vol-corbeau 5.2s ease-in-out}
+.corbeau.vol .c-sens{animation:demi-tour 5.2s linear}
+@keyframes flotte{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
 @keyframes cligne{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
-@keyframes croa{to{transform:rotate(22deg)}}
-@keyframes tete-croa{0%,100%{transform:rotate(0)}30%,70%{transform:rotate(-14deg)}}
+@keyframes rire{from{transform:rotate(-7deg)}to{transform:rotate(7deg) translateY(-1px)}}
 @keyframes saut{0%,100%{transform:translateY(0) scale(1)}15%{transform:translateY(0) scale(1.08,.9)}50%{transform:translateY(-12px) scale(.95,1.06)}}
-@keyframes bat{from{transform:rotate(0)}to{transform:rotate(-38deg)}}
-@keyframes penche{0%,100%{transform:rotate(0)}20%,45%{transform:rotate(18deg)}60%,85%{transform:rotate(-10deg)}}
+@keyframes etirement{0%,100%{transform:scale(1)}40%,65%{transform:scale(.9,1.14)}}
+@keyframes bras-haut{0%,100%{transform:translateY(0)}40%,65%{transform:translateY(-14px)}}
+@keyframes respire{0%,100%{transform:scale(1,1)}50%{transform:scale(1.03,.97)}}
+@keyframes croa{to{transform:translateY(4px) scaleY(1.3)}}
+@keyframes saut-leger{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes envol-court{0%,100%{transform:translateY(0)}40%,60%{transform:translateY(-26px)}}
+@keyframes bat-g{from{transform:rotate(0)}to{transform:rotate(40deg)}}
+@keyframes bat-d{from{transform:rotate(0)}to{transform:rotate(-40deg)}}
+@keyframes penche{0%,100%{transform:rotate(0)}20%,45%{transform:rotate(14deg)}60%,85%{transform:rotate(-10deg)}}
 @keyframes regarde{0%{transform:scaleX(1)}30%{transform:scaleX(-1)}70%{transform:scaleX(1)}}
-@keyframes sautille{0%,100%{transform:translate(0,0)}15%{transform:translate(5px,-6px)}30%{transform:translate(10px,0)}50%{transform:translate(5px,-6px)}70%{transform:translate(0,0)}85%{transform:translate(0,-4px)}}
-@keyframes ebroue{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
-@keyframes vol{0%,100%{transform:translate(0,0)}10%{transform:translate(10px,-14px) rotate(-10deg)}40%{transform:translate(230px,-22px) scale(.8)}50%{transform:translate(250px,-8px) scale(.8)}85%{transform:translate(30px,-18px) scale(.9) rotate(8deg)}}
+@keyframes ebroue{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}
+@keyframes sautille{0%,100%{transform:translateY(0)}20%{transform:translateY(-10px)}40%{transform:translateY(0)}60%{transform:translateY(-6px)}80%{transform:translateY(0)}}
+@keyframes vol-corbeau{0%,100%{transform:translate(0,0)}10%{transform:translate(10px,-20px) rotate(-10deg)}40%{transform:translate(260%,-40%) scale(.85)}50%{transform:translate(290%,10%) scale(.85)}85%{transform:translate(40%,-30%) rotate(8deg)}}
 @keyframes demi-tour{0%,46%,96%,100%{transform:scaleX(1)}47%,95%{transform:scaleX(-1)}}
-@media (prefers-reduced-motion: reduce){.mascotte *{animation:none!important}}
+@media (prefers-reduced-motion: reduce){.compagnon *{animation:none!important}}
 
 /* Noël (de plus en plus fourni au fil de décembre), Pâques, anniversaire */
 .saison .flocon,.saison .confetti{position:absolute;top:-30px;width:calc(18px * var(--t));height:calc(18px * var(--t));color:var(--accent);opacity:.4;animation:neige var(--v) linear infinite;animation-delay:var(--d)}
@@ -372,7 +406,7 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 @keyframes hop{0%,100%{transform:translateY(0)}30%{transform:translateY(-34px) rotate(-6deg)}55%{transform:translateY(0)}70%{transform:translateY(-12px)}}
 @keyframes monte-ballon{to{transform:translateY(-120vh) rotate(6deg)}}
 
-/* chapeaux du corbeau selon la saison */
+/* chapeaux du petit kiné selon la saison */
 .mascotte .chapeau{display:none}
 :root[data-saison="halloween"] .mascotte .h-sorciere,:root[data-noel="3"] .mascotte .h-bonnet,:root[data-noel="4"] .mascotte .h-bonnet,:root[data-noel="5"] .mascotte .h-bonnet,
 :root[data-saison="paques"] .mascotte .h-oreilles,:root[data-saison="anniversaire"] .mascotte .h-fete{display:inline}

@@ -27,15 +27,20 @@ test("réglages : noir et violet, texte plus grand, écriture arrondie, gardés 
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Patrick Hand");
   await choisir(page, "police", "nunito");
   await page.locator("#regfermer").click();
-  // la mascotte (Muninn, le petit corbeau) réagit quand on la touche, chaque fois différemment
+  // le petit kiné et Muninn, le corbeau sur son épaule, réagissent quand on les touche, chaque fois différemment
+  const kine = page.getByRole("button", { name: /petit kiné/ });
+  await expect(kine).toBeVisible();
+  await kine.click({ force: true });
+  await expect(kine).toHaveClass(/rit/);
+  await kine.click({ force: true });
+  await expect(kine).toHaveClass(/saute/);
+  await expect(kine).not.toHaveClass(/saute/, { timeout: 4000 });
   const corbeau = page.getByRole("button", { name: /petit corbeau/ });
-  await expect(corbeau).toBeVisible();
   await corbeau.click({ force: true });
   await expect(corbeau).toHaveClass(/croasse/);
-  await expect(corbeau.locator(".m-bulle")).toHaveText("Croâ !");
+  await expect(corbeau.locator(".c-bulle")).toHaveText("Croâ !");
   await corbeau.click({ force: true });
-  await expect(corbeau).toHaveClass(/saute/);
-  await expect(corbeau).not.toHaveClass(/saute/, { timeout: 4000 });
+  await expect(corbeau).toHaveClass(/ailes/);
 
   await page.reload();
   await expect(html).toHaveAttribute("data-palette", "violet");
