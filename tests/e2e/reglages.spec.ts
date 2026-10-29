@@ -21,7 +21,13 @@ test("réglages : noir et violet, texte plus grand, écriture arrondie, gardés 
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(18, 14, 23)");
   expect(await taille()).toBeGreaterThan(avant);
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Nunito");
+  await expect(page.locator('#regchoix [data-cle="couleur"]')).toHaveCount(11);
+  await expect(page.locator('#regchoix [data-cle="police"]')).toHaveCount(8);
+  await choisir(page, "police", "manuscrite");
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Patrick Hand");
+  await choisir(page, "police", "nunito");
   await page.locator("#regfermer").click();
+  await expect(page.locator(".logo svg")).toBeVisible();
 
   await page.reload();
   await expect(html).toHaveAttribute("data-palette", "violet");
@@ -42,7 +48,16 @@ test("Halloween : toiles d'araignée dans les coins, sans gêner les doigts, et 
   expect(await page.locator(".saison").evaluate(e => getComputedStyle(e).pointerEvents)).toBe("none");
   await page.getByRole("button", { name: "Ajouter des bilans" }).click({ trial: true });   // le bouton reste touchable sous la toile
 
+  // l'araignée remonte quand on la touche, puis redescend
+  await page.waitForTimeout(2600);
+  await page.locator(".saison .araignee").click({ force: true });   // elle se balance sans arrêt : on touche sans attendre qu'elle s'immobilise
+  await expect(page.locator(".saison .araignee .corps")).toHaveClass(/monte/);
+  await expect(page.locator(".saison .araignee .corps")).not.toHaveClass(/monte/, { timeout: 6000 });
+  await expect(page.locator(".saison .chauve")).toHaveCount(1);
+
   await page.getByRole("button", { name: "Réglages" }).click();
+  await choisir(page, "couleur", "rouge");
+  await expect(page.locator(".saison .araignee .corps")).toHaveCount(1);   // pas redessinée par un changement de réglage
   await choisir(page, "saisons", false);
   await expect(page.locator(".saison")).toHaveCount(0);
 });

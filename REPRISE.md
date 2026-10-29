@@ -92,6 +92,7 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 - Bouton « ⚙️ Réglages » à côté de « État de l'appli » : fond (comme la tablette, clair, sombre), couleur principale (vert, violet, orange, bleu ; en sombre, « noir et violet », « noir et orange »…), taille du texte (3), écriture (très lisible, arrondie, fantaisie), contraste fort, décorations de saison. Changement immédiat, gardé dans la tablette.
 - Décorations de saison (idée de Corentin) : Halloween (toiles d'araignée, araignée, 🎃 à côté du titre), Noël (flocons, 🎄). Autres fêtes possibles plus tard.
 - L'IA et les sauvegardes restent dans « État de l'appli ».
+- Demandes du 29 octobre, faites avant la mise en production : 11 palettes (vert, turquoise, bleu, indigo, violet, framboise, rouge, orange, or, café, ardoise), 8 écritures (très lisible, claire, arrondie, douce, moderne, ronde, fantaisie, manuscrite), logo « petit docteur à lunettes » (premier jet, Corentin doit envoyer la capture d'une appli dont il aime le style), araignée qui remonte quand on la touche, chauve-souris qui passe.
 
 ## Autres idées notées (plus tard)
 
