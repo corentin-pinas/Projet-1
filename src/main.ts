@@ -1,4 +1,7 @@
 import "./styles.css";
+import * as reglages from "./reglages";
+
+reglages.appliquer(reglages.lire());   // couleurs et taille du texte avant tout affichage
 import { registerSW } from "virtual:pwa-register";
 import { demarrer, rafraichirIA } from "./app";
 import * as db from "./db";
@@ -66,6 +69,9 @@ async function afficherEtat() {
 }
 
 brancherCopies(afficherEtat);
+reglages.brancher();
+/* la décoration de saison change d'elle-même si l'appli reste ouverte d'un jour à l'autre */
+document.addEventListener("visibilitychange", () => { if (!document.hidden) reglages.appliquer(reglages.lire()); });
 brancherReglagesIA(async () => { await afficherEtat(); rafraichirIA(); });
 
 async function demanderProtection() {

@@ -87,6 +87,12 @@ Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave r
 - Toucher une petite fiche ouvre la vraie fiche du patient.
 - Retour de Corentin sur l'agenda (0.7.0) : fonctionne, pas de bug constaté.
 
+## Réglages d'affichage (version 0.8.0, 29 octobre 2026)
+
+- Bouton « ⚙️ Réglages » à côté de « État de l'appli » : fond (comme la tablette, clair, sombre), couleur principale (vert, violet, orange, bleu ; en sombre, « noir et violet », « noir et orange »…), taille du texte (3), écriture (très lisible, arrondie, fantaisie), contraste fort, décorations de saison. Changement immédiat, gardé dans la tablette.
+- Décorations de saison (idée de Corentin) : Halloween (toiles d'araignée, araignée, 🎃 à côté du titre), Noël (flocons, 🎄). Autres fêtes possibles plus tard.
+- L'IA et les sauvegardes restent dans « État de l'appli ».
+
 ## Autres idées notées (plus tard)
 
 Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, couleurs et palettes d'affichage, transcription audio par un service dédié (il prévoit d'autres applis vocales).
