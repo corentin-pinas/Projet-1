@@ -1,6 +1,6 @@
 /* Décorations de saison, pour que l'appli ne soit pas « que du boulot » (idée de Corentin, 29 octobre 2026).
    Dans les coins et sur les bords, transparentes, jamais sur le texte ; seuls l'araignée et le lapin se touchent.
-   Immobiles si la tablette réduit les animations. Le petit kiné porte un chapeau de saison (styles.css). */
+   Immobiles si la tablette réduit les animations. Muninn, le petit corbeau, porte un chapeau de saison (styles.css). */
 
 export type Saison = "halloween" | "noel" | "paques" | "anniversaire" | null;
 

@@ -40,7 +40,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 - **Sauvegarde** : copie interne automatique chaque jour (7 gardées, retour en arrière annulable) ; **copie hors de Chrome** chiffrée dans « Téléchargements » (mot de passe retenu par la tablette, à noter sur papier), restauration depuis le fichier, rappel orange après 7 jours.
 - **État de l'appli** : installation, hors-connexion, protection du stockage, place, IA (abonnement / clé API de secours), copies de sécurité.
 - **Réglages** (⚙️) : fond (tablette / clair / sombre), **11 couleurs** (vert, turquoise, bleu, indigo, violet, framboise, rouge, orange, or, café, ardoise ; fond assorti en sombre), taille du texte (3), **8 écritures**, contraste fort, décorations de saison oui/non. Gardés dans la tablette (`localStorage`).
-- **Petit kiné à lunettes** (mascotte, pas un docteur) à côté de « Mes patients » : flotte et cligne des yeux, **rit / saute / s'étire** quand on le touche ; col aux couleurs choisies ; chapeau de saison.
+- **Muninn, le petit corbeau** (mascotte depuis 0.9.2, remplace le petit kiné) à côté du titre : respire, cligne des yeux, fait des gestes tout seul, croasse / saute / bat des ailes quand on le touche ; écharpe aux couleurs choisies ; chapeau de saison. C'est l'emblème de l'appli (demande de Corentin : il doit rester en toute saison).
 - **Décorations de saison** : Halloween (24 oct.–1er nov. : toiles, araignée qui remonte quand on la touche, chauve-souris, chapeau de sorcière) ; **Noël tout décembre en 5 niveaux** (flocons → guirlande → bonnet → neige au sol, sapin, cadeaux → étoile, 🎅 du 24 au 26) ; **Pâques** (Rameaux → lundi de Pâques : œufs, lapin qui saute au toucher, oreilles de lapin) ; **anniversaire de Corentin** (10–16 mars, confettis, ballons, chapeau de fête, « Joyeux anniversaire Corentin ! » le 13 mars, prioritaire sur Pâques).
 - Mises à jour par un bandeau « Mettre à jour », jamais de rechargement automatique.
 
@@ -61,6 +61,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.8.1 | 29 oct. | Noël progressif, Pâques, anniversaire, chapeaux du petit kiné |
 | 0.9.0 | 29 oct. | Écran d'accueil « Ma journée » (branche de travail, **pas encore en production**) |
 | 0.9.1 | 29 oct. | L'appli s'appelle **Muninn** (« la mémoire du cabinet », corbeau d'Odin) : titre, nom à l'installation, icône corbeau ; araignée d'Halloween décalée (elle cachait le titre). Pas encore en production |
+| 0.9.2 | 29 oct. | Corbeau redessiné (bec long et droit, gorge ébouriffée, queue en pointe) ; **Muninn, le petit corbeau, remplace le petit kiné** comme mascotte toute l'année (chapeaux de saison, écharpe aux couleurs choisies) : gestes tout seuls toutes les 20 à 50 s (penche la tête, regarde derrière, sautille, s'ébroue, parfois un tour en vol au-dessus du titre), et au toucher : « Croâ ! », saut, battement d'ailes. Pas encore en production |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 
