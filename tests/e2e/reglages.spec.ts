@@ -21,26 +21,22 @@ test("réglages : noir et violet, texte plus grand, écriture arrondie, gardés 
   expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(18, 14, 23)");
   expect(await taille()).toBeGreaterThan(avant);
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Nunito");
-  await expect(page.locator('#regchoix [data-cle="couleur"]')).toHaveCount(11);
+  await expect(page.locator('#regchoix [data-cle="couleur"]')).toHaveCount(12);
   await expect(page.locator('#regchoix [data-cle="police"]')).toHaveCount(8);
   await choisir(page, "police", "manuscrite");
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Patrick Hand");
   await choisir(page, "police", "nunito");
   await page.locator("#regfermer").click();
-  // le petit kiné et Muninn, le corbeau sur son épaule, réagissent quand on les touche, chaque fois différemment
-  const kine = page.getByRole("button", { name: /petit kiné/ });
-  await expect(kine).toBeVisible();
-  await kine.click({ force: true });
-  await expect(kine).toHaveClass(/rit/);
-  await kine.click({ force: true });
-  await expect(kine).toHaveClass(/saute/);
-  await expect(kine).not.toHaveClass(/saute/, { timeout: 4000 });
+  // Muninn, le corbeau sur son perchoir, réagit quand on le touche, chaque fois différemment
   const corbeau = page.getByRole("button", { name: /petit corbeau/ });
+  await expect(corbeau).toBeVisible();
+  await expect(page.locator(".compagnon .perchoir")).toBeVisible();
   await corbeau.click({ force: true });
   await expect(corbeau).toHaveClass(/croasse/);
   await expect(corbeau.locator(".c-bulle")).toHaveText("Croâ !");
   await corbeau.click({ force: true });
   await expect(corbeau).toHaveClass(/ailes/);
+  await expect(corbeau).not.toHaveClass(/ailes/, { timeout: 4000 });
 
   await page.reload();
   await expect(html).toHaveAttribute("data-palette", "violet");
@@ -49,7 +45,7 @@ test("réglages : noir et violet, texte plus grand, écriture arrondie, gardés 
 
   await page.getByRole("button", { name: "Réglages" }).click();
   await page.getByRole("button", { name: "Revenir aux réglages d'origine" }).click();
-  await expect(html).toHaveAttribute("data-palette", "vert");
+  await expect(html).toHaveAttribute("data-palette", "muninn");
   await expect(html).not.toHaveAttribute("data-theme", /./);
 });
 

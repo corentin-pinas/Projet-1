@@ -18,7 +18,7 @@ const page = await browser.newPage();
 for (const { fichier, taille, marge } of icones) {
   const m = Math.round(taille * marge);
   await page.setViewportSize({ width: taille, height: taille });
-  await page.setContent(`<body style="margin:0;background:${marge ? "#23705F" : "transparent"}">
+  await page.setContent(`<body style="margin:0;background:${marge ? "#2A2650" : "transparent"}">
     <img src="${src}" style="display:block;margin:${m}px;width:${taille - 2 * m}px;height:${taille - 2 * m}px"></body>`);
   await page.screenshot({ path: `public/icons/${fichier}`, omitBackground: !marge });
 }

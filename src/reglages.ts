@@ -24,7 +24,7 @@ export type Reglages = {
   saisons: boolean;
 };
 
-export const DEFAUT: Reglages = { fond: "auto", couleur: "vert", contraste: false, taille: "normal", police: "atkinson", saisons: true };
+export const DEFAUT: Reglages = { fond: "auto", couleur: "muninn", contraste: false, taille: "normal", police: "atkinson", saisons: true };
 const CLE = "reglages-affichage";
 
 export function lire(): Reglages {
@@ -42,7 +42,7 @@ export function appliquer(r: Reglages, maintenant = new Date()) {
   /* couleurs de la palette : une feuille de style ajoutée après celle de l'appli, qu'elle remplace */
   let st = document.getElementById("style-palette");
   if (!st) { st = document.createElement("style"); st.id = "style-palette"; document.head.append(st); }
-  st.textContent = cssPalette(PALETTES[r.couleur] ?? PALETTES.vert) + `\nbody{font-family:${(POLICES[r.police] ?? POLICES.atkinson).famille},system-ui,sans-serif}`;
+  st.textContent = cssPalette(PALETTES[r.couleur] ?? PALETTES.muninn) + `\nbody{font-family:${(POLICES[r.police] ?? POLICES.atkinson).famille},system-ui,sans-serif}`;
   h.dataset.contraste = r.contraste ? "fort" : "";
   h.dataset.taille = r.taille;
   h.dataset.police = r.police;

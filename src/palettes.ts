@@ -9,6 +9,10 @@ export type Palette = {
 };
 
 export const PALETTES: Record<string, Palette> = {
+  /* couleurs de Muninn : bleu nuit en clair, nuit et lune dorée en sombre (palette d'origine depuis la 0.9.4) */
+  muninn: { nom: "Muninn", clair: { accent: "#3F3A6E", accentBg: "#ECEAF5" },
+    sombre: { accent: "#F2C96B", accentInk: "#1A1508", accentBg: "#2E2A47", bg: "#110F1A", panel: "#1B1828", line: "#322D47", soft: "#ABA5C2" },
+    warn: { clair: "#A3283A", clairBg: "#FBE4E7", sombre: "#F07A84", sombreBg: "#3A1C20" } },
   vert: { nom: "Vert", clair: { accent: "#23705F", accentBg: "#E3F1EC" },
     sombre: { accent: "#5BB79F", accentInk: "#0E1716", accentBg: "#1F332D", bg: "#141B1C", panel: "#1E2729", line: "#33413F", soft: "#9AAAA8" } },
   turquoise: { nom: "Turquoise", clair: { accent: "#0E6E75", accentBg: "#DDF2F3" },
