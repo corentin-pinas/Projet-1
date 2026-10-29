@@ -76,7 +76,7 @@ export function brancher() {
     const r = lire();
     zone.innerHTML = CHOIX.map(c => `<fieldset class="regligne"><legend>${c.titre}</legend><div class="pastilles">${c.options.map(([v, l]) =>
       `<button type="button" data-cle="${c.cle}" data-val='${JSON.stringify(v)}' aria-pressed="${r[c.cle] === v}"${c.cle === "couleur" ? ` class="teinte" style="--t:${PALETTES[v as string].clair.accent};--t2:${PALETTES[v as string].sombre.accent}"` : c.cle === "police" ? ` style="font-family:${POLICES[v as string].famille}"` : ""}>${l}</button>`).join("")}</div></fieldset>`).join("") +
-      `<p class="note">${saisonDu(new Date()) ? "Une décoration de saison est en cours." : "Prochaines décorations : Halloween (la semaine d'avant) et Noël (en décembre)."} Ces réglages restent dans cette tablette.</p>`;
+      `<p class="note">${saisonDu(new Date()) ? "Une décoration de saison est en cours." : "Décorations de l'année : anniversaire (10 au 16 mars), Pâques, Halloween (la semaine d'avant), Noël (tout décembre, de plus en plus)."} Ces réglages restent dans cette tablette.</p>`;
     zone.querySelectorAll<HTMLButtonElement>("[data-cle]").forEach(b => b.onclick = () => {
       enregistrer({ ...lire(), [b.dataset.cle!]: JSON.parse(b.dataset.val!) });
       afficher();

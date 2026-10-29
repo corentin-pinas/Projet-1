@@ -58,8 +58,8 @@ test("Halloween : toiles d'araignée dans les coins, sans gêner les doigts, et 
   // l'araignée remonte quand on la touche, puis redescend
   await page.waitForTimeout(2600);
   await page.locator(".saison .araignee").click({ force: true });   // elle se balance sans arrêt : on touche sans attendre qu'elle s'immobilise
-  await expect(page.locator(".saison .araignee .corps")).toHaveClass(/monte/);
-  await expect(page.locator(".saison .araignee .corps")).not.toHaveClass(/monte/, { timeout: 6000 });
+  await expect(page.locator(".saison .araignee .corps")).toHaveClass(/bouge/);
+  await expect(page.locator(".saison .araignee .corps")).not.toHaveClass(/bouge/, { timeout: 6000 });
   await expect(page.locator(".saison .chauve")).toHaveCount(1);
 
   await page.getByRole("button", { name: "Réglages" }).click();
