@@ -1,106 +1,97 @@
 # Reprise du projet — appli de suivi patients (kiné)
 
-Point de reprise rédigé le 10 octobre 2026, pour démarrer une nouvelle conversation Claude Code.
-À lire avec `CLAUDE.md` (contexte détaillé, règles de travail, technique) et `PLAN.md` (plan validé).
-Carte du projet, à mettre à jour à chaque point d'étape : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb
+Point de reprise du **29 octobre 2026**, à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
+À lire ensuite : `CLAUDE.md` (contexte détaillé, règles de travail, technique ; certaines parties décrivent encore la version d'essai claude.ai) et `PLAN.md` (plan d'origine).
+Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb — pas mise à jour depuis plusieurs étapes.
 
-## Qui et comment
+## 1. Qui et comment travailler
 
-- **Corentin**, kinésithérapeute à Toulouse (surtout l'épaule). Il ne code pas et ne relit pas la technique : je choisis, j'explique ce qui change à l'écran, je dis ce qui n'est pas testé.
-- Il dicte à la voix, en français. Il veut des réponses sans jargon, qui commencent par le résultat, et une **illustration (schéma, maquette) à chaque point de plan**.
-- **Uniquement tablette Android et téléphone, pas d'ordinateur** : toutes les marches à suivre (Railway, GitHub, comptes) doivent se faire sur tablette.
-- Règle d'or : lui faire gagner du temps ; ne jamais casser une version qui fonctionne.
-- Dépôt : `corentin-pinas/Projet-1`, branche de travail `claude/patient-management-planning-xg8y6k` (aussi branche de production sur Railway). Pas de pull request sans demande.
+- **Corentin**, kinésithérapeute à Toulouse (surtout l'épaule). Il ne code pas et ne relit pas la technique : Claude choisit, explique ce qui change **à l'écran**, dit franchement ce qui n'est pas testé.
+- Il **dicte à la voix** (phrases orales, parfois approximatives, parfois envoyées deux fois : un message répété n'est pas une nouvelle demande).
+- Réponses en français, sans jargon, **en commençant par le résultat**. Une illustration (schéma, maquette, capture) à chaque point de plan. Il apprécie les **captures d'écran à la taille de sa tablette** (1000 × 625 en paysage) envoyées avec `SendUserFile`.
+- **Tablette Android + téléphone, pas encore d'ordinateur** (un PC arrive bientôt). L'appli est **installée avec Chrome** (Brave refuse la protection du stockage).
+- Règles d'or : lui faire gagner du temps ; **ne jamais casser une version qui fonctionne** ; **ne jamais mettre en production sans son accord explicite** (il répond « mets en production »).
+- Il a un compte **Railway payant** et reçoit les mails de Railway ; il peut envoyer des captures des « Deploy Logs ».
 
-## Ce que fait l'appli (version 0.4.3, en usage réel au cabinet depuis le 8 octobre)
+## 2. Dépôt, branches, mise en production
 
-Appli web installable (PWA) sur la tablette, **installée avec Chrome** (Brave refuse la protection du stockage).
+- Dépôt : `corentin-pinas/Projet-1` (GitHub).
+- **Branche de travail** de cette session : `ccr-53b733ac-e4ek55`. **Branche de production** (déployée par Railway à chaque push) : `claude/patient-management-planning-xg8y6k`.
+- Méthode suivie à chaque changement :
+  1. coder sur la branche de travail ; `npm test` et `npm run test:e2e` au vert ;
+  2. monter la version dans `package.json` (puis `npm install --package-lock-only`) ;
+  3. commit + push sur la branche de travail ;
+  4. présenter à Corentin (captures) et **attendre son « oui »** ;
+  5. relancer les tests, puis avancer la production en avance rapide : `git push origin HEAD:claude/patient-management-planning-xg8y6k` (vérifier d'abord `git merge-base --is-ancestor`).
+- Pas de pull request sans demande.
+- **Les deux branches sont au même commit** au 29 octobre (version 0.8.1 en production), à part ce fichier.
 
-- **Liste du jour** classée par rendez-vous (Aujourd'hui, Demain, jours suivants, puis sans rendez-vous), recherche.
-- **Bilans** : dépôt de PDF ou de photos. Le nom du patient (prénom + initiale) est tiré du nom du fichier. **Résumé automatique par l'IA** : coup d'œil, chiffres, rubriques, points « à vérifier » validables ou corrigeables. Les corrections sont renvoyées à l'IA pour les bilans suivants. Visionneuse du bilan complet.
-- **Bilans au stylet** : sa trame PDF est tapée puis remplie au stylet. Chaque page est dessinée sur la tablette, écriture comprise, et envoyée en image à l'IA, avec le texte tapé à part. Vérifié : un trait de stylet apparaît bien dans l'image.
-- **Séances** dictées avec le micro du clavier, mises au propre par l'IA en rubriques (État du patient, Fait en séance, À faire à la maison, Autres notes, À venir). Le texte d'origine reste consultable. Encadré « À venir ». Rendez-vous dicté placé tout seul.
-- **Homonymes** : question « même personne ? » (réunir, ou ajouter la 2e lettre du nom).
-- **État de l'appli** : installation, hors-connexion, protection du stockage, place, IA. Réglages de l'IA. Les messages s'affichent dans la fenêtre.
-- **Mises à jour** proposées par un bandeau, jamais de rechargement automatique.
+## 3. Ce que fait l'appli (version 0.8.1, en production)
 
-## Décisions prises (dans l'ordre)
+PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedDB), serveur Railway sans aucune donnée patient.
 
-1. **Tablette seule** ; les données patients restent dans la tablette (IndexedDB). Pas de serveur qui les stocke.
-2. **Résumé automatique** des bilans dès le dépôt.
-3. **On est reparti de zéro** : les anciens bilans de test ont été supprimés par Corentin ; il dépose désormais de vrais bilans pseudonymisés.
-4. **D'abord à l'identique** de la version d'essai claude.ai, puis les idées une par une.
-5. **Hébergement : Railway** (5 €/mois, un collègue le connaît). Variable `CODE_ACCES` réglée ; **volume monté sur `/data`** (garde la connexion de Claude Code).
-6. **IA par l'abonnement Claude Pro de Corentin** (demande du 7 octobre, d'après son document `reference/mecanisme-abonnement-claude-code.md`) : la tablette envoie au serveur Railway, qui lance **Claude Code** (CLI officiel) connecté à l'abonnement, verrouillé (aucun outil, aucun connecteur, rien de conservé, réponse au format imposé). Connexion faite depuis la tablette, **fonctionnelle**. La clé API reste un secours **verrouillé par défaut**.
-7. **Niveaux d'IA** : la plus puissante (opus) pour les **bilans** et la future **dictée groupée** ; une plus légère (sonnet) pour les **séances**. Si le quota Pro ne suffit plus : passage à l'abonnement Max, sans rien changer à l'appli.
-8. **Confidentialité** : prénom + initiale, âge sans date de naissance, médecin par sa spécialité, etc. (voir CLAUDE.md). En mode abonnement, le contenu transite par Railway en mémoire, sans y être gardé.
-9. **Volume habituel** : 3 à 8 bilans et 80 à 110 séances par semaine.
+- **Liste** à gauche : patients classés par rendez-vous (Aujourd'hui, Demain, jours suivants, sans rendez-vous), recherche ; « Bilan à venir » pour les patients sans bilan ; créer un patient depuis la recherche (« Créer le patient « Paul G. » (bilan à venir) »).
+- **Bilans** (PDF ou photos) : nom tiré du fichier (prénom composé gardé : « Marie-Laure D. » ; particules « Le Goff » → « L. ») ; **résumé automatique par l'IA** (coup d'œil, chiffres, rubriques, points « à vérifier ») ; **une correction « à vérifier » est reportée dans le résumé** (IA légère) ; visionneuse ; « Ajouter le bilan » sur la fiche d'un patient sans bilan ; « Modifier le nom ».
+- **Séances** : dictées (micro du clavier), mises au propre par l'IA en rubriques (État du patient, Fait en séance, À faire à la maison, Autres notes, À venir), « À venir » en tête de fiche, rendez-vous dicté placé tout seul.
+- **Dictée groupée** (🎙️) : toute la matinée d'un bloc, une seule demande à l'IA la plus puissante, rangement automatique par patient, question seulement en cas de doute, « Annuler cette dictée ». Date Aujourd'hui / Hier / autre. Bouton « Enregistrer ma dictée » **prêt pour Whisper** mais caché tant que Whisper n'est pas branché.
+- **Agenda** (📅) : semaine en colonnes, séance 20 min, bilan 40 min, créneaux libres en orange d'après « Mes horaires », toucher un patient → sa fiche, toucher un créneau → y placer un patient existant ou nouveau.
+- **Rendez-vous** : « Séance » ou « Bilan » ; plusieurs possibles, un par jour.
+- **Homonymes** : « même personne ? ».
+- **Sauvegarde** : copie interne automatique chaque jour (7 gardées, retour en arrière annulable) ; **copie hors de Chrome** chiffrée dans « Téléchargements » (mot de passe retenu par la tablette, à noter sur papier), restauration depuis le fichier, rappel orange après 7 jours.
+- **État de l'appli** : installation, hors-connexion, protection du stockage, place, IA (abonnement / clé API de secours), copies de sécurité.
+- **Réglages** (⚙️) : fond (tablette / clair / sombre), **11 couleurs** (vert, turquoise, bleu, indigo, violet, framboise, rouge, orange, or, café, ardoise ; fond assorti en sombre), taille du texte (3), **8 écritures**, contraste fort, décorations de saison oui/non. Gardés dans la tablette (`localStorage`).
+- **Petit kiné à lunettes** (mascotte, pas un docteur) à côté de « Mes patients » : flotte et cligne des yeux, **rit / saute / s'étire** quand on le touche ; col aux couleurs choisies ; chapeau de saison.
+- **Décorations de saison** : Halloween (24 oct.–1er nov. : toiles, araignée qui remonte quand on la touche, chauve-souris, chapeau de sorcière) ; **Noël tout décembre en 5 niveaux** (flocons → guirlande → bonnet → neige au sol, sapin, cadeaux → étoile, 🎅 du 24 au 26) ; **Pâques** (Rameaux → lundi de Pâques : œufs, lapin qui saute au toucher, oreilles de lapin) ; **anniversaire de Corentin** (10–16 mars, confettis, ballons, chapeau de fête, « Joyeux anniversaire Corentin ! » le 13 mars, prioritaire sur Pâques).
+- Mises à jour par un bandeau « Mettre à jour », jamais de rechargement automatique.
 
-## Étapes
+## 4. Historique des versions
 
-| # | Étape | État |
+| Version | Date | Contenu |
 |---|---|---|
-| 1 | Socle installable, hors-connexion | Fait |
-| 2 | Reproduction de la version d'essai | Fait |
-| 3 | IA branchée (abonnement, stylet, niveaux d'IA) | Fait, en usage |
-| 4 | Sauvegarde : copies internes (0.5.0, en production) + copie hors de Chrome (0.5.1) | Faite, à valider sur la tablette |
-| 5 | Dictée groupée | Faite (0.6.0), à valider sur une vraie matinée |
-| 6 | Agenda + patients sans bilan | Fait (0.7.0), à valider sur la tablette |
-| 7 | Transmissions en PDF | À faire |
-| 8 | Ses autres idées, une par une | Plus tard |
+| 0.4.3 | 8 oct. | IA par l'abonnement, bilans au stylet, niveaux d'IA (début de l'usage réel) |
+| 0.5.0 | 25 oct. | Copies de sécurité internes |
+| 0.5.1 | 25 oct. | Copie hors de Chrome chiffrée + restauration |
+| 0.5.2 | 25 oct. | Liste : patients qui se chevauchaient quand la liste dépasse l'écran |
+| 0.5.3 | 26 oct. | Serveur : ne tombe plus si Claude Code quitte avant d'avoir lu (EPIPE) |
+| 0.6.0 | 26 oct. | Dictée groupée |
+| 0.6.1 | 26 oct. | Fin des faux mails « Deploy Crashed » (serveur lancé par `node server.mjs`, arrêt propre sur SIGTERM) |
+| 0.6.2 | 26 oct. | Corrections reportées dans le résumé ; prénoms composés ; « Modifier le nom » |
+| 0.7.0 | 28 oct. | Agenda, patients sans bilan, dictée enregistrée prête pour Whisper |
+| 0.8.0 | 29 oct. | Réglages, 11 couleurs, 8 écritures, petit kiné, Halloween |
+| 0.8.1 | 29 oct. | Noël progressif, Pâques, anniversaire, chapeaux du petit kiné |
 
-## Étape 4 — sauvegarde (version 0.5.0, 11 octobre 2026)
+## 5. Décisions prises (à ne pas remettre en question)
 
-- **Décision du 11 octobre** : sauvegarde **interne à la tablette seulement**. Pas de fichier sur Drive pour l'instant, donc **pas de mot de passe** (chiffrer une copie rangée à côté des données ne protège rien). Corentin accepte le risque de tout perdre si la tablette est perdue ou cassée : la future version PC aura sa propre sauvegarde à deux endroits.
-- **Copie automatique chaque jour** (store `copies`, base en version 3), faite avant le premier changement de la journée ou à l'ouverture : elle garde l'état de la veille au soir. Texte seulement (dossiers, bilans, séances ; pas les réglages). **7 copies gardées**, la plus ancienne effacée.
-- Les PDF et photos ne sont pas recopiés : un fichier reste gardé tant qu'un bilan ou une copie y renvoie (`nettoyerFichiers` dans `src/db.ts`). Un bilan supprimé par erreur revient donc avec son PDF.
-- **Retour en arrière** dans « État de l'appli », partie « Copies de sécurité » (`src/copies.ts`) : « Revenir à cette copie ». L'état actuel est d'abord gardé (`avant-retour`), ce qui permet « Annuler le retour en arrière ».
-- Non testé sur la vraie tablette. Limite assumée : effacer les données de Chrome ou désinstaller l'appli efface aussi les copies.
-- **Copie hors de Chrome (version 0.5.1, 25 octobre 2026, demandée par Corentin)** : bouton « Copier hors de Chrome » qui télécharge un fichier complet (texte + PDF et photos) dans « Téléchargements », `mes-patients-AAAA-MM-JJ.sauvegarde`. Chiffré (AES-GCM 256, clé PBKDF2 SHA-256 600 000 tours, morceau par morceau : `src/fichier-copie.ts`) avec un mot de passe choisi une fois et **retenu par la tablette** (option 1 choisie par Corentin), à noter sur papier. Survit à un effacement des données de Chrome, pas à la perte de la tablette. Pas de Drive. Rappel : la ligne « Copie hors de Chrome » de « État de l'appli » passe en orange après 7 jours. « Restaurer depuis un fichier » : essaie le mot de passe retenu, sinon le demande ; l'état actuel est gardé (annulable).
-- Non testé sur la vraie tablette : le téléchargement depuis l'appli installée et le choix du fichier à restaurer dans le sélecteur Android.
+1. **Tablette seule** ; données patients dans la tablette. Serveur Railway = livrer l'appli + relayer l'IA, rien n'y est stocké.
+2. **IA par l'abonnement Claude Pro** de Corentin : le serveur lance Claude Code (verrouillé, sans outils). Clé API = secours verrouillé. IA puissante (opus) pour bilans et dictée groupée, légère (sonnet) pour séances et report des corrections.
+3. **Sauvegarde** : interne + copie hors de Chrome (pas de Drive). Corentin accepte le risque de perte de la tablette jusqu'au passage au PC (qui aura sa propre sauvegarde).
+4. **Dictée** : le clavier Samsung fait perdre trop de temps ; la dictée de l'appli Claude n'est pas utilisable par une autre appli. **Décision : Whisper à l'arrivée du PC** (comme l'appli d'un ami). L'appli est déjà câblée (voir § 7).
+5. **Rattachement dans la dictée groupée** (règle souple) : un seul dossier possible parmi les rendez-vous du jour, sinon un seul dossier de ce nom dans toute l'appli → rangé seul ; sinon on demande. Corentin dicte le prénom, parfois avec l'initiale, jamais le nom de famille.
+6. **Agenda** : séance 20 min, bilan 40 min ; Corentin règle lui-même ses horaires dans « Mes horaires » (défaut lun.–ven. 8 h–12 h / 14 h–19 h).
+7. **Confidentialité** : prénom + initiale, âge sans date de naissance, médecin par sa spécialité, pas de nom complet (voir `CLAUDE.md`).
+8. Volume : 3 à 8 bilans et 80 à 110 séances par semaine.
 
-## Étape 6 — agenda (version 0.7.0, 28 octobre 2026)
+## 6. Pas encore testé en conditions réelles
 
-- **Patients sans bilan** (demande du 28 octobre : patients déjà en soins dont le bilan n'est pas arrivé) : création depuis la recherche (« Créer le patient « Paul G. » (bilan à venir) ») ou depuis un créneau de l'agenda. Le nom tapé passe par `patientFrom` (nom complet réduit à l'initiale). Fiche sans bilan : séances, rendez-vous, « Ajouter le bilan », « Supprimer ce patient ». Un bilan déposé au même nom rejoint le seul patient sans bilan de ce nom. La sélection de l'écran se fait par dossier (`selD`), plus par bilan.
-- **Agenda** (`src/agenda.ts`, bouton « 📅 Agenda ») : semaine du lundi au samedi en colonnes, plein écran ; séance 20 min, bilan 40 min (`t: "bilan"` sur le rendez-vous, choix « Séance / Bilan » aussi sur la fiche). Créneaux libres en orange (`creneauxLibres`) d'après les horaires habituels (« Mes horaires », paramètre `horaires`, défaut lun.–ven. 8 h–12 h / 14 h–19 h, samedi non travaillé), à venir seulement. Toucher un patient ouvre sa fiche ; toucher un créneau : patient existant (suggestions : patients sans rendez-vous à venir) ou nouveau patient. Déplacement dans la journée confirmé (un rendez-vous par jour et par patient).
-- Corentin doit régler ses vrais horaires dans « Mes horaires » (question jamais tranchée : il les saisit lui-même).
-- **Dictée enregistrée, prête pour Whisper** : bouton « 🎙️ Enregistrer ma dictée » dans la dictée groupée, visible seulement si le serveur a `WHISPER_URL` (et le code d'accès réglé). La tablette enregistre (MediaRecorder), `/api/ia/transcrire` relaie à un service compatible avec l'API audio/transcriptions d'OpenAI (`serveur/transcription.mjs`, variables `WHISPER_URL`, `WHISPER_CLE`, `WHISPER_MODELE`, vocabulaire de kiné en prompt), le texte s'ajoute à la dictée. Micro autorisé (`microphone=(self)`). Pour un Whisper sur le PC : le serveur Railway doit pouvoir le joindre (adresse publique ou tunnel), à voir avec le PC.
+- Copie hors de Chrome : le fichier arrive-t-il bien dans « Téléchargements », et le sélecteur Android permet-il de le choisir pour restaurer ?
+- Dictée groupée sur une vraie matinée : qualité du découpage, durée (limite serveur 5 min), consommation du quota Pro.
+- Report des corrections dans le résumé avec la vraie IA.
+- Agenda au doigt (retour du 29 octobre : « ça a l'air très bien, pas de bug »).
+- Réglages, mascotte et décorations sur la tablette (Noël, Pâques, anniversaire seulement simulés en changeant la date dans les tests).
 
-## Étape 7 — transmissions
+## 7. Prochaines étapes (dans l'ordre conseillé)
 
-- Pour une période choisie, tous les patients ayant rendez-vous : pathologie, état à l'arrivée (bilan), traitement en cours (séances). **Sortie : un PDF** envoyé par message au remplaçant. L'agenda sert à vérifier qu'aucun patient ne manque. Maquette sur la carte du projet.
+1. **Écran d'accueil « Ma journée »** (idée du 28 octobre, conseillée en premier) : à l'ouverture, à la place de « Choisissez un patient », les patients du jour en **petites fiches** dans l'ordre des rendez-vous : heure, nom, séance ou bilan, pathologie (région du bilan), **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**. Toucher une petite fiche → la vraie fiche. Pas d'IA en plus, sauf un résumé court de chaque séance à produire en même temps que la mise au propre.
+2. **Transmissions en PDF** pour un remplaçant : pour une période choisie (une semaine, quinze jours…), tous les patients ayant rendez-vous : pathologie, état à l'arrivée (bilan), traitement en cours (séances). PDF envoyé par message. L'agenda sert à vérifier qu'aucun patient ne manque.
+3. **Whisper**, quand le PC est là : choisir Whisper sur le PC (gratuit, la voix ne sort pas du cabinet ; il faudra que le serveur Railway puisse le joindre : adresse publique ou tunnel) ou l'API d'OpenAI (voix envoyée aux États-Unis). Il suffira de régler les variables Railway `WHISPER_URL` (+ `WHISPER_CLE`, `WHISPER_MODELE`) : le bouton « Enregistrer ma dictée » apparaîtra tout seul.
+4. Idées proposées, non demandées : le petit kiné comme **icône de l'appli** sur l'écran d'accueil de la tablette ; d'autres fêtes.
+5. Plus tard (idées de Corentin) : résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, propositions de séance appuyées sur la littérature, version PC.
 
-## Étape 5 — dictée groupée (version 0.6.0, 26 octobre 2026)
+## 8. Repères techniques (détails dans `CLAUDE.md`)
 
-- Bouton « 🎙️ Dictée groupée » sous « Ajouter des bilans » : grande zone de texte (micro du clavier), date « Aujourd'hui / Hier / autre » (Corentin dicte parfois le lendemain matin). Brouillon gardé dans la tablette à chaque mot (`dictee_brouillon`).
-- **Une seule demande à l'IA la plus puissante** (`decouperDictee` dans `src/ia.ts`) : découpe par patient, extrait mot pour mot, mise au propre, « À venir », rendez-vous dicté. La liste des patients de l'appli (prénom + initiale, « rendez-vous ce jour-là ») est fournie pour corriger les prénoms mal reconnus. Garde-fou : si les extraits font moins de 60 % de la dictée, rien n'est rangé.
-- **Rattachement fait par l'appli, pas par l'IA** (`rattacher` dans `src/regles.ts`, règle souple choisie par Corentin) : un seul dossier possible parmi les rendez-vous du jour, sinon un seul dossier à ce nom dans toute l'appli → rangé seul. Sinon question : candidats par heure de rendez-vous, ou tous les dossiers si le nom est inconnu ; « Ne pas ranger ce passage » possible. Passages en attente gardés (`dictee_doutes`).
-- Corentin dicte prénom seul ou prénom + initiale, jamais le nom de famille (identitovigilance) ; un nom complet est de toute façon réduit à l'initiale.
-- Récapitulatif « N séances rangées » avec « Annuler cette dictée » : séances retirées, rendez-vous remis, texte dicté rendu pour correction.
-- Non testé en vrai : qualité du découpage sur une vraie matinée, durée de la demande (limite de 5 minutes du serveur).
-- **Essai du 26 octobre** : la dictée groupée fonctionne, mais la dictée du clavier Samsung fait perdre trop de temps en corrections. La dictée de l'appli Claude n'est pas utilisable par une autre appli.
-- **Décision du 28 octobre** : on laisse la dictée telle quelle pour l'instant. À l'arrivée du PC de Corentin : **Whisper** (comme l'appli d'un ami). L'appli enregistre la voix (bouton micro), Whisper transcrit l'audio en texte, le texte part ensuite dans le rangement actuel (`rangerDictee`). À trancher à ce moment-là : Whisper sur le PC (gratuit, la voix ne sort pas du cabinet) ou par l'API d'OpenAI (voix envoyée aux États-Unis). Penser à autoriser le micro : `Permissions-Policy: microphone=()` dans `server.mjs` le bloque aujourd'hui.
-
-## Idée notée le 28 octobre 2026 : écran d'accueil « Ma journée »
-
-- À l'ouverture de l'appli, à la place de « Choisissez un patient » : les patients du jour en **petites fiches**, dans l'ordre des rendez-vous. Sur chacune : heure, nom, séance ou bilan, **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**, pathologie (région du bilan).
-- Toucher une petite fiche ouvre la vraie fiche du patient.
-- Retour de Corentin sur l'agenda (0.7.0) : fonctionne, pas de bug constaté.
-
-## Réglages d'affichage (version 0.8.0, 29 octobre 2026)
-
-- Bouton « ⚙️ Réglages » à côté de « État de l'appli » : fond (comme la tablette, clair, sombre), couleur principale (vert, violet, orange, bleu ; en sombre, « noir et violet », « noir et orange »…), taille du texte (3), écriture (très lisible, arrondie, fantaisie), contraste fort, décorations de saison. Changement immédiat, gardé dans la tablette.
-- Décorations de saison (idée de Corentin) : Halloween (toiles d'araignée, araignée, 🎃 à côté du titre), Noël (flocons, 🎄). Autres fêtes possibles plus tard.
-- L'IA et les sauvegardes restent dans « État de l'appli ».
-- Version 0.8.0 en production le 29 octobre. Version 0.8.1 : Pâques (œufs, lapin qui saute quand on le touche), semaine d'anniversaire de Corentin (13 mars : confettis, ballons, « Joyeux anniversaire Corentin ! » le jour même), Noël tout décembre de plus en plus fourni (flocons, puis guirlande, bonnet du petit kiné, neige au sol, sapin et cadeaux, étoile), chapeaux du petit kiné (sorcière, bonnet, oreilles de lapin, chapeau de fête).
-- Demandes du 29 octobre, faites avant la mise en production : 11 palettes (vert, turquoise, bleu, indigo, violet, framboise, rouge, orange, or, café, ardoise), 8 écritures (très lisible, claire, arrondie, douce, moderne, ronde, fantaisie, manuscrite), mascotte « petit kiné à lunettes » (pas un docteur, demande de Corentin), sur le modèle du petit fantôme d'une appli qu'il aime (vidéo du 29 octobre) : flotte et cligne des yeux, rit / saute / s'étire quand on la touche, araignée qui remonte quand on la touche, chauve-souris qui passe.
-
-## Autres idées notées (plus tard)
-
-Résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, couleurs et palettes d'affichage, transcription audio par un service dédié (il prévoit d'autres applis vocales).
-
-## Pour reprendre
-
-1. Lire `CLAUDE.md`, `PLAN.md` et ce fichier.
-2. Sauvegarde interne faite (0.5.0) , en production depuis le 25 octobre 2026. Copie hors de Chrome (0.5.1) et correction de la liste qui se chevauchait (0.5.2) en production le 25 octobre. À valider sur la tablette. Ensuite : dictée groupée, puis un écran Réglages (couleurs, taille du texte). Prochaine étape : dictée groupée.
-3. Lui redemander ses horaires et son accord sur la création de patient depuis l'agenda.
+- Fichiers principaux : `src/app.ts` (liste, fiche ; sélection par dossier `selD` / bilan `selB`), `src/db.ts` (IndexedDB, base version 3, copies, export/import, `creerPatient`, `supprimerPatient`), `src/regles.ts` (règles pures : noms, rendez-vous, `rattacher`, agenda), `src/ia.ts` (prompts, garde-fous : `resumerBilan`, `analyserSeance`, `decouperDictee`, `corrigerResume`), `src/moteur.ts` (files d'attente IA), `src/dictee.ts`, `src/agenda.ts`, `src/copies.ts`, `src/fichier-copie.ts`, `src/transcription.ts`, `src/reglages.ts`, `src/palettes.ts`, `src/saisons.ts`, `src/mascotte.ts`, `server.mjs`, `serveur/claude.mjs`, `serveur/transcription.mjs`.
+- Tests : `npm test` (Vitest, 102 tests) et `npm run test:e2e` (Playwright, 43 tests, Chromium `/opt/pw-browsers/chromium`, faux Claude Code `tests/faux/claude.mjs`, faux Whisper `tests/faux/whisper.mjs`, micro simulé). Dans les tests d'écran, `page.clock.setFixedTime(...)` fixe la date (utile pour l'agenda et les saisons).
+- Si `node_modules` manque dans une nouvelle session : `npm ci`.
+- Captures pour Corentin : un test Playwright temporaire `tests/e2e/zz-capture.spec.ts` (viewport 1000 × 625), à supprimer ensuite ; fichiers dans le dossier scratchpad.
+- Railway : `railway.json` lance `node server.mjs` (surtout pas `npm start`, qui faisait envoyer de faux mails « Deploy Crashed » à chaque mise en ligne). Variables : `CODE_ACCES`, volume `/data` (connexion de Claude Code), et plus tard `WHISPER_URL`.
+- Le serveur bloque la caméra et la géolocalisation ; le micro est autorisé pour l'appli elle-même (`microphone=(self)`).
