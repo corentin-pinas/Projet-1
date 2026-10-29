@@ -301,7 +301,30 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 @media (prefers-reduced-motion: reduce){.saison *{animation:none!important}.saison.noel .flocon{top:auto;bottom:20px}}
 
 
-/* logo : petit docteur à lunettes, aux couleurs choisies */
+/* mascotte : petit kiné à lunettes ; corps clair et lumineux dans tous les thèmes, col aux couleurs choisies */
 .side h1{display:flex;align-items:center;gap:10px}
-.logo{width:44px;height:44px;flex:none}
-.logo svg{display:block;width:100%;height:100%}
+.mascotte{width:54px;height:54px;flex:none;padding:0;min-height:0;border:0;background:none;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.mascotte svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 7px color-mix(in srgb,var(--accent) 45%,transparent)) drop-shadow(0 2px 2px rgb(0 0 0 / .18))}
+.mascotte .m-peau,.mascotte .m-bras,.mascotte .m-pied{fill:#FFF3E4}
+.mascotte .m-pied{fill:#F3E2CC}
+.mascotte .m-trait{fill:none;stroke:#2A2522;stroke-linecap:round}
+.mascotte .m-yeux{fill:#2A2522;transform-origin:32px 29.5px;animation:cligne 4.5s infinite}
+.mascotte .m-bouche{fill:#2A2522}
+.mascotte .m-joue{fill:#F49C9C;opacity:.55}
+.mascotte .m-col{fill:none;stroke:var(--accent);stroke-width:4.5;stroke-linecap:round}
+.mascotte .m-lunettes{fill:#FFFFFF;fill-opacity:.25;stroke:#2A2522;stroke-width:2.2}
+.mascotte .m-joie{display:none}
+.mascotte .m-corps{transform-origin:32px 60px;animation:flotte 3.6s ease-in-out infinite}
+.mascotte.rit .m-normal,.mascotte.saute .m-normal,.mascotte.etire .m-normal{display:none}
+.mascotte.rit .m-joie,.mascotte.saute .m-joie,.mascotte.etire .m-joie{display:inline}
+.mascotte.rit .m-corps{animation:rire .18s ease-in-out 8 alternate}
+.mascotte.saute .m-corps{animation:saut .9s cubic-bezier(.3,1.6,.5,1) 2}
+.mascotte.etire .m-corps{animation:etirement 1.7s ease-in-out}
+.mascotte.etire .m-bras{animation:bras-haut 1.7s ease-in-out}
+@keyframes flotte{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
+@keyframes cligne{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+@keyframes rire{from{transform:rotate(-7deg)}to{transform:rotate(7deg) translateY(-1px)}}
+@keyframes saut{0%,100%{transform:translateY(0) scale(1)}15%{transform:translateY(0) scale(1.08,.9)}50%{transform:translateY(-12px) scale(.95,1.06)}}
+@keyframes etirement{0%,100%{transform:scale(1)}40%,65%{transform:scale(.9,1.14)}}
+@keyframes bras-haut{0%,100%{transform:translateY(0)}40%,65%{transform:translateY(-14px)}}
+@media (prefers-reduced-motion: reduce){.mascotte *{animation:none!important}}

@@ -1,5 +1,6 @@
 import "./styles.css";
 import * as reglages from "./reglages";
+import { installer as installerMascotte } from "./mascotte";
 
 reglages.appliquer(reglages.lire());   // couleurs et taille du texte avant tout affichage
 import { registerSW } from "virtual:pwa-register";
@@ -70,6 +71,7 @@ async function afficherEtat() {
 
 brancherCopies(afficherEtat);
 reglages.brancher();
+installerMascotte(document.querySelector<HTMLElement>("#mascotte")!);
 /* la décoration de saison change d'elle-même si l'appli reste ouverte d'un jour à l'autre */
 document.addEventListener("visibilitychange", () => { if (!document.hidden) reglages.appliquer(reglages.lire()); });
 brancherReglagesIA(async () => { await afficherEtat(); rafraichirIA(); });
