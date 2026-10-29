@@ -60,6 +60,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.8.0 | 29 oct. | Réglages, 11 couleurs, 8 écritures, petit kiné, Halloween |
 | 0.8.1 | 29 oct. | Noël progressif, Pâques, anniversaire, chapeaux du petit kiné |
 | 0.9.0 | 29 oct. | Écran d'accueil « Ma journée » (branche de travail, **pas encore en production**) |
+| 0.9.1 | 29 oct. | L'appli s'appelle **Muninn** (« la mémoire du cabinet », corbeau d'Odin) : titre, nom à l'installation, icône corbeau ; araignée d'Halloween décalée (elle cachait le titre). Pas encore en production |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 

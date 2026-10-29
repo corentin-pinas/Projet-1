@@ -7,7 +7,7 @@ const ouvrirEtat = async (page: import("@playwright/test").Page) => {
 
 test("l'état de l'appli affiche les vérifications d'installation", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle("Mes patients");
+  await expect(page).toHaveTitle("Muninn");
   // ouverte dans le navigateur, pas depuis l'icône : le bouton d'état signale un point à voir
   await expect(page.locator("#etatbtn")).toHaveClass(/alerte/);
   await ouvrirEtat(page);
@@ -19,7 +19,7 @@ test("le manifeste permet l'installation sur l'écran d'accueil", async ({ page,
   await page.goto("/");
   const href = await page.locator('link[rel="manifest"]').getAttribute("href");
   const manifeste = await (await request.get(href!)).json();
-  expect(manifeste.name).toBe("Mes patients");
+  expect(manifeste.name).toBe("Muninn");
   expect(manifeste.display).toBe("standalone");
   expect(manifeste.icons.map((i: { sizes: string }) => i.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
   for (const i of manifeste.icons) expect((await request.get(i.src)).ok()).toBe(true);
@@ -31,7 +31,7 @@ test("l'appli s'ouvre sans internet une fois chargée", async ({ page, context }
   await expect(page.locator('[data-id="hors-connexion"]')).toHaveClass(/ok/, { timeout: 15_000 });
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Mes patients" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Muninn/ })).toBeVisible();
   await context.setOffline(false);
 });
 

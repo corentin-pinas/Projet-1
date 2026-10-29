@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: "prompt",
       includeAssets: ["icons/icon.svg"],
       manifest: {
-        name: "Mes patients",
-        short_name: "Mes patients",
-        description: "Bilans, séances et rendez-vous des patients du cabinet.",
+        name: "Muninn",
+        short_name: "Muninn",
+        description: "Muninn, la mémoire du cabinet : bilans, séances et rendez-vous des patients.",
         lang: "fr",
         start_url: "./",
         scope: "./",
