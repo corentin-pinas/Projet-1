@@ -47,6 +47,8 @@ export type Seance = {
   brut?: string;                                      // dictée d'origine, gardée après une correction à la main
   avenir_resume?: string;
   avenir_source?: string;
+  bref?: string;                                      // résumé court de la séance (écran « Ma journée »)
+  bref_source?: string;                               // texte dont « bref » est issu
   ia_ok?: boolean;
 };
 
@@ -175,6 +177,16 @@ export function avenirDe(seancesDuDossier: Seance[]) {
 /* texte mis au propre par l'IA, valable tant que la note d'origine n'a pas changé */
 export const propreOk = (s: Seance) => !!s.propre && s.propre_source === s.contenu;
 export const texteDe = (s: Seance) => propreOk(s) ? s.propre! : s.contenu;
+
+/* résumé court d'une séance : celui de l'IA tant que la note n'a pas changé,
+   sinon « État du patient » et « Fait en séance » de la note, coupés à 160 caractères */
+export function brefDe(s: Seance): string {
+  if (s.bref && s.bref_source === s.contenu) return s.bref;
+  const t = texteDe(s);
+  const lignes = t.split("\n").map(l => /^(État du patient|Fait en séance) ?: ?(.*)$/.exec(l.trim())).filter(Boolean).map(m => m![2].trim());
+  const out = (lignes.length ? lignes.join(" ; ") : t.replace(/\s+/g, " ")).trim();
+  return out.length > 160 ? out.slice(0, 159).replace(/\s+\S*$/, "") + "…" : out;
+}
 
 /* ---------- dates et rendez-vous ---------- */
 
@@ -327,4 +339,33 @@ export function creneauxLibres(plages: Plage[], occupes: { debut: number; fin: n
     couper(fin);
   }
   return libres;
+}
+
+/* ---------- « Ma journée » : les patients d'un jour, avec ce qui est prévu pour eux ---------- */
+
+export type Carte = {
+  dossier: Dossier; rdv: Rdv; bilan: Bilan | null;
+  avenir: ReturnType<typeof avenirDe>;               // « À venir » de la dernière séance avant ce jour
+  avant: Seance | null;                              // dernière séance avant ce jour
+  faite: Seance | null;                              // séance déjà notée ce jour-là
+};
+
+export function journee(dossiers: Dossier[], bilans: Bilan[], seances: Seance[], iso: string): Carte[] {
+  return rdvsDuJour(dossiers, iso).map(({ dossier, rdv }) => {
+    const siennes = trierSeances(seances.filter(s => s.dossierId === dossier.id));
+    const avant = siennes.filter(s => s.date < iso);
+    return {
+      dossier, rdv,
+      bilan: trierBilans(bilans.filter(b => b.dossierId === dossier.id))[0] ?? null,
+      avenir: avenirDe(avant),
+      avant: avant[0] ?? null,
+      faite: siennes.find(s => s.date === iso) ?? null
+    };
+  });
+}
+
+/* premier jour, à partir de celui-ci et dans les 14 jours, où un rendez-vous est noté ; null s'il n'y en a pas */
+export function prochaineJournee(dossiers: Dossier[], iso: string): string | null {
+  const jours = dossiers.flatMap(d => d.rdvs.map(r => r.d)).filter(d => d >= iso && d <= decalerJours(iso, 14)).sort();
+  return jours[0] ?? null;
 }

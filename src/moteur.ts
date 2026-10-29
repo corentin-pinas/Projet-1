@@ -210,6 +210,7 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
   const patch: Partial<Seance> = { ia_ok: true };
   if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = brut; }
   if (a.propre) { patch.propre = a.propre; patch.propre_source = se.contenu; }
+  if (a.bref) { patch.bref = a.bref; patch.bref_source = se.contenu; }
   await db.majSeance(se.id, patch);
   /* on ne pose le rendez-vous que s'il est à venir et que cette séance est bien la dernière du patient */
   const { seances, dossiers } = await db.tout();

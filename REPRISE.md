@@ -16,7 +16,7 @@ Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb �
 ## 2. Dépôt, branches, mise en production
 
 - Dépôt : `corentin-pinas/Projet-1` (GitHub).
-- **Branche de travail** de cette session : `ccr-53b733ac-e4ek55`. **Branche de production** (déployée par Railway à chaque push) : `claude/patient-management-planning-xg8y6k`.
+- **Branche de travail** de la dernière session : `ccr-5fa8a3ae-zcpk2o`. **Branche de production** (déployée par Railway à chaque push) : `claude/patient-management-planning-xg8y6k`.
 - Méthode suivie à chaque changement :
   1. coder sur la branche de travail ; `npm test` et `npm run test:e2e` au vert ;
   2. monter la version dans `package.json` (puis `npm install --package-lock-only`) ;
@@ -59,6 +59,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.7.0 | 28 oct. | Agenda, patients sans bilan, dictée enregistrée prête pour Whisper |
 | 0.8.0 | 29 oct. | Réglages, 11 couleurs, 8 écritures, petit kiné, Halloween |
 | 0.8.1 | 29 oct. | Noël progressif, Pâques, anniversaire, chapeaux du petit kiné |
+| 0.9.0 | 29 oct. | Écran d'accueil « Ma journée » (branche de travail, **pas encore en production**) |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 
@@ -81,7 +82,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 
 ## 7. Prochaines étapes (dans l'ordre conseillé)
 
-1. **Écran d'accueil « Ma journée »** (idée du 28 octobre, conseillée en premier) : à l'ouverture, à la place de « Choisissez un patient », les patients du jour en **petites fiches** dans l'ordre des rendez-vous : heure, nom, séance ou bilan, pathologie (région du bilan), **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**. Toucher une petite fiche → la vraie fiche. Pas d'IA en plus, sauf un résumé court de chaque séance à produire en même temps que la mise au propre.
+1. **Écran d'accueil « Ma journée »** — fait en 0.9.0, en attente du « oui » de Corentin pour la production. `src/journee.ts`, règles `journee`, `prochaineJournee`, `brefDe` ; champ `bref` (+ `bref_source`) demandé à l'IA avec la mise au propre (séance seule et dictée groupée) ; sans lui, « État du patient » + « Fait en séance » coupés à 160 caractères. Boutons Aujourd'hui / Demain, fiche « À suivre », fiches déjà notées grisées, « ← Ma journée » en haut de chaque fiche. Idée d'origine : à l'ouverture, à la place de « Choisissez un patient », les patients du jour en **petites fiches** dans l'ordre des rendez-vous : heure, nom, séance ou bilan, pathologie (région du bilan), **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**. Toucher une petite fiche → la vraie fiche. Pas d'IA en plus, sauf un résumé court de chaque séance à produire en même temps que la mise au propre.
 2. **Transmissions en PDF** pour un remplaçant : pour une période choisie (une semaine, quinze jours…), tous les patients ayant rendez-vous : pathologie, état à l'arrivée (bilan), traitement en cours (séances). PDF envoyé par message. L'agenda sert à vérifier qu'aucun patient ne manque.
 3. **Whisper**, quand le PC est là : choisir Whisper sur le PC (gratuit, la voix ne sort pas du cabinet ; il faudra que le serveur Railway puisse le joindre : adresse publique ou tunnel) ou l'API d'OpenAI (voix envoyée aux États-Unis). Il suffira de régler les variables Railway `WHISPER_URL` (+ `WHISPER_CLE`, `WHISPER_MODELE`) : le bouton « Enregistrer ma dictée » apparaîtra tout seul.
 4. Idées proposées, non demandées : le petit kiné comme **icône de l'appli** sur l'écran d'accueil de la tablette ; d'autres fêtes.

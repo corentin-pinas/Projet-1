@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  brefDe, journee, prochaineJournee,
   agesCompatibles, avecRdv, avenirDe, avenirFrom, heureFr, jourLabel, lignesListe, nomAffiche,
   creneauxLibres, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
@@ -214,5 +215,35 @@ describe("agenda", () => {
     const d = (id: string, label: string, rdvs: Rdv[]): Dossier => ({ id, label, rdvs, homonyme: false, cree: "" });
     const r = rdvsDuJour([d("a", "Paul G.", [{ d: "2026-10-28", h: "10:00", t: "bilan" }]), d("b", "Marc D.", [{ d: "2026-10-28", h: "08:00" }, { d: "2026-10-29", h: "08:00" }])], "2026-10-28");
     expect(r.map(x => [x.dossier.label, x.debut, x.fin])).toEqual([["Marc D.", 480, 500], ["Paul G.", 600, 640]]);
+  });
+});
+
+describe("Ma journée", () => {
+  const D = (id: string, label: string, rdvs: { d: string; h: string; t?: "bilan" }[]) => ({ id, label, rdvs, homonyme: false, cree: "" });
+  const S = (id: string, dossierId: string, date: string, contenu: string, x = {}) => ({ id, dossierId, date, cree: date + "T10:00:00Z", contenu, ...x });
+
+  it("résumé court : celui de l'IA tant que la note n'a pas changé, sinon état et fait en séance", () => {
+    const propre = "État du patient : douleur 3/10.\nFait en séance : pendulaires.\nÀ venir : tester la force.";
+    expect(brefDe(S("1", "a", "2026-10-01", "brut", { propre, propre_source: "brut", bref: "Douleur 3/10.", bref_source: "brut" }))).toBe("Douleur 3/10.");
+    expect(brefDe(S("1", "a", "2026-10-01", "brut", { propre, propre_source: "brut", bref: "Ancien", bref_source: "autre" }))).toBe("douleur 3/10. ; pendulaires.");
+    expect(brefDe(S("1", "a", "2026-10-01", "massage   du trapèze"))).toBe("massage du trapèze");
+    expect(brefDe(S("1", "a", "2026-10-01", "mot ".repeat(80))).length).toBeLessThanOrEqual(160);
+  });
+
+  it("petites fiches dans l'ordre des rendez-vous, avec ce qui est prévu et la séance d'avant", () => {
+    const dossiers = [D("a", "Marc D.", [{ d: "2026-10-29", h: "10:00" }]), D("b", "Lucie M.", [{ d: "2026-10-29", h: "08:20", t: "bilan" }]), D("c", "Paul G.", [{ d: "2026-10-30", h: "09:00" }])];
+    const seances = [
+      S("1", "a", "2026-10-20", "renfo. Pour la prochaine séance tester la force"),
+      S("2", "a", "2026-10-22", "pendulaires. La prochaine fois travail excentrique"),
+      S("3", "a", "2026-10-29", "séance du jour")
+    ];
+    const c = journee(dossiers, [], seances, "2026-10-29");
+    expect(c.map(x => x.dossier.label)).toEqual(["Lucie M.", "Marc D."]);
+    expect(c[1].avenir?.texte).toBe("Travail excentrique");
+    expect(c[1].avant?.id).toBe("2");
+    expect(c[1].faite?.id).toBe("3");
+    expect(c[0].faite).toBeNull();
+    expect(prochaineJournee(dossiers, "2026-10-30")).toBe("2026-10-30");
+    expect(prochaineJournee(dossiers, "2026-10-31")).toBeNull();
   });
 });

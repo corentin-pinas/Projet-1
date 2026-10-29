@@ -8,6 +8,7 @@ import {
 } from "./regles";
 import * as agenda from "./agenda";
 import * as dictee from "./dictee";
+import * as journee from "./journee";
 import * as moteur from "./moteur";
 import { confirmer, esc, toast } from "./ui";
 
@@ -50,7 +51,12 @@ export async function demarrer() {
   $<HTMLInputElement>("#file").addEventListener("change", ajouter);
   $("#q").addEventListener("input", renderList);
   /* la liste se reclasse quand on revient sur l'appli (le jour a pu changer) */
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { renderList(); if (selD && !busy()) renderMain(); } });
+  let jourVu = aujourdhui();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    if (jourVu !== aujourdhui()) { jourVu = aujourdhui(); journee.revenirAujourdhui(); }
+    renderList(); if (!busy()) renderMain();
+  });
   renderList();
   renderMain();
 }
@@ -122,13 +128,13 @@ function quitterDictee() {
 export function renderMain() {
   if (dicteeVue) return;   // la dictée groupée gère son propre affichage
   const D = donnees.dossiers.find(d => d.id === selD);
-  if (!D) { $("#main").innerHTML = `<div class="empty">Choisissez un patient dans la liste, ou ajoutez un bilan.</div>`; return; }
+  if (!D) { journee.afficher($("#main"), donnees, ouvrirPatient); return; }
   const bilans = bilansDe(D), age = ageDe(D);
   const b = bilans.find(x => x.id === selB) ?? bilans[0] as Bilan | undefined, r = b?.resume;
   const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b ? b.fichier : "Bilan à venir"])].filter(Boolean).join(", ");
   const titre = nomOpen
     ? `<div class="vedit nomedit"><input type="text" id="nomval" value="${esc(D.label)}" aria-label="Nom du patient (prénom et initiale)" autocomplete="off"><button class="primary" id="nomsave">Enregistrer</button><button id="nomcancel">Annuler</button></div>`
-    : `<div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button></div>`;
+    : `<button class="retour" id="majournee"><span aria-hidden="true">←</span> Ma journée</button><div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button></div>`;
   let html = `<div class="head"><div>${titre}<div class="meta">${esc(meta)}</div></div>${!formOpen && !editing ? `<button class="primary dict" id="dict">Dicter la séance</button>` : ""}</div>`;
 
   const autre = questionHomonyme(D, donnees.dossiers, donnees.bilans);
@@ -189,6 +195,7 @@ export function renderMain() {
   wireSeances(D);
   wireRdv(D);
   wireNom(D);
+  const mj = $("#majournee"); if (mj) mj.onclick = retourJournee;
   if (autre) wireHomonyme(D, autre);
   $("#main").querySelectorAll<HTMLElement>("[data-bil]").forEach(el => el.onclick = () => {
     selB = el.dataset.bil!; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
@@ -437,11 +444,16 @@ async function supprimer(b: Bilan) {
 
 /* ---------- patient sans bilan ---------- */
 
+function retourJournee() {
+  selD = null; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
+  renderList(); renderMain(); $("#main").scrollTop = 0;
+}
+
 /* ouvre la fiche d'un patient (depuis l'agenda, par exemple) */
 export function ouvrirPatient(id: string) {
   quitterDictee();
   selD = id; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
-  renderList(); renderMain();
+  renderList(); renderMain(); $("#main").scrollTop = 0;
 }
 
 async function creerPatient(nom: string) {
