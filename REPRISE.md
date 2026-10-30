@@ -9,7 +9,7 @@ Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb �
 - **Corentin**, kinésithérapeute à Toulouse (surtout l'épaule). Il ne code pas et ne relit pas la technique : Claude choisit, explique ce qui change **à l'écran**, dit franchement ce qui n'est pas testé.
 - Il **dicte à la voix** (phrases orales, parfois approximatives, parfois envoyées deux fois : un message répété n'est pas une nouvelle demande).
 - Réponses en français, sans jargon, **en commençant par le résultat**. Une illustration (schéma, maquette, capture) à chaque point de plan. Il apprécie les **captures d'écran à la taille de sa tablette** (d'après ses captures du 29 octobre : environ **1690 × 1000 en paysage**, 1060 × 1690 en portrait ; il y a donc une marge vide de chaque côté de l'appli en paysage) envoyées avec `SendUserFile`.
-- **Tablette Android + téléphone, pas encore d'ordinateur** (un PC arrive bientôt). L'appli est **installée avec Chrome** (Brave refuse la protection du stockage).
+- **Tablette Android + iPhone, et un PC Windows Famille chez lui depuis le 30 octobre**. L'appli est **installée avec Chrome** (Brave refuse la protection du stockage).
 - Règles d'or : lui faire gagner du temps ; **ne jamais casser une version qui fonctionne** ; **ne jamais mettre en production sans son accord explicite** (il répond « mets en production »).
 - Il a un compte **Railway payant** et reçoit les mails de Railway ; il peut envoyer des captures des « Deploy Logs ».
 
@@ -89,7 +89,9 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 - Conseillé : **l'ordinateur du cabinet (ou un NAS à lui) garde les dossiers**, chaque appareil garde une copie et se synchronise (Wi-Fi au cabinet, Tailscale ailleurs). Écarté : un compte en ligne (hébergeur HDS obligatoire). Le NAS du père de Corentin : déconseillé pour des dossiers patients (chez un tiers, qui en a l'accès).
 - 30 octobre : Corentin confirme. **Pas de NAS pour l'instant** (possible plus tard s'il en achète un). Le PC, peut-être à la maison, restera allumé et sera joint de partout (Tailscale), vacances comprises.
 - Décision provisoire : **attendre l'ordinateur (début décembre)**, tout continue sur la tablette d'ici là. Le serveur de synchronisation sera écrit pour tourner aussi bien sur un PC que sur un NAS (Docker).
-- Questions posées, sans réponse : Windows ou Mac ? accès hors du cabinet ? seul utilisateur ?
+- **30 octobre, le PC est arrivé** : Windows 11 **Famille**, **chez Corentin** ; parfois éteint ou hors internet quand il le déplace (il n'a alors pas besoin de l'appli). Seul utilisateur (des collègues un jour peut-être, pas une priorité). Il veut **aussi utiliser Muninn sur le PC** (bilans à la maison) et retrouver le soir-même sur la tablette et le téléphone ce qu'il a fait sur le PC, et inversement.
+- Fait par Corentin le 30 octobre : copie hors de Chrome (sur la tablette et sur le PC) ; mot de passe de session, pas de veille ; **Tailscale installé et connecté** sur le PC, la tablette (`tab-s11-ultra-de-corentin`) et le téléphone (**iPhone 15 Pro Max**, iOS, pas Android), même compte Google ; expiration de clé désactivée et « Run unattended » sur le PC. Chiffrement du disque : à vérifier (Windows Famille : « Chiffrement de l'appareil » seulement si le matériel le permet).
+- Plan proposé (v1.0) : petit serveur Muninn sur le PC (démarre avec Windows, base dans un dossier, joignable en HTTPS par Tailscale) ; **l'appli garde son adresse actuelle** (Railway ne livre que le code) et chaque appareil garde sa copie, échange les changements avec le PC quand il le joint ; première synchro = la tablette envoie tout. Pas de déménagement de données, pas de réinstallation. En attente du « vas-y » de Corentin.
 
 ## 6. Pas encore testé en conditions réelles
 
