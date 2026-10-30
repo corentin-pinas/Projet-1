@@ -139,9 +139,11 @@ export async function resumerEnAttente() {
   enFile = true;
   try {
     if (!(await configIA()) || !navigator.onLine) return;
+    const moi = await db.appareil();
     for (;;) {
       const { bilans } = await db.tout();
-      const b = bilans.find(x => !x.resume && !tentes.has(x.id) && !enCours.has(x.id));
+      /* un bilan déposé sur un autre appareil (reçu du PC) est résumé là-bas : pas de double demande à l'IA */
+      const b = bilans.find(x => !x.resume && !tentes.has(x.id) && !enCours.has(x.id) && (!x.origine || x.origine === moi));
       if (!b) break;
       await resumer(b.id, false);
     }

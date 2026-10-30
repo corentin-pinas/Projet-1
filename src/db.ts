@@ -10,6 +10,7 @@ interface Schema extends DBSchema {
   fichiers: { key: string; value: { id: string; blob: Blob } };
   parametres: { key: string; value: { cle: string; valeur: unknown } };
   copies: { key: string; value: Copie };
+  synchro: { key: string; value: Base };
 }
 
 /* entree, sortie : jetons de la clé API ; facture : dollars facturés sur la clé API ; indicatif : coût annoncé par Claude Code sur l'abonnement (non facturé, c'est le quota) */
@@ -25,7 +26,7 @@ export const AVANT_RETOUR = "avant-retour";
 export const COPIES_GARDEES = 7;
 
 let base: Promise<IDBPDatabase<Schema>> | null = null;
-const ouvrir = () => base ??= openDB<Schema>("mes-patients", 3, {
+const ouvrir = () => base ??= openDB<Schema>("mes-patients", 4, {
   upgrade(db, ancienne) {
     if (ancienne < 1) {
       db.createObjectStore("dossiers", { keyPath: "id" });
@@ -35,11 +36,12 @@ const ouvrir = () => base ??= openDB<Schema>("mes-patients", 3, {
     }
     if (ancienne < 2) db.createObjectStore("parametres", { keyPath: "cle" });   // version 0.3 : clé de l'IA, consommation
     if (ancienne < 3) db.createObjectStore("copies", { keyPath: "id" });        // version 0.5 : copies de sécurité
+    if (ancienne < 4) db.createObjectStore("synchro", { keyPath: "cle" });      // version 1.0 : partage avec le PC
   }
 });
 
 /* pour les tests : repartir d'une base neuve */
-export async function fermer() { if (base) (await base).close(); base = null; jourCopie = null; }
+export async function fermer() { if (base) (await base).close(); base = null; jourCopie = null; monAppareil = null; }
 
 const nouvelId = () => crypto.randomUUID();
 
@@ -76,7 +78,7 @@ export async function ajouterBilan(fichiers: File[], dossierId?: string): Promis
   if (dossierId && !cible) throw new Error("Dossier introuvable");
   const dossier: Dossier = cible ?? { id: nouvelId(), label, rdvs: [], homonyme: existants.some(d => d.label === label), cree: new Date().toISOString() };
   const refs: FichierBilan[] = fichiers.map(f => ({ id: nouvelId(), nom: f.name, type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : "") }));
-  const bilan: Bilan = { id: nouvelId(), dossierId: dossier.id, fichier: nom, fichiers: refs, ajoute: new Date().toISOString(), resume: null, valides: [], corrections: [] };
+  const bilan: Bilan = { id: nouvelId(), dossierId: dossier.id, fichier: nom, fichiers: refs, ajoute: new Date().toISOString(), resume: null, valides: [], corrections: [], origine: await appareil() };
   const tx = db.transaction(["dossiers", "bilans", "fichiers"], "readwrite");
   await Promise.all([
     ...fichiers.map((f, i) => tx.objectStore("fichiers").put({ id: refs[i].id, blob: f })),
@@ -285,6 +287,81 @@ async function nettoyerFichiers() {
   (await tx.objectStore("copies").getAll()).forEach(c => garder(c.donnees.bilans));
   for (const k of await tx.objectStore("fichiers").getAllKeys()) if (!gardes.has(k)) await tx.objectStore("fichiers").delete(k);
   await tx.done;
+}
+
+/* ---------- partage avec le PC (synchronisation, voir synchro.ts) ---------- */
+
+/* Chaque élément partagé a une clé « magasin/identifiant » : dossiers/…, bilans/…, seances/…, parametres/horaires.
+   Les PDF et photos voyagent à part (un fichier ne change jamais une fois déposé).
+   Base : la version de l'élément au dernier échange avec le PC (rev : son numéro sur le PC). */
+export type Base = { cle: string; valeur: unknown; rev: number };
+export const PARAMS_PARTAGES = ["horaires", "transmissions_mot"];
+const MAGASINS = ["dossiers", "bilans", "seances"] as const;
+
+/* identifiant de cet appareil, créé à la première demande (jamais partagé avec les autres appareils) */
+let monAppareil: string | null = null;
+export async function appareil(): Promise<string> {
+  if (monAppareil) return monAppareil;
+  const db = await ouvrir();
+  const p = await db.get("parametres", "appareil");
+  monAppareil = typeof p?.valeur === "string" ? p.valeur : nouvelId();
+  if (!p) await db.put("parametres", { cle: "appareil", valeur: monAppareil });
+  return monAppareil;
+}
+
+/* tout ce qui est partagé, tel qu'il est dans cet appareil */
+export async function etatPartage(): Promise<Map<string, unknown>> {
+  const db = await ouvrir();
+  const m = new Map<string, unknown>();
+  for (const nom of MAGASINS) for (const v of await db.getAll(nom)) m.set(nom + "/" + v.id, v);
+  for (const cle of PARAMS_PARTAGES) {
+    const p = await db.get("parametres", cle);
+    if (p && p.valeur !== undefined) m.set("parametres/" + cle, p.valeur);
+  }
+  return m;
+}
+
+export async function basesPartage(): Promise<Map<string, Base>> {
+  return new Map((await (await ouvrir()).getAll("synchro")).map(b => [b.cle, b]));
+}
+
+/* Range ce qui arrive du PC (valeur null : élément supprimé) et note les nouvelles bases, en une fois.
+   La copie du jour est faite avant : un échange malheureux peut être annulé depuis « Copies de sécurité ». */
+export async function appliquerPartage(ecritures: { cle: string; valeur: unknown }[], bases: Base[]) {
+  if (ecritures.length) await copieDuJour();
+  const db = await ouvrir();
+  const tx = db.transaction(["dossiers", "bilans", "seances", "parametres", "synchro"], "readwrite");
+  for (const { cle, valeur } of ecritures) {
+    const i = cle.indexOf("/"), nom = cle.slice(0, i), id = cle.slice(i + 1);
+    if (nom === "parametres") {
+      if (!PARAMS_PARTAGES.includes(id)) continue;
+      if (valeur === null) await tx.objectStore("parametres").delete(id);
+      else await tx.objectStore("parametres").put({ cle: id, valeur });
+    } else if ((MAGASINS as readonly string[]).includes(nom)) {
+      const m = tx.objectStore(nom as typeof MAGASINS[number]);
+      if (valeur === null) await m.delete(id);
+      else await m.put({ ...(valeur as object), id } as never);
+    }
+  }
+  for (const b of bases) await tx.objectStore("synchro").put(b);
+  await tx.done;
+  if (ecritures.length) { await nettoyerFichiers(); prevenir(); }
+}
+
+/* appareil délié du PC, ou relié à un autre : il repartira de zéro (tout envoyer, tout recevoir) */
+export async function oublierPartage() {
+  await (await ouvrir()).clear("synchro");
+}
+
+export async function fichiersAbsents(ids: string[]): Promise<string[]> {
+  const db = await ouvrir();
+  const absents: string[] = [];
+  for (const id of ids) if (!(await db.getKey("fichiers", id))) absents.push(id);
+  return absents;
+}
+
+export async function ajouterFichier(id: string, blob: Blob) {
+  await (await ouvrir()).put("fichiers", { id, blob });
 }
 
 /* ---------- réglages ---------- */

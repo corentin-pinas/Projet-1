@@ -8,6 +8,8 @@ import { demarrer, rafraichirIA } from "./app";
 import * as db from "./db";
 import { afficherCopies, brancherCopies, joursDepuis, PARAM_COPIE_EXTERNE, surveillerCopies } from "./copies";
 import { configIA } from "./moteur";
+import { brancherPartage } from "./partage";
+import * as synchro from "./synchro";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
 import { toast, esc } from "./ui";
 import { verifications, type EtatAppareil } from "./verifications";
@@ -107,6 +109,7 @@ matchMedia("(display-mode: standalone)").addEventListener("change", afficherEtat
 })();
 
 surveillerCopies();
-demarrer().catch(() => {
+brancherPartage();
+demarrer().then(() => synchro.brancher()).catch(() => {
   $("#list").innerHTML = `<div class="note">Vos données n'ont pas pu être chargées. Fermez l'appli et rouvrez-la.</div>`;
 });

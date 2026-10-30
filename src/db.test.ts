@@ -211,3 +211,52 @@ describe("patient sans bilan", () => {
     expect(await db.fichierBlob(b.fichiers[0].id)).toBeNull();
   });
 });
+
+describe("partage avec le PC", () => {
+  it("une base de la version précédente garde ses patients en passant à la version 4", async () => {
+    await new Promise<void>((ok, ko) => {
+      const r = indexedDB.open("mes-patients", 3);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        d.createObjectStore("dossiers", { keyPath: "id" });
+        d.createObjectStore("bilans", { keyPath: "id" }).createIndex("dossierId", "dossierId");
+        d.createObjectStore("seances", { keyPath: "id" }).createIndex("dossierId", "dossierId");
+        d.createObjectStore("fichiers", { keyPath: "id" });
+        d.createObjectStore("parametres", { keyPath: "cle" });
+        d.createObjectStore("copies", { keyPath: "id" });
+      };
+      r.onsuccess = () => {
+        const tx = r.result.transaction("dossiers", "readwrite");
+        tx.objectStore("dossiers").put({ id: "a", label: "Marc D.", rdvs: [], homonyme: false, cree: "" });
+        tx.oncomplete = () => { r.result.close(); ok(); };
+      };
+      r.onerror = () => ko(r.error);
+    });
+    expect((await db.tout()).dossiers.map(d => d.label)).toEqual(["Marc D."]);
+    expect(await db.basesPartage()).toEqual(new Map());
+  });
+
+  it("ce qui arrive du PC est rangé, les suppressions aussi, et seuls les réglages partagés sont pris", async () => {
+    const d = await db.creerPatient("Lucie M.");
+    await db.ecrireParametre("horaires", { lun: 1 });
+    const etat = await db.etatPartage();
+    expect([...etat.keys()].sort()).toEqual(["dossiers/" + d.id, "parametres/horaires"]);
+    await db.appliquerPartage([
+      { cle: "dossiers/" + d.id, valeur: null },
+      { cle: "seances/s9", valeur: { id: "s9", dossierId: "x", date: "2026-11-02", cree: "", contenu: "Venu du PC." } },
+      { cle: "parametres/transmissions_mot", valeur: "Code 1234" },
+      { cle: "parametres/cle_ia", valeur: "volée" }
+    ], [{ cle: "seances/s9", valeur: {}, rev: 3 }]);
+    const t = await db.tout();
+    expect(t.dossiers).toEqual([]);
+    expect(t.seances.map(s => s.contenu)).toEqual(["Venu du PC."]);
+    expect(await db.lireParametre("transmissions_mot")).toBe("Code 1234");
+    expect(await db.lireParametre("cle_ia")).toBeUndefined();
+    expect((await db.basesPartage()).get("seances/s9")?.rev).toBe(3);
+  });
+
+  it("chaque bilan déposé porte l'appareil d'origine", async () => {
+    const b = await db.ajouterBilan([pdf("Bilan - Paul G.pdf")]);
+    expect(b.origine).toBe(await db.appareil());
+  });
+});

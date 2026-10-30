@@ -20,6 +20,11 @@ export default defineConfig({
     url: "http://localhost:4173",
     reuseExistingServer: false
   }, {
+    // Muninn du PC, pour le partage entre appareils
+    command: "rm -rf .faux-pc && MUNINN_DOSSIER=.faux-pc MUNINN_PORT=4747 MUNINN_CODE=ESSA-IPCM-UNIN node public/pc/muninn-pc.mjs",
+    url: "http://127.0.0.1:4747/",
+    reuseExistingServer: false
+  }, {
     command: "PORT=4181 node tests/faux/whisper.mjs",
     url: "http://localhost:4181/dernier",
     reuseExistingServer: false

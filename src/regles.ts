@@ -37,6 +37,7 @@ export type Bilan = {
   valides: string[];
   corrections: { point: string; correction: string; quand: string; appliquee?: boolean }[];   // appliquee : reportée dans le résumé
   correction_erreur?: string;                         // dernier échec du report d'une correction dans le résumé
+  origine?: string;                                   // appareil où le bilan a été déposé : lui seul le résume tout seul
 };
 
 export type Seance = {

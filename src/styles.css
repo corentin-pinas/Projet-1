@@ -175,7 +175,7 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 .secours summary{cursor:pointer;color:var(--soft);padding:6px 0}
 .secours[open]{display:grid;gap:8px}
 .sansmarge{margin:0}
-.sform input[type=password]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-height:44px;width:100%;max-width:420px}
+.sform input[type=url],.sform input[type=text],.sform input[type=password]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-height:44px;width:100%;max-width:420px}
 .sform p{margin:0}
 .copies{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .copies li{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
@@ -446,3 +446,12 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 #listebtn .ico{width:26px;height:26px}
 .basbar{align-items:center}
 .basbar .regbtn{min-height:52px;min-width:56px;justify-content:center;color:var(--accent)}
+
+/* partage avec le PC */
+.syncmini{justify-content:flex-start;gap:8px;background:transparent;border-color:transparent;color:var(--soft);font-size:.85rem;min-height:36px;padding:4px 10px}
+.syncmini.encours .pastille-mini{animation:clignote 1.2s ease-in-out infinite}
+.syncmini.alerte{color:var(--warn)}
+.syncmini.alerte .pastille-mini{background:var(--warn)}
+@keyframes clignote{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.syncmini.encours .pastille-mini{animation:none}}
+.commande{display:block;font-family:ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;word-break:break-all;user-select:all}

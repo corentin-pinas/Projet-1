@@ -7,7 +7,7 @@ test("transmissions : période, patients cochés, jours vides signalés, PDF fid
   await page.goto("/");
   await page.waitForTimeout(300);
   await page.evaluate(async () => {
-    const db: IDBDatabase = await new Promise((ok, ko) => { const r = indexedDB.open("mes-patients", 3); r.onsuccess = () => ok(r.result); r.onerror = ko; });
+    const db: IDBDatabase = await new Promise((ok, ko) => { const r = indexedDB.open("mes-patients"); r.onsuccess = () => ok(r.result); r.onerror = ko; });
     const tx = db.transaction(["dossiers", "bilans", "seances"], "readwrite");
     tx.objectStore("dossiers").put({ id: "a", label: "Marc D.", rdvs: [{ d: "2026-11-03", h: "09:00" }, { d: "2026-11-05", h: "10:00" }], homonyme: false, cree: "" });
     tx.objectStore("dossiers").put({ id: "b", label: "Lucie M.", rdvs: [{ d: "2026-11-02", h: "08:20", t: "bilan" }], homonyme: false, cree: "" });

@@ -25,6 +25,7 @@
     <input type="search" id="q" placeholder="Rechercher un patient" aria-label="Rechercher un patient">
     <button class="dicteebtn" id="listebtn" aria-pressed="false" aria-controls="list" aria-label="Liste des patients"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.7 3.2-6 6.5-6s5.9 2.3 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.4c2 .9 3.2 2.9 3.5 5.6"/></svg> Patients</button>
     <div class="panel list" id="list" hidden><div class="note">Chargement…</div></div>
+    <button class="syncmini" id="syncmini" hidden><span class="pastille-mini" aria-hidden="true"></span><span id="syncminitxt"></span></button>
     <div class="basbar">
       <button class="etat" id="etatbtn"><span class="pastille-mini" id="etatpastille" aria-hidden="true"></span><span id="etattxt">État de l'appli</span></button>
       <button class="etat regbtn outil" id="regbtn" aria-label="Réglages" title="Réglages"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -72,6 +73,27 @@
       </div>
     </details>
   </section>
+  <section class="iabox" aria-labelledby="synctitre">
+    <h3 id="synctitre">Partage avec le PC</h3>
+    <p class="note">Patients, bilans et séances sont échangés avec votre PC par Tailscale. Chaque appareil garde tout et marche même sans le PC ; il se met à jour dès qu'il le joint.</p>
+    <p class="sansmarge" id="syncetat" aria-live="polite"></p>
+    <div class="sform" id="syncform">
+      <input type="url" id="syncadresse" placeholder="Adresse du PC (elle finit par .ts.net)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Adresse du PC">
+      <input type="text" id="synccode" placeholder="Code du PC (XXXX-XXXX-XXXX)" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code du PC">
+      <div class="row"><button class="primary" id="syncrelier">Relier au PC</button></div>
+    </div>
+    <div class="row" id="syncactions" hidden>
+      <button class="primary" id="syncmaintenant">Échanger maintenant</button>
+      <button id="syncdelier">Délier cet appareil</button>
+    </div>
+    <details class="secours">
+      <summary>Installer Muninn sur le PC</summary>
+      <p>Sur le PC (Windows), avec Tailscale déjà installé : clic droit sur le bouton Démarrer, puis « Terminal (administrateur) ». Collez cette ligne, appuyez sur Entrée et laissez faire. À la fin, l'adresse et le code du PC s'affichent.</p>
+      <code class="commande" id="synccommande"></code>
+      <div class="row"><button id="synccopier">Copier la ligne</button></div>
+      <p class="note">Pour vous servir de Muninn sur le PC lui-même, ouvrez cette même adresse dans Chrome sur le PC : <span id="syncappli"></span></p>
+    </details>
+  </section>
   <section class="iabox" aria-labelledby="copiestitre">
     <h3 id="copiestitre">Copies de sécurité</h3>
     <p class="note">Une copie par jour, faite toute seule et gardée 7 jours dans cette tablette. Elle permet de revenir en arrière après une fausse manœuvre (un bilan supprimé par erreur, par exemple). Elle ne protège pas contre la perte de la tablette.</p>
@@ -101,7 +123,7 @@
     <button class="primary" id="persist" hidden>Protéger mes données</button>
     <button id="refresh">Vérifier à nouveau</button>
   </div>
-  <p class="note">Les données restent dans cette tablette. Seuls le bilan à résumer et le texte des séances partent vers l'IA (en passant par le serveur de l'appli pour l'abonnement), le temps du traitement, sans y être gardés.</p>
+  <p class="note">Les données restent dans vos appareils (et sur votre PC une fois relié). Seuls le bilan à résumer et le texte des séances partent vers l'IA (en passant par le serveur de l'appli pour l'abonnement), le temps du traitement, sans y être gardés.</p>
 </dialog>
 <dialog class="etatdlg" id="regdlg" aria-labelledby="regtitre">
   <div class="head"><h2 id="regtitre">Réglages</h2><button id="regfermer">Fermer</button></div>

@@ -23,7 +23,8 @@ const types = {
   ".png": "image/png",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
-  ".txt": "text/plain; charset=utf-8"
+  ".txt": "text/plain; charset=utf-8",
+  ".ps1": "text/plain; charset=utf-8"
 };
 
 const securite = {
@@ -136,6 +137,14 @@ const serveur = createServer(async (req, res) => {
   // une adresse inconnue sans extension ouvre l'appli (c'est elle qui gère ses écrans)
   if (!trouve && !extname(chemin)) { trouve = await fichier("/index.html"); chemin = "/index.html"; }
   if (!trouve) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...securite }).end("Introuvable"); return; }
+
+  /* programme d'installation du PC : il télécharge Muninn depuis l'adresse même où il a été pris */
+  if (chemin === "/pc/installer.ps1") {
+    const hote = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+    const proto = String(req.headers["x-forwarded-proto"] || "http").split(",")[0].trim();
+    if (!/^[A-Za-z0-9.:-]+$/.test(hote)) { res.writeHead(400, securite).end(); return; }
+    trouve = { ...trouve, contenu: Buffer.from(trouve.contenu.toString("utf8").replaceAll("__ADRESSE__", `${proto}://${hote}`)) };
+  }
 
   res.writeHead(200, {
     "Content-Type": types[extname(trouve.complet)] ?? "application/octet-stream",
