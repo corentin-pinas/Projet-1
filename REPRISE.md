@@ -85,6 +85,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 
 - Corentin veut utiliser Muninn sur tablette, téléphone et ordinateur avec les mêmes dossiers.
 - Conseillé : **l'ordinateur du cabinet (ou un NAS à lui) garde les dossiers**, chaque appareil garde une copie et se synchronise (Wi-Fi au cabinet, Tailscale ailleurs). Écarté : un compte en ligne (hébergeur HDS obligatoire). Le NAS du père de Corentin : déconseillé pour des dossiers patients (chez un tiers, qui en a l'accès).
+- 30 octobre : Corentin confirme. **Pas de NAS pour l'instant** (possible plus tard s'il en achète un). Le PC, peut-être à la maison, restera allumé et sera joint de partout (Tailscale), vacances comprises.
 - Décision provisoire : **attendre l'ordinateur (début décembre)**, tout continue sur la tablette d'ici là. Le serveur de synchronisation sera écrit pour tourner aussi bien sur un PC que sur un NAS (Docker).
 - Questions posées, sans réponse : Windows ou Mac ? accès hors du cabinet ? seul utilisateur ?
 
