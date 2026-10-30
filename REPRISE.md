@@ -24,7 +24,7 @@ Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb �
   4. présenter à Corentin (captures) et **attendre son « oui »** ;
   5. relancer les tests, puis avancer la production en avance rapide : `git push origin HEAD:claude/patient-management-planning-xg8y6k` (vérifier d'abord `git merge-base --is-ancestor`).
 - Pas de pull request sans demande.
-- **Les deux branches sont au même commit** au 29 octobre au soir (version **0.12.2** en production le 30 octobre : transmissions, agenda en demi-journées, accueil épuré en colonne, icônes), à part ce fichier.
+- **Les deux branches sont au même commit** au 29 octobre au soir (version **0.12.3** en production le 30 octobre : création de patient depuis la dictée, transmissions, agenda en demi-journées, accueil épuré en colonne, icônes), à part ce fichier.
 
 ## 3. Ce que fait l'appli (version 0.9.4, en production)
 
@@ -70,7 +70,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.12.0 | 30 oct. | **Accueil épuré** : la liste de tous les patients est cachée derrière « 📋 Liste des patients » (ouverte ou fermée, gardé dans la tablette ; la recherche l'affiche) ; « Ma journée » montre la **demi-journée en cours** (le matin vide : l'après-midi), boutons Matin / Après-midi / Demain avec le nombre de patients, fiches plus grandes (2 colonnes, prévu sur 6 lignes). Corrigés : les boutons répondent dès l'ouverture (un dépôt très rapide pouvait être ignoré) ; un message de connexion à l'abonnement pouvait être écrasé par une vérification en retard ; premier patient créable depuis la recherche quand l'appli est vide. Pas encore en production |
 | 0.12.1 | 30 oct. | Colonne étroite à gauche (250 px) : le corbeau en grand en haut, « Muninn » et tous les boutons dessous ; l'appli prend toute la largeur de l'écran ; « Ma journée » sur 3 colonnes en paysage (2 en portrait). Pas encore en production |
 | 0.12.2 | 30 oct. | Boutons en icônes (demande de Corentin) : « + » (ajouter des bilans), micro (dictée groupée), calendrier (agenda) sur une ligne, « Patients » pour la liste, roue dentée pour les réglages ; noms gardés pour l'accessibilité et en info-bulle. **En production le 30 oct.** (avec 0.10.0 à 0.12.1) |
-| 0.12.3 | 30 oct. | Dictée groupée : un patient pas encore dans l'appli (bilan pas ajouté) peut être **créé depuis le passage à ranger** (nom dicté proposé, modifiable, initiale exigée), « bilan à venir », et le passage y est rangé ; « Annuler cette dictée » retire aussi ces patients s'ils n'ont rien reçu d'autre. Pas encore en production |
+| 0.12.3 | 30 oct. | Dictée groupée : un patient pas encore dans l'appli (bilan pas ajouté) peut être **créé depuis le passage à ranger** (nom dicté proposé, modifiable, initiale exigée), « bilan à venir », et le passage y est rangé ; « Annuler cette dictée » retire aussi ces patients s'ils n'ont rien reçu d'autre. **En production le 30 oct.** |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 
