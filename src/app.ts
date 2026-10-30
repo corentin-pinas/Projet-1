@@ -31,7 +31,7 @@ function montrerListe() {
   const cherche = !!$<HTMLInputElement>("#q").value.trim();
   $("#list").hidden = !listeOuverte && !cherche;
   $("#listebtn").setAttribute("aria-pressed", String(listeOuverte));
-  $("#listetxt").textContent = listeOuverte ? "Masquer la liste" : "Liste des patients";
+  $("#listebtn").setAttribute("aria-label", listeOuverte ? "Masquer la liste" : "Liste des patients");
 }
 
 const aujourdhui = () => isoDay(new Date());

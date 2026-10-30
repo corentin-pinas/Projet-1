@@ -317,8 +317,6 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
   .side h1 .compagnon{--compagnon:130px}
   .side h1::after{position:absolute;top:0;right:4px}
   .nomappli{align-items:center}
-  .side .duo{grid-template-columns:1fr}
-  .basbar{flex-direction:column}
 }
 .corbeau{position:absolute;left:0;top:0;width:100%;aspect-ratio:1;padding:0;min-height:0;border:0;background:none;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .corbeau svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 40%,transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / .25))}
@@ -436,3 +434,13 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .tpatient input{width:22px;height:22px;margin-top:2px;flex:none;accent-color:var(--accent)}
 .tpatient small{display:block;color:var(--soft)}
 .tactions{position:sticky;bottom:0;background:var(--bg);padding:10px 0}
+
+/* boutons en icônes sous le corbeau : ajouter un bilan, dictée groupée, agenda ; réglages en roue dentée */
+.ico{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.outils{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.outils .outil{min-height:64px;padding:8px}
+.outils #add .ico{width:34px;height:34px;stroke-width:2.6}
+#listebtn{gap:10px}
+#listebtn .ico{width:26px;height:26px}
+.basbar{align-items:center}
+.basbar .regbtn{min-height:52px;min-width:56px;justify-content:center;color:var(--accent)}

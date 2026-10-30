@@ -16,18 +16,18 @@
 <div class="app">
   <div class="side">
     <h1><span id="mascotte"></span><span class="nomappli">Muninn<small>la mémoire du cabinet</small></span></h1>
-    <button class="primary" id="add">Ajouter des bilans</button>
     <input type="file" id="file" accept="application/pdf,image/*" multiple hidden>
-    <div class="duo">
-      <button class="dicteebtn" id="dicteebtn" aria-pressed="false"><span aria-hidden="true">🎙️</span> Dictée groupée</button>
-      <button class="dicteebtn" id="agendabtn"><span aria-hidden="true">📅</span> Agenda</button>
+    <div class="outils">
+      <button class="primary outil" id="add" aria-label="Ajouter des bilans" title="Ajouter des bilans"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="dicteebtn outil" id="dicteebtn" aria-pressed="false" aria-label="Dictée groupée" title="Dictée groupée"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></button>
+      <button class="dicteebtn outil" id="agendabtn" aria-label="Agenda" title="Agenda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 17h2M11 17h2" stroke-width="2.2"/></svg></button>
     </div>
     <input type="search" id="q" placeholder="Rechercher un patient" aria-label="Rechercher un patient">
-    <button class="dicteebtn" id="listebtn" aria-pressed="false" aria-controls="list"><span aria-hidden="true">📋</span> <span id="listetxt">Liste des patients</span></button>
+    <button class="dicteebtn" id="listebtn" aria-pressed="false" aria-controls="list" aria-label="Liste des patients"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.7 3.2-6 6.5-6s5.9 2.3 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.4c2 .9 3.2 2.9 3.5 5.6"/></svg> Patients</button>
     <div class="panel list" id="list" hidden><div class="note">Chargement…</div></div>
     <div class="basbar">
       <button class="etat" id="etatbtn"><span class="pastille-mini" id="etatpastille" aria-hidden="true"></span><span id="etattxt">État de l'appli</span></button>
-      <button class="etat regbtn" id="regbtn"><span aria-hidden="true">⚙️</span> Réglages</button>
+      <button class="etat regbtn outil" id="regbtn" aria-label="Réglages" title="Réglages"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
   </div>
   <main class="panel main" id="main"></main>
