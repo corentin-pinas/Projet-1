@@ -2,9 +2,9 @@
    Reprise de la version d'essai ; l'IA (résumés, mise au propre) arrive à l'étape 3. */
 import * as db from "./db";
 import {
-  ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, frDate, heureFr, isoDay, jourLabel, lignesListe, nomAffiche,
+  ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
   prochainRdv, propreOk, questionHomonyme, rdvsAVenir, texteDe, trierBilans, trierSeances,
-  type Bilan, type Dossier, type Seance
+  type Bilan, type Demi, type Dossier, type Seance
 } from "./regles";
 import * as agenda from "./agenda";
 import * as dictee from "./dictee";
@@ -99,7 +99,7 @@ function renderList() {
     const n = donnees.seances.filter(s => s.dossierId === d.id).length;
     const ask = !!questionHomonyme(d, donnees.dossiers, donnees.bilans);
     return head + `<button class="item${g === t ? " now" : ""}" data-id="${esc(d.id)}" aria-current="${cur}">
-      <b>${rdv?.heure ? `<i class="hr">${esc(heureFr(rdv.heure))}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${!bilans.length ? `<span class="pending">Bilan à venir</span>` : bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
+      <b>${rdv?.demi ? `<i class="hr">${DEMI_FR[rdv.demi]}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${!bilans.length ? `<span class="pending">Bilan à venir</span>` : bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
   }).join("");
   $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => {
     quitterDictee();
@@ -148,10 +148,10 @@ export function renderMain() {
   const rv = prochainRdv(D.rdvs, aujourdhui());
   html += rdvOpen ? `<div class="sform" style="margin-top:12px">
       <label for="rdate">Date du prochain rendez-vous</label><input type="date" id="rdate" value="${esc(rv ? rv.date : aujourdhui())}">
-      <label for="rtime">Heure</label><input type="time" id="rtime" value="${esc(rv ? rv.heure : "")}">
+      <div class="choix-type" role="radiogroup" aria-label="Demi-journée"><label class="choix"><input type="radio" name="rdemi" value="am"${rv?.demi === "pm" ? "" : " checked"}> Matin</label><label class="choix"><input type="radio" name="rdemi" value="pm"${rv?.demi === "pm" ? " checked" : ""}> Après-midi</label></div>
       <div class="choix-type" role="radiogroup" aria-label="Type de rendez-vous"><label class="choix"><input type="radio" name="rtype" value="seance"${rv?.bilan ? "" : " checked"}> Séance (20 min)</label><label class="choix"><input type="radio" name="rtype" value="bilan"${rv?.bilan ? " checked" : ""}> Bilan (40 min)</label></div>
       <div class="row"><button class="primary" id="rsave">Enregistrer</button>${rv ? `<button id="rclear">Effacer le rendez-vous</button>` : ""}<button id="rcancel">Annuler</button></div></div>`
-    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.heure ? " à " + heureFr(rv.heure) : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span><button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
+    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.demi ? " " + DEMI_FR[rv.demi] : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span><button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
@@ -277,11 +277,11 @@ function wireHomonyme(D: Dossier, autre: Dossier) {
 }
 
 /* « Modifier » remplace le prochain rendez-vous, « Effacer » le retire ; les suivants sont gardés */
-async function saveRdv(D: Dossier, date: string, heure: string, type?: "seance" | "bilan") {
+async function saveRdv(D: Dossier, date: string, demi: Demi | null, type?: "seance" | "bilan") {
   try {
     const suite = rdvsAVenir(D.rdvs, aujourdhui()).slice(1);
     rdvOpen = false;
-    await db.setRdvs(D.id, date ? avecRdv(suite, date, heure, type) : suite);
+    await db.setRdvs(D.id, date ? avecRdv(suite, date, "", type, demi) : suite);
     toast(date ? "Rendez-vous enregistré." : "Rendez-vous effacé.");
   } catch {
     rdvOpen = true; toast("L'enregistrement a échoué. Réessayez.");
@@ -292,14 +292,15 @@ async function saveRdv(D: Dossier, date: string, heure: string, type?: "seance" 
 function wireRdv(D: Dossier) {
   const open = $("#rbtn"); if (open) open.onclick = () => { rdvOpen = true; formOpen = false; editing = null; renderMain(); $("#rdate").focus(); };
   const cancel = $("#rcancel"); if (cancel) cancel.onclick = () => { rdvOpen = false; renderMain(); };
-  const clear = $("#rclear"); if (clear) clear.onclick = () => saveRdv(D, "", "");
+  const clear = $("#rclear"); if (clear) clear.onclick = () => saveRdv(D, "", null);
   const save = $<HTMLButtonElement>("#rsave");
   if (save) save.onclick = () => {
-    const date = $<HTMLInputElement>("#rdate").value, heure = $<HTMLInputElement>("#rtime").value;
+    const date = $<HTMLInputElement>("#rdate").value;
+    const demi = document.querySelector<HTMLInputElement>('input[name="rdemi"]:checked')?.value === "pm" ? "pm" : "am";
     if (!date) { toast("Indiquez la date du rendez-vous."); return; }
     if (date < aujourdhui()) { toast("Cette date est déjà passée."); return; }
     const type = document.querySelector<HTMLInputElement>('input[name="rtype"]:checked')?.value === "bilan" ? "bilan" : "seance";
-    save.disabled = true; saveRdv(D, date, heure, type);
+    save.disabled = true; saveRdv(D, date, demi, type);
   };
 }
 
@@ -335,7 +336,7 @@ function wireSeances(D: Dossier) {
   if (ta && prev) {
     const show = () => {
       const a = avenirFrom(ta.value);
-      prev.textContent = a ? "À venir repéré : " + a : "Ce que vous dictez après « Pour la prochaine séance » s'affichera en haut de la fiche du patient. Si vous y dites quand elle aura lieu (« dans une semaine à 8 heures »), le rendez-vous se place tout seul.";
+      prev.textContent = a ? "À venir repéré : " + a : "Ce que vous dictez après « Pour la prochaine séance » s'affichera en haut de la fiche du patient. Si vous y dites quand elle aura lieu (« dans une semaine, le matin »), le rendez-vous se place tout seul.";
     };
     ta.oninput = show; show();
   }

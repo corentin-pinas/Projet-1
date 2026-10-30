@@ -126,7 +126,7 @@ test("la séance dictée est mise au propre et le rendez-vous dicté se place to
 
   await expect(page.locator(".seance .sc").first()).toContainText("Fait en séance :", { timeout: 15_000 });
   await expect(page.locator(".avenir")).toContainText("Tester la force en RE.");
-  await expect(page.locator(".rdv")).toContainText("à 8 h");
+  await expect(page.locator(".rdv")).toContainText("matin");   // « à 8 heures » : le matin
   await expect(page.locator(".seance details.orig")).toContainText("Texte d'origine");
   const envoiSeance = envois.find(e => e.messages[0].content[0].type === "text")!;
   expect(envoiSeance.messages[0].content[0].text).toContain("J+7 :");

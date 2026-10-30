@@ -161,7 +161,7 @@ export async function fusionner(depuisId: string, versId: string) {
   if (!depuis || !vers) throw new Error("Dossier introuvable");
   for (const b of await tx.objectStore("bilans").index("dossierId").getAll(depuisId)) await tx.objectStore("bilans").put({ ...b, dossierId: versId });
   for (const s of await tx.objectStore("seances").index("dossierId").getAll(depuisId)) await tx.objectStore("seances").put({ ...s, dossierId: versId });
-  const rdvs = depuis.rdvs.reduce((l, r) => l.some(x => x.d === r.d) ? l : avecRdv(l, r.d, r.h), vers.rdvs);
+  const rdvs = depuis.rdvs.reduce((l, r) => l.some(x => x.d === r.d) ? l : avecRdv(l, r.d, r.h, r.t, r.p), vers.rdvs);
   await tx.objectStore("dossiers").put({ ...vers, rdvs });
   await tx.objectStore("dossiers").delete(depuisId);
   await tx.done;

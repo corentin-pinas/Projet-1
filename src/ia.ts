@@ -4,7 +4,7 @@
    Les règles de prompt et les garde-fous de la séance sont repris de la version d'essai. */
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaContentBlockParam, BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { avenirFrom, isoDay, type Resume } from "./regles";
+import { avenirFrom, isoDay, type Demi, type Resume } from "./regles";
 
 /* Deux niveaux d'IA, choisis par Corentin : la plus puissante pour les bilans (lecture du manuscrit) et la dictée groupée,
    une plus légère pour les séances (mise au propre d'une dictée), qui consomme moins de quota.
@@ -263,8 +263,8 @@ export const parleRdv = (t: string) => /rendez[- ]?vous|\brdv\b|prochain|revoi|s
 export const SCHEMA_SEANCE = {
   type: "object",
   additionalProperties: false,
-  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure"],
-  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul }
+  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi"],
+  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul }
 };
 
 export function promptSeance(date: string, contenu: string, sansPropre: boolean): string {
@@ -272,23 +272,30 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
   return "Tu aides un kinésithérapeute. Voici sa note, souvent dictée à voix haute, pour la séance du " + date + " (J) avec un patient. " +
     "Une dictée peut contenir des mots mal reconnus, peu de ponctuation, des hésitations et des répétitions.\n\n" +
     "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\n" +
-    "Réponds uniquement par un objet JSON à cinq champs :\n" +
+    "Réponds uniquement par un objet JSON à six champs :\n" +
     '- "propre" : ' + (sansPropre ? "null" : "la note remise au propre. " + REGLES_PROPRE) + "\n" +
     '- "resume" : ' + (brut ? "résumé très court (25 mots maximum, français correct, style télégraphique) de ce qui est prévu pour la prochaine séance, d'après le passage « Prévu » ci-dessous. N'ajoute rien, n'interprète pas, ne retire rien d'important. N'y mets ni la date ni l'heure du rendez-vous. null s'il n'y a rien d'autre que la date." : "null") + "\n" +
     '- "bref" : ' + CONSIGNE_BREF + "\n" +
     '- "rdv_date" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
-    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00"}\n\n' +
+    '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
+    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}\n\n' +
     "Note complète :\n" + contenu.slice(0, 8000) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
 }
 
+const CONSIGNE_DEMI = "« matin » ou « après-midi » si la note le dit pour cette prochaine séance (ou si l'heure annoncée le dit : avant 13 h, matin), sinon null.";
+/* demi-journée lue dans la réponse, sinon déduite de l'heure */
+const okDemi = (v: unknown, heure: string): Demi | "" => {
+  const t = typeof v === "string" ? v.toLowerCase() : "";
+  return /apr[eè]s/.test(t) ? "pm" : /matin/.test(t) ? "am" : heure ? (heure < "13:00" ? "am" : "pm") : "";
+};
 const okDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
 const okHeure = (v: unknown) => {
   const m = typeof v === "string" && /^(\d{1,2})[:hH](\d{2})$/.exec(v.trim());
   return m && +m[1] < 24 && +m[2] < 60 ? m[1].padStart(2, "0") + ":" + m[2] : "";
 };
 
-export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string };
+export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string; rdvDemi: Demi | "" };
 
 /* Lecture de la réponse avec les garde-fous de la version d'essai :
    une mise au propre beaucoup plus courte que la dictée a sans doute perdu des informations, on ne la retient pas. */
@@ -302,7 +309,8 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
     resume: avenirFrom(contenu) ? resume : "",
     bref: typeof o.bref === "string" ? o.bref.trim().slice(0, 300) : "",
     rdvDate,
-    rdvHeure: rdvDate ? okHeure(o.rdv_heure) : ""
+    rdvHeure: rdvDate ? okHeure(o.rdv_heure) : "",
+    rdvDemi: rdvDate ? okDemi(o.rdv_demi, okHeure(o.rdv_heure)) : ""
   };
 }
 
@@ -319,8 +327,8 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
 
 const SEANCE_DICTEE = {
   type: "object", additionalProperties: false,
-  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure"],
-  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul }
+  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul }
 };
 export const SCHEMA_DICTEE = {
   type: "object", additionalProperties: false, required: ["seances"],
@@ -336,7 +344,7 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\n" +
     "Découpe la dictée en une entrée par patient, dans l'ordre de la dictée. Il annonce chaque patient par son prénom, parfois suivi d'une initiale (« Avec Marc D. », « ensuite Élisabeth G. », « pour Lucie »). " +
     "Si le même patient revient plus loin, réunis ses passages dans une seule entrée. Un passage qui ne concerne aucun patient nommé forme une entrée avec nom null. Aucun passage de la dictée ne doit être perdu.\n" +
-    "Pour chaque entrée, sept champs :\n" +
+    "Pour chaque entrée, huit champs :\n" +
     '- "nom" : le patient tel qu\'il est annoncé. S\'il correspond manifestement à un patient de la liste, écris-le exactement comme dans la liste ; sinon le prénom, et l\'initiale si elle est dite. Jamais de nom de famille complet. null si aucun patient n\'est nommé.\n' +
     '- "extrait" : le texte dicté pour ce patient, mot pour mot, sans l\'annonce de son nom (« Avec Marc D., » disparaît). Ne corrige rien, mais réduis tout nom de famille complet à son initiale suivie d\'un point.\n' +
     '- "propre" : cet extrait remis au propre. ' + REGLES_PROPRE + "\n" +
@@ -344,7 +352,8 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "bref" : ' + CONSIGNE_BREF + "\n" +
     '- "rdv_date" : si l\'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
-    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00"}]}\n\n' +
+    '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}]}\n\n' +
     "Dictée :\n" + texte.slice(0, 60000);
 }
 

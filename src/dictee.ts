@@ -5,7 +5,7 @@ import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
 import * as voix from "./transcription";
-import { ageDossier, heureFr, isoDay, nomAffiche, nomCorrespond, type Dossier, type Rdv } from "./regles";
+import { ageDossier, demiFr, isoDay, nomAffiche, nomCorrespond, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
 const BROUILLON = "dictee_brouillon";   // { texte, date }
@@ -84,7 +84,7 @@ async function afficher() {
     ${doutes.map(d => {
       const cands = d.candidats.map(id => parId.get(id)).filter((x): x is Dossier => !!x);
       const rdvJour = (x: Dossier) => x.rdvs.find(r => r.d === d.date);
-      const bouton = (x: Dossier) => `<button class="cand" data-doute="${esc(d.id)}" data-dossier="${esc(x.id)}">${esc(nom(x))}${rdvJour(x) ? `<small>${rdvJour(x)!.h ? "rendez-vous à " + esc(heureFr(rdvJour(x)!.h)) : "rendez-vous ce jour-là"}</small>` : ""}</button>`;
+      const bouton = (x: Dossier) => `<button class="cand" data-doute="${esc(d.id)}" data-dossier="${esc(x.id)}">${esc(nom(x))}${rdvJour(x) ? `<small>${demiFr(rdvJour(x)!) ? "rendez-vous ce jour-là, " + demiFr(rdvJour(x)!) : "rendez-vous ce jour-là"}</small>` : ""}</button>`;
       const choix = cands.length <= 8
         ? `<div class="row">${cands.map(bouton).join("")}</div>`
         : `<div class="row">${cands.filter(rdvJour).map(bouton).join("")}</div>

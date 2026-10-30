@@ -46,7 +46,6 @@ test("dictée groupée : un seul texte, rangé patient par patient, question seu
   // Marc D. a rendez-vous aujourd'hui : c'est lui, le « Marc » de la dictée
   await item(page, "Marc D.").click();
   await page.getByRole("button", { name: "Ajouter un rendez-vous" }).click();
-  await page.locator("#rtime").fill("09:00");
   await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(page.locator(".rdv")).toContainText("aujourd'hui");
 
@@ -74,7 +73,7 @@ test("dictée groupée : un seul texte, rangé patient par patient, question seu
   await page.getByRole("button", { name: "Ranger la dictée" }).click();
   await expect(page.locator(".recap")).toContainText("2 séances rangées : Marc D., Élisabeth G.");
   await expect(page.locator(".recap")).not.toContainText("G..");
-  await expect(page.locator(".recap")).toContainText("Rendez-vous repéré pour Élisabeth G. : demain à 8 h");
+  await expect(page.locator(".recap")).toContainText("Rendez-vous repéré pour Élisabeth G. : demain matin");
   const demande = envois.find(e => e.messages[0].content.some(b => b.text?.includes("dictée groupée")))!;
   expect(demande.model).toBe("claude-opus-5-5");
   expect(demande.messages[0].content[0].text).toContain("- Marc D. (rendez-vous ce jour-là)");
@@ -107,10 +106,10 @@ test("deux patients au même prénom vus le même jour : l'appli demande lequel"
   await simulerIA(page);
   await page.goto("/");
   for (const n of ["Marc DUPONT", "Marc LEBLANC"]) await page.locator("#file").setInputFiles([{ name: `Bilan - ${n}.png`, mimeType: "image/png", buffer: png }]);
-  for (const [n, h] of [["Marc D.", "09:00"], ["Marc L.", "10:00"]]) {
+  for (const [n, demi] of [["Marc D.", "Matin"], ["Marc L.", "Après-midi"]]) {
     await item(page, n).click();
     await page.getByRole("button", { name: "Ajouter un rendez-vous" }).click();
-    await page.locator("#rtime").fill(h);
+    await page.getByLabel(demi).check();
     await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   }
   await page.locator("#etatbtn").click();
@@ -127,7 +126,7 @@ test("deux patients au même prénom vus le même jour : l'appli demande lequel"
   const doute = page.locator(".doute", { hasText: "« Marc »" });
   await expect(doute).toContainText("plusieurs patients possibles");
   await expect(doute.locator(".cand")).toHaveCount(2);
-  await expect(doute.locator(".cand").first()).toContainText("rendez-vous à 9 h");
+  await expect(doute.locator(".cand").first()).toContainText("rendez-vous ce jour-là, matin");
   await doute.locator(".cand", { hasText: "Marc L." }).click();
   await expect(page.locator(".recap")).toContainText("Marc L.");
 });

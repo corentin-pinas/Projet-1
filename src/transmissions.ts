@@ -3,7 +3,7 @@
    Le PDF est fabriqué dans la tablette, sans IA : il reprend fidèlement bilans et séances. */
 import * as db from "./db";
 import {
-  decalerJours, frDate, HORAIRES_DEFAUT, heureFr, isoDay, joursSansRdv, semaineProchaine, transmissions,
+  decalerJours, demiFr, frDate, HORAIRES_DEFAUT, isoDay, joursSansRdv, semaineProchaine, transmissions,
   type Horaires, type Transmission
 } from "./regles";
 import { esc, toast } from "./ui";
@@ -79,7 +79,7 @@ function ligne(t: Transmission): string {
   const manque = !t.bilan ? "Bilan à venir" : !r ? "Bilan pas encore résumé" : "";
   return `<label class="tpatient"><input type="checkbox" data-inclus="${esc(t.dossier.id)}"${exclus.has(t.dossier.id) ? "" : " checked"}>
     <span><b>${esc(t.dossier.label)}</b>${r?.region ? ` · ${esc(r.region)}` : ""}
-    <small>${t.rdvs.map(x => esc(jourCourt(x.d) + (x.h ? " " + heureFr(x.h) : "") + (x.t === "bilan" ? " (bilan)" : ""))).join(" ; ")} · ${t.seances.length} séance${t.seances.length > 1 ? "s" : ""}${manque ? ` · <span class="pending">${manque}</span>` : ""}</small></span></label>`;
+    <small>${t.rdvs.map(x => esc(jourCourt(x.d) + (demiFr(x) ? " " + demiFr(x) : "") + (x.t === "bilan" ? " (bilan)" : ""))).join(" ; ")} · ${t.seances.length} séance${t.seances.length > 1 ? "s" : ""}${manque ? ` · <span class="pending">${manque}</span>` : ""}</small></span></label>`;
 }
 
 async function produire(patients: Transmission[], vides: string[], envoyer: boolean) {

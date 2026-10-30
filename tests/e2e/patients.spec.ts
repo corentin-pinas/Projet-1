@@ -41,11 +41,12 @@ test("ajouter un bilan, dicter une séance, poser un rendez-vous, puis supprimer
 
   // rendez-vous aujourd'hui : le patient passe en tête, avec l'heure
   await page.getByRole("button", { name: "Ajouter un rendez-vous" }).click();
-  await page.locator("#rtime").fill("08:30");
+  await expect(page.locator("#rtime")).toHaveCount(0);   // plus d'heure : matin ou après-midi
+  await page.getByLabel("Matin").check();
   await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
-  await expect(page.locator(".rdv")).toContainText("aujourd'hui à 8 h 30");
+  await expect(page.locator(".rdv")).toContainText("aujourd'hui matin");
   await expect(page.locator("#list .grp").first()).toHaveText("Aujourd'hui");
-  await expect(item(page, "Marc D.").locator(".hr")).toHaveText("8 h 30");
+  await expect(item(page, "Marc D.").locator(".hr")).toHaveText("matin");
 
   // les données restent après fermeture et réouverture
   await page.reload();

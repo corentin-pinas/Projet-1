@@ -30,7 +30,8 @@ describe("analyse d'une séance", () => {
   });
 
   it("ne garde une date de rendez-vous que si elle est bien formée, et l'heure seulement avec une date", () => {
-    expect(lireAnalyse({ rdv_date: "2026-10-09", rdv_heure: "8h00" }, dictee, false)).toMatchObject({ rdvDate: "2026-10-09", rdvHeure: "08:00" });
+    expect(lireAnalyse({ rdv_date: "2026-10-09", rdv_heure: "8h00" }, dictee, false)).toMatchObject({ rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am" });
+    expect(lireAnalyse({ rdv_date: "2026-10-09", rdv_heure: null, rdv_demi: "après-midi" }, dictee, false)).toMatchObject({ rdvDemi: "pm" });
     expect(lireAnalyse({ rdv_date: "vendredi", rdv_heure: "08:00" }, dictee, false)).toMatchObject({ rdvDate: "", rdvHeure: "" });
     expect(lireAnalyse({ rdv_date: "2026-10-09", rdv_heure: "25:00" }, dictee, false).rdvHeure).toBe("");
   });
@@ -46,7 +47,7 @@ describe("analyse d'une séance", () => {
 
   it("renvoie l'analyse et la consommation", async () => {
     const r = await analyserSeance("cle", "2026-10-02", dictee, false, faux({ propre: null, resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdv_date: "2026-10-09", rdv_heure: "08:00" }));
-    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00" });
+    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am" });
     expect(r.usage).toEqual({ entree: 1000, sortie: 500 });
   });
 });

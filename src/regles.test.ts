@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
-  agesCompatibles, avecRdv, avenirDe, avenirFrom, heureFr, jourLabel, lignesListe, nomAffiche,
-  creneauxLibres, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
+  agesCompatibles, avecRdv, avenirDe, avenirFrom, jourLabel, lignesListe, nomAffiche,
+  plageDemi, placesPlage, placesPrises, demiDe, rdvKey, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
 } from "./regles";
 
@@ -70,18 +70,16 @@ describe("avenirDe", () => {
 describe("rendez-vous", () => {
   it("ignore les rendez-vous passés et n'en garde qu'un par jour", () => {
     const l = rdvsAVenir([{ d: "2026-09-30", h: "" }, { d: "2026-10-05", h: "09:00" }, { d: "2026-10-05", h: "10:00" }, { d: "2026-10-03", h: "" }], "2026-10-02");
-    expect(l).toEqual([{ d: "2026-10-03", h: "" }, { d: "2026-10-05", h: "10:00" }]);
+    expect(l).toEqual([{ d: "2026-10-03", h: "" }, { d: "2026-10-05", h: "10:00", p: "am" }]);
   });
   it("remplace le rendez-vous du même jour", () => {
-    expect(avecRdv([{ d: "2026-10-05", h: "09:00" }], "2026-10-05", "11:00")).toEqual([{ d: "2026-10-05", h: "11:00" }]);
+    expect(avecRdv([{ d: "2026-10-05", h: "09:00" }], "2026-10-05", "", "seance", "pm")).toEqual([{ d: "2026-10-05", h: "", p: "pm" }]);
   });
   it("donne le prochain et compte les suivants", () => {
     expect(prochainRdv([{ d: "2026-10-09", h: "" }, { d: "2026-10-03", h: "08:30" }], "2026-10-02"))
-      .toEqual({ k: "2026-10-03 08:30", date: "2026-10-03", heure: "08:30", bilan: false, autres: 1 });
+      .toEqual({ k: "2026-10-03 1 08:30", date: "2026-10-03", heure: "08:30", demi: "am", bilan: false, autres: 1 });
   });
-  it("écrit l'heure et le jour à la française", () => {
-    expect(heureFr("08:30")).toBe("8 h 30");
-    expect(heureFr("14:00")).toBe("14 h");
+  it("écrit le jour à la française", () => {
     const now = new Date(2026, 9, 2, 9);
     expect(jourLabel("2026-10-02", now)).toBe("Aujourd'hui");
     expect(jourLabel("2026-10-03", now)).toBe("Demain");
@@ -201,14 +199,22 @@ describe("agenda", () => {
   it("une séance dure 20 minutes, un bilan 40", () => {
     expect(dureeRdv({ d: "2026-10-28", h: "08:00" })).toBe(20);
     expect(dureeRdv({ d: "2026-10-28", h: "08:00", t: "bilan" })).toBe(40);
-    expect(avecRdv([], "2026-10-28", "08:00", "bilan")).toEqual([{ d: "2026-10-28", h: "08:00", t: "bilan" }]);
+    expect(avecRdv([], "2026-10-28", "08:00", "bilan")).toEqual([{ d: "2026-10-28", h: "08:00", t: "bilan", p: "am" }]);
     expect(rdvsAVenir([{ d: "2026-10-28", h: "08:00", t: "bilan" }], "2026-10-01")[0].t).toBe("bilan");
   });
 
-  it("les créneaux libres sont ce qui reste des horaires, pause de midi exclue", () => {
-    const l = creneauxLibres([["08:00", "10:00"], ["14:00", "15:00"]], [{ debut: 8 * 60 + 20, fin: 9 * 60 }, { debut: 14 * 60 + 10, fin: 14 * 60 + 30 }]);
-    const h = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
-    expect(l.map(c => h(c.debut))).toEqual(["08:00", "09:00", "09:20", "09:40", "14:30"]);   // 14:00-14:10 : trop court
+  it("demi-journées : choisie, ou déduite de l'heure ; matin avant l'après-midi ; places selon les horaires", () => {
+    expect(demiDe({ d: "2026-10-28", h: "", p: "pm" })).toBe("pm");
+    expect(demiDe({ d: "2026-10-28", h: "12:40" })).toBe("am");
+    expect(demiDe({ d: "2026-10-28", h: "14:00" })).toBe("pm");
+    expect(demiDe({ d: "2026-10-28", h: "" })).toBeNull();
+    expect(rdvKey({ d: "2026-10-28", h: "", p: "am" }) < rdvKey({ d: "2026-10-28", h: "09:00", p: "pm" })).toBe(true);
+    expect(avecRdv([], "2026-10-28", "", "seance", "pm")).toEqual([{ d: "2026-10-28", h: "", p: "pm" }]);
+    const plages: [string, string][] = [["08:00", "12:00"], ["14:00", "19:00"]];
+    expect(plageDemi(plages, "pm")).toEqual(["14:00", "19:00"]);
+    expect(placesPlage(plageDemi(plages, "am"))).toBe(12);
+    expect(placesPlage(plageDemi([["14:00", "18:00"]], "am"))).toBe(0);
+    expect(placesPrises([{ d: "x", h: "", t: "bilan" }, { d: "x", h: "" }])).toBe(3);
   });
 
   it("les rendez-vous du jour, à l'heure, avec leur fin", () => {

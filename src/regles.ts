@@ -1,7 +1,10 @@
 /* Règles métier reprises à l'identique de la version d'essai (reference/bilans-seances-essai.html).
    Fonctions pures : aucune lecture de la base ni de l'écran, pour pouvoir les tester une à une. */
 
-export type Rdv = { d: string; h: string; t?: "bilan" };   // d : AAAA-MM-JJ, h : HH:MM ou "", t : « bilan » (40 min), sinon séance (20 min)
+/* d : AAAA-MM-JJ ; p : demi-journée (« am » matin, « pm » après-midi), choix de Corentin depuis la 0.11 : plus d'heure précise ;
+   h : HH:MM ou "" (anciens rendez-vous et heure dictée, sert seulement à ranger dans la demi-journée) ; t : « bilan », sinon séance */
+export type Demi = "am" | "pm";
+export type Rdv = { d: string; h: string; t?: "bilan"; p?: Demi };
 
 export type Resume = {
   region?: string;
@@ -195,23 +198,29 @@ export const isoDay = (d: Date) =>
 
 export const frDate = (iso: string) => { const [y, m, d] = String(iso).split("-"); return d ? `${d}/${m}/${y}` : iso; };
 
-export const heureFr = (h: string) => h ? h.replace(/^0/, "").replace(":", " h ").replace(/ h 00$/, " h") : "";
 
-export const rdvKey = (r: Rdv) => r.d + " " + (r.h || "99:99");
+/* demi-journée d'un rendez-vous : celle choisie, sinon d'après l'heure (avant 13 h : matin) ; null si rien n'est connu */
+export const demiDe = (r: Rdv): Demi | null => r.p ?? (r.h ? (r.h < "13:00" ? "am" : "pm") : null);
+export const DEMI_FR: Record<Demi, string> = { am: "matin", pm: "après-midi" };
+export const demiFr = (r: Rdv) => { const m = demiDe(r); return m ? DEMI_FR[m] : ""; };
+
+/* ordre : jour, puis matin, après-midi, sans précision ; dans la demi-journée, l'heure si elle est connue */
+export const rdvKey = (r: Rdv) => { const m = demiDe(r); return r.d + " " + (m === "am" ? "1" : m === "pm" ? "2" : "3") + " " + (r.h || "99:99"); };
+const copieRdv = (r: Rdv): Rdv => ({ d: r.d, h: r.h || "", ...(r.t === "bilan" ? { t: "bilan" as const } : {}), ...(demiDe(r) ? { p: demiDe(r)! } : {}) });
 
 /* rendez-vous à venir (un par jour au plus), du plus proche au plus lointain ; les passés ne comptent plus */
 export function rdvsAVenir(rdvs: Rdv[], aujourdhui: string): Rdv[] {
   const vus = new Map<string, Rdv>();
-  for (const r of rdvs) if (r && r.d && r.d >= aujourdhui) vus.set(r.d, { d: r.d, h: r.h || "", ...(r.t === "bilan" ? { t: "bilan" as const } : {}) });
+  for (const r of rdvs) if (r && r.d && r.d >= aujourdhui) vus.set(r.d, copieRdv(r));
   return [...vus.values()].sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
 }
 
-export const avecRdv = (list: Rdv[], d: string, h: string, t?: "bilan" | "seance") =>
-  list.filter(r => r.d !== d).concat([{ d, h: h || "", ...(t === "bilan" ? { t: "bilan" as const } : {}) }]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+export const avecRdv = (list: Rdv[], d: string, h: string, t?: "bilan" | "seance", p?: Demi | null) =>
+  list.filter(r => r.d !== d).concat([copieRdv({ d, h: h || "", ...(t === "bilan" ? { t: "bilan" as const } : {}), ...(p ? { p } : {}) })]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
 
 export function prochainRdv(rdvs: Rdv[], aujourdhui: string) {
   const l = rdvsAVenir(rdvs, aujourdhui);
-  return l.length ? { k: rdvKey(l[0]), date: l[0].d, heure: l[0].h, bilan: l[0].t === "bilan", autres: l.length - 1 } : null;
+  return l.length ? { k: rdvKey(l[0]), date: l[0].d, heure: l[0].h, demi: demiDe(l[0]), bilan: l[0].t === "bilan", autres: l.length - 1 } : null;
 }
 
 export function jourLabel(iso: string, maintenant: Date): string {
@@ -319,27 +328,16 @@ export function rdvsDuJour(dossiers: Dossier[], iso: string): RdvDuJour[] {
   return dossiers.flatMap(d => d.rdvs.filter(r => r.d === iso).map(r => {
     const debut = r.h ? minutes(r.h) : null;
     return { dossier: d, rdv: r, debut, fin: debut == null ? null : debut + dureeRdv(r) };
-  })).sort((a, b) => (a.debut ?? -1) - (b.debut ?? -1) || a.dossier.label.localeCompare(b.dossier.label, "fr"));
+  })).sort((a, b) => rdvKey(a.rdv).localeCompare(rdvKey(b.rdv)) || a.dossier.label.localeCompare(b.dossier.label, "fr"));
 }
 
-/* Créneaux libres de 20 minutes dans les horaires du jour : ce qui reste des plages une fois les rendez-vous posés.
-   Chaque trou est découpé en créneaux à partir de son début ; un reste de moins de 20 minutes n'est pas un créneau. */
-export function creneauxLibres(plages: Plage[], occupes: { debut: number; fin: number }[]): { debut: number; fin: number }[] {
-  const pris = [...occupes].sort((a, b) => a.debut - b.debut);
-  const libres: { debut: number; fin: number }[] = [];
-  for (const [a, b] of plages) {
-    let t = minutes(a);
-    const fin = minutes(b);
-    const couper = (jusqua: number) => { for (; t + PAS <= jusqua; t += PAS) libres.push({ debut: t, fin: t + PAS }); };
-    for (const o of pris) {
-      if (o.fin <= t || o.debut >= fin) continue;
-      couper(Math.min(o.debut, fin));
-      t = Math.max(t, o.fin);
-    }
-    couper(fin);
-  }
-  return libres;
+/* Plage de travail d'une demi-journée (d'après les horaires : celle qui commence avant 13 h est le matin) et nombre de places :
+   une séance prend 20 minutes, un bilan 40. */
+export function plageDemi(plages: Plage[], m: Demi): Plage | null {
+  return plages.find(([a]) => (a < "13:00") === (m === "am")) ?? null;
 }
+export const placesPlage = (p: Plage | null) => p ? Math.floor((minutes(p[1]) - minutes(p[0])) / PAS) : 0;
+export const placesPrises = (rdvs: Rdv[]) => rdvs.reduce((n, r) => n + dureeRdv(r) / PAS, 0);
 
 /* ---------- « Ma journée » : les patients d'un jour, avec ce qui est prévu pour eux ---------- */
 

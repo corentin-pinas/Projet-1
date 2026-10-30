@@ -3,7 +3,7 @@
    rendez-vous de la période, ce qui est prévu pour la suite, le bilan (coup d'œil, chiffres, rubriques), les deux dernières séances.
    Fidèle à ce qui est enregistré : aucun résumé n'est inventé. */
 import { jsPDF } from "jspdf";
-import { frDate, heureFr, texteDe, type Rdv, type Transmission } from "./regles";
+import { demiDe, demiFr, frDate, rdvKey, texteDe, type Rdv, type Transmission } from "./regles";
 
 /* police intégrée du PDF (Helvetica) : alphabet latin et ponctuation française ; le reste est remplacé */
 const AUTRES = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
@@ -15,7 +15,7 @@ export function propre(t: string): string {
 const jourLong = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
 const jourCourt = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); };
 const maj = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-const rdvTexte = (r: Rdv) => jourCourt(r.d) + (r.h ? " à " + heureFr(r.h) : "") + (r.t === "bilan" ? " (bilan)" : "");
+const rdvTexte = (r: Rdv) => jourCourt(r.d) + (demiFr(r) ? " " + demiFr(r) : "") + (r.t === "bilan" ? " (bilan)" : "");
 
 export type OptionsPdf = { du: string; au: string; mot: string; patients: Transmission[]; joursVides: string[] };
 
@@ -51,13 +51,18 @@ export function fabriquerPdf({ du, au, mot, patients, joursVides }: OptionsPdf):
   if (joursVides.length) texte("Aucun rendez-vous noté dans l'appli : " + joursVides.map(jourCourt).join(", ").replace(/\.?$/, "."), { couleur: doux, apres: 4 });
 
   texte("Planning", { taille: 12, gras: true, couleur: accent });
-  const parJour = new Map<string, { h: string; t: Transmission; r: Rdv }[]>();
-  for (const t of patients) for (const r of t.rdvs) { if (!parJour.has(r.d)) parJour.set(r.d, []); parJour.get(r.d)!.push({ h: r.h, t, r }); }
+  /* planning : chaque jour, le matin puis l'après-midi, les patients à la suite */
+  const parJour = new Map<string, { t: Transmission; r: Rdv }[]>();
+  for (const t of patients) for (const r of t.rdvs) { if (!parJour.has(r.d)) parJour.set(r.d, []); parJour.get(r.d)!.push({ t, r }); }
+  const nom = ({ t, r }: { t: Transmission; r: Rdv }) => t.dossier.label + (r.t === "bilan" ? " (bilan)" : "") + (t.bilan?.resume?.region ? " - " + t.bilan.resume.region : "");
   for (const j of [...parJour.keys()].sort()) {
     place(12);
     texte(maj(jourLong(j)), { gras: true, apres: 0.5 });
-    for (const { h, t, r } of parJour.get(j)!.sort((a, b) => (a.h || "99").localeCompare(b.h || "99")))
-      texte(`${h ? heureFr(h) : "sans heure"}  ·  ${t.dossier.label}${r.t === "bilan" ? "  ·  bilan" : ""}${t.bilan?.resume?.region ? "  ·  " + t.bilan.resume.region : ""}`, { retrait: 4, apres: 0.3 });
+    const l = parJour.get(j)!.sort((a, b) => rdvKey(a.r).localeCompare(rdvKey(b.r)) || a.t.dossier.label.localeCompare(b.t.dossier.label, "fr"));
+    for (const [m, titre] of [["am", "Matin"], ["pm", "Après-midi"], [null, "Sans précision"]] as const) {
+      const ici = l.filter(x => demiDe(x.r) === m);
+      if (ici.length) texte(`${titre} (${ici.length}) : ${ici.map(nom).join(" ; ")}`, { retrait: 4, apres: 0.5 });
+    }
     y += 2;
   }
 

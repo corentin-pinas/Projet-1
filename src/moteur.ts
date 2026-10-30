@@ -2,7 +2,7 @@
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
-import { avecRdv, avenirFrom, isoDay, jourLabel, heureFr, rattacher, rdvsAVenir, type Bilan, type Seance } from "./regles";
+import { avecRdv, avenirFrom, DEMI_FR, isoDay, jourLabel, rattacher, rdvsAVenir, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -217,8 +217,8 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
   const derniere = !seances.some(x => x.dossierId === se.dossierId && x.id !== se.id && x.date > se.date);
   const dossier = dossiers.find(d => d.id === se.dossierId);
   if (!(a.rdvDate && a.rdvDate >= isoDay(new Date()) && derniere && dossier)) return null;
-  await db.setRdvs(dossier.id, avecRdv(rdvsAVenir(dossier.rdvs, isoDay(new Date())), a.rdvDate, a.rdvHeure));
-  return "Rendez-vous repéré pour " + dossier.label + " : " + jourLabel(a.rdvDate, new Date()).toLowerCase() + (a.rdvHeure ? " à " + heureFr(a.rdvHeure) : "") + ".";
+  await db.setRdvs(dossier.id, avecRdv(rdvsAVenir(dossier.rdvs, isoDay(new Date())), a.rdvDate, a.rdvHeure, undefined, a.rdvDemi || null));
+  return "Rendez-vous repéré pour " + dossier.label + " : " + jourLabel(a.rdvDate, new Date()).toLowerCase() + (a.rdvDemi ? " " + DEMI_FR[a.rdvDemi] : "") + ".";
 }
 
 /* Après l'enregistrement d'une séance : mise au propre de la dictée, résumé du « À venir » et,

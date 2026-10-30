@@ -222,22 +222,21 @@ button.lien{background:none;border:0;padding:4px 6px;min-height:0;font-size:.85r
 .abar h2{margin:0;font-size:1.25rem}
 .alegende{margin:6px 0 8px}
 .trous{color:var(--warn);font-weight:700}
-.agrille{flex:1;overflow:auto;display:grid;grid-template-columns:44px repeat(6,minmax(110px,1fr));gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
-.agrille .entete{position:sticky;top:0;z-index:2;background:var(--panel);height:74px;overflow:auto;padding:4px 2px;display:grid;gap:3px;align-content:start;border-bottom:1px solid var(--line);margin-bottom:6px}
+.agrille{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:8px;align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+.agrille .jour{display:flex;flex-direction:column;gap:8px;min-width:0}
+.agrille .entete{position:sticky;top:-8px;z-index:2;background:var(--panel);padding:6px 4px;display:flex;justify-content:space-between;align-items:baseline;gap:6px;border-bottom:1px solid var(--line)}
 .agrille .entete small{color:var(--soft);font-size:.78rem}
 .jour.auj .entete b{color:var(--accent)}
-.agrille .col{position:relative}
-.heures span{position:absolute;right:4px;font-size:.75rem;color:var(--soft);transform:translateY(-50%)}
-.heures span:first-child{transform:none}
-.plage{position:absolute;left:0;right:0;background:var(--bg);border-radius:6px}
-.agrille .libre,.agrille .rdvb{position:absolute;left:0;width:100%;min-height:0;padding:2px 6px;border-radius:6px;font-size:.78rem;justify-content:flex-start;align-items:flex-start;overflow:hidden;text-align:left}
-.agrille .libre{background:var(--warn-bg);border:1px dashed var(--warn);color:var(--warn)}
-.agrille .rdvb{flex-direction:column;gap:0;background:var(--accent-bg);border:1px solid var(--accent);color:var(--ink);line-height:1.15}
+.ademi{display:flex;flex-direction:column;gap:4px;background:var(--bg);border-radius:10px;padding:6px}
+.ademi h4{margin:0 0 2px;font-size:.85rem;display:flex;flex-direction:column}
+.ademi h4 small{font-weight:400;color:var(--soft);font-size:.75rem}
+.ademi.ferme{opacity:.6}
+.ademi.ferme small{color:var(--soft);font-size:.75rem}
+.agrille .rdvb{min-height:34px;padding:4px 8px;border-radius:8px;font-size:.85rem;justify-content:space-between;align-items:baseline;gap:6px;text-align:left;background:var(--accent-bg);border:1px solid var(--accent);color:var(--ink);line-height:1.2}
 .agrille .rdvb.bilan{background:var(--accent);color:var(--accent-ink)}
-.agrille .rdvb.bilan small{color:inherit}
-.agrille .rdvb b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.agrille .rdvb small{color:var(--soft);font-size:.72rem}
-.agrille .rdvb.sansheure{position:static;padding:1px 6px;flex-direction:row;gap:6px;align-items:baseline}
+.agrille .rdvb b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.agrille .rdvb small{font-size:.72rem;color:inherit;opacity:.85}
+.agrille .ajout{min-height:34px;padding:4px 8px;border-radius:8px;font-size:.82rem;border:1px dashed var(--warn);color:var(--warn);background:var(--warn-bg)}
 dialog.placer{border:0;border-radius:16px;padding:20px;width:min(520px,calc(100vw - 32px));display:grid;gap:12px;background:var(--panel);color:var(--ink)}
 dialog.placer:not([open]){display:none}
 dialog.placer h3{margin:0}
@@ -392,17 +391,16 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 /* « Ma journée » : petites fiches des patients du jour */
 button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.92rem;font-weight:700;color:var(--accent);margin-bottom:2px}
 .jchoix{margin-top:0}
-.jcartes{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:16px}
+.jcartes{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:8px}
+.jdemi{margin:18px 0 0;font-size:1.1rem;color:var(--accent)}
+.jdemi small{font-size:.8rem;font-weight:400;color:var(--soft)}
 .jcarte{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px;text-align:left;padding:12px 14px;border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:12px;background:var(--panel);color:var(--ink);font-weight:400;min-height:0;position:relative}
-.jcarte.suivant{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .jcarte.faite{border-left-color:var(--line);background:var(--bg)}
-.jcarte.faite .jheure,.jcarte.faite .jnom{color:var(--soft)}
+.jcarte.faite .jnom{color:var(--soft)}
 .jtete{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.jheure{font-weight:700;font-size:1.15rem;color:var(--accent);min-width:3.2em}
 .jnom{font-weight:700;font-size:1.1rem;flex:1}
 .jtype{font-size:.8rem;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--accent-bg);color:var(--accent)}
 .jtype.bilan{background:var(--warn-bg);color:var(--warn)}
-.jsuivant{position:absolute;top:-10px;right:12px;font-size:.75rem;font-weight:700;background:var(--accent);color:var(--accent-ink);padding:1px 9px;border-radius:999px}
 .jregion{color:var(--soft);font-size:.92rem}
 .jcarte p{margin:0;font-size:.92rem}
 /* coupe à 3 lignes sur le texte lui-même, pour qu'aucun bout de 4e ligne ne dépasse dans la marge intérieure */
