@@ -63,9 +63,14 @@ export async function afficherIA() {
   }
 }
 
+/* Une vérification du serveur qui arrive après une action plus récente (connexion, code refusé) ne doit pas écraser son message. */
+let tour = 0;
+
 async function afficherServeur() {
+  const n = ++tour;
   $("#abostatut").textContent = "Vérification du serveur…";
   const e = await serveur<EtatServeur>("/api/ia/etat");
+  if (n !== tour) return;
   $("#aboconnect").hidden = true; $("#abodeco").hidden = true;
   if (e.erreur) { $("#abostatut").textContent = e.erreur; return; }
   if (!e.installe) { $("#abostatut").textContent = "Claude Code n'est pas installé sur le serveur."; return; }
@@ -102,7 +107,7 @@ export function brancherReglagesIA(changement: () => void) {
   });
 
   $("#aboconnect").addEventListener("click", async () => {
-    const btn = $<HTMLButtonElement>("#aboconnect"); btn.disabled = true;
+    const btn = $<HTMLButtonElement>("#aboconnect"); btn.disabled = true; tour++;
     const r = await serveur<{ lien?: string }>("/api/ia/connexion", "POST");
     btn.disabled = false;
     if (r.erreur || !r.lien) { const m = r.erreur || "Le serveur n'a pas proposé de lien de connexion."; $("#abostatut").textContent = m; toast(m); return; }
@@ -116,6 +121,7 @@ export function brancherReglagesIA(changement: () => void) {
     if (!code) { toast("Collez le code affiché après la connexion."); return; }
     const btn = $<HTMLButtonElement>("#abovalider"); btn.disabled = true; btn.textContent = "Connexion…";
     const r = await serveur<{ ok?: boolean }>("/api/ia/connexion/code", "POST", { code });
+    tour++;
     btn.disabled = false; btn.textContent = "Valider";
     if (r.erreur) {
       // le message reste affiché (le toast disparaît au bout de quelques secondes)

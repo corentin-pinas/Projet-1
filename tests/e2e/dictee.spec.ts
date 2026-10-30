@@ -1,5 +1,8 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+/* la liste de tous les patients, cachée par défaut, est ouverte pour ces tests */
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte")));
+
 /* Dictée groupée, avec l'IA simulée : on vérifie la demande envoyée et le rangement qui en découle. */
 type Envoi = { model: string; messages: { content: { type: string; text?: string }[] }[] };
 

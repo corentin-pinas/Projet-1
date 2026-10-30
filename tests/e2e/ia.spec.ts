@@ -1,5 +1,8 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+/* la liste de tous les patients, cachée par défaut, est ouverte pour ces tests */
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte")));
+
 /* L'IA est simulée : aucune vraie requête ne part, on vérifie ce que l'appli envoie et ce qu'elle fait de la réponse. */
 type Envoi = { model: string; fallbacks: unknown; messages: { content: { type: string; text?: string; source?: { media_type: string } }[] }[]; output_config: { effort: string } };
 

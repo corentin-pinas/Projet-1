@@ -2,6 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+/* la liste de tous les patients, cachée par défaut, est ouverte pour ces tests */
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte")));
+
 /* Mode abonnement : l'appli passe par le serveur, qui lance Claude Code. Ici Claude Code est un faux (tests/faux/claude.mjs). */
 const CODE = "code-acces-essai-123";
 const appels = () => readFileSync(".faux-claude/appels.jsonl", "utf8").trim().split("\n").map(l => JSON.parse(l) as { args: string[]; env: string[] });

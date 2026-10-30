@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/* la liste de tous les patients, cachée par défaut, est ouverte pour ces tests */
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte")));
+
 /* Un vrai petit PDF, fabriqué par le navigateur de test. */
 async function fairePdf(page: Page, texte: string): Promise<Buffer> {
   const p = await page.context().newPage();
@@ -17,7 +20,7 @@ const item = (page: Page, nom: string) => page.locator("#list .item", { hasText:
 
 test("ajouter un bilan, dicter une séance, poser un rendez-vous, puis supprimer", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#list")).toContainText("Aucun bilan");
+  await expect(page.locator("#list")).toContainText("Aucun patient pour l'instant");
 
   await deposer(page, [{ name: "Fiche Bilan Épaule - Marc DUPONT.pdf", mimeType: "application/pdf", buffer: await fairePdf(page, "Marc") }]);
   await expect(page.getByRole("status")).toContainText("Bilan ajouté");
@@ -57,7 +60,7 @@ test("ajouter un bilan, dicter une séance, poser un rendez-vous, puis supprimer
   await page.getByRole("button", { name: "Supprimer ce bilan" }).click();
   await expect(page.getByRole("dialog")).toContainText("C'est son seul bilan");
   await page.getByRole("dialog").getByRole("button", { name: "Supprimer" }).click();
-  await expect(page.locator("#list")).toContainText("Aucun bilan");
+  await expect(page.locator("#list")).toContainText("Aucun patient pour l'instant");
 });
 
 test("deux patients au même prénom et même initiale restent deux dossiers", async ({ page }) => {

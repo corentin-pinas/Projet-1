@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/* la liste de tous les patients, cachée par défaut, est ouverte pour ces tests */
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte")));
+
 /* Agenda et patients sans bilan. L'horloge est fixée au mercredi 28 octobre 2026, 9 h 10. */
 async function fairePdf(page: Page): Promise<Buffer> {
   const p = await page.context().newPage();

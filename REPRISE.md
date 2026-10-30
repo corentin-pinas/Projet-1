@@ -67,6 +67,7 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 | 0.9.5 | 29 oct. | Barre du haut d'Android (heure, batterie) à la couleur du fond de l'appli (et non plus de la couleur principale) ; couleurs de l'appli installée (barres, écran de démarrage) en nuit `#110F1A` ; « Ma journée » : plus de demi-ligne qui dépasse sous les « … ». En production le 29 oct. |
 | 0.10.0 | 30 oct. | **Transmissions pour un remplaçant** : bouton « Transmissions » dans l'Agenda ; période (semaine prochaine par défaut, 1 à 3 semaines, dates libres), patients ayant rendez-vous cochés (décochables), jours travaillés sans rendez-vous signalés, mot pour le remplaçant gardé ; PDF fabriqué dans la tablette **sans IA** (fidèle) : planning jour par jour, puis une fiche par patient à la suite (rendez-vous, prévu pour la suite, bilan complet résumé, deux dernières séances) ; « Envoyer le PDF » ouvre le partage d'Android, « Enregistrer » le met dans Téléchargements. Pas encore en production |
 | 0.11.0 | 30 oct. | **Agenda en demi-journées** (demande de Corentin : plus d'heure précise) : rendez-vous « matin » ou « après-midi » (`Rdv.p`, l'ancienne heure sert seulement à ranger), agenda de la semaine en blocs matin / après-midi avec places libres d'après « Mes horaires » (séance 20 min, bilan 40) et « + Ajouter » ; fiche, liste, Ma journée (groupes Matin / Après-midi, plus de « À suivre »), dictée (l'IA rend `rdv_demi`), transmissions. Pas encore en production |
+| 0.12.0 | 30 oct. | **Accueil épuré** : la liste de tous les patients est cachée derrière « 📋 Liste des patients » (ouverte ou fermée, gardé dans la tablette ; la recherche l'affiche) ; « Ma journée » montre la **demi-journée en cours** (le matin vide : l'après-midi), boutons Matin / Après-midi / Demain avec le nombre de patients, fiches plus grandes (2 colonnes, prévu sur 6 lignes). Corrigés : les boutons répondent dès l'ouverture (un dépôt très rapide pouvait être ignoré) ; un message de connexion à l'abonnement pouvait être écrasé par une vérification en retard ; premier patient créable depuis la recherche quand l'appli est vide. Pas encore en production |
 
 ## 5. Décisions prises (à ne pas remettre en question)
 
@@ -78,6 +79,13 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 6. **Agenda** : séance 20 min, bilan 40 min ; Corentin règle lui-même ses horaires dans « Mes horaires » (défaut lun.–ven. 8 h–12 h / 14 h–19 h).
 7. **Confidentialité** : prénom + initiale, âge sans date de naissance, médecin par sa spécialité, pas de nom complet (voir `CLAUDE.md`).
 8. Volume : 3 à 8 bilans et 80 à 110 séances par semaine.
+
+## 5 bis. Partage entre appareils (discussion du 30 octobre)
+
+- Corentin veut utiliser Muninn sur tablette, téléphone et ordinateur avec les mêmes dossiers.
+- Conseillé : **l'ordinateur du cabinet (ou un NAS à lui) garde les dossiers**, chaque appareil garde une copie et se synchronise (Wi-Fi au cabinet, Tailscale ailleurs). Écarté : un compte en ligne (hébergeur HDS obligatoire). Le NAS du père de Corentin : déconseillé pour des dossiers patients (chez un tiers, qui en a l'accès).
+- Décision provisoire : **attendre l'ordinateur (début décembre)**, tout continue sur la tablette d'ici là. Le serveur de synchronisation sera écrit pour tourner aussi bien sur un PC que sur un NAS (Docker).
+- Questions posées, sans réponse : Windows ou Mac ? accès hors du cabinet ? seul utilisateur ?
 
 ## 6. Pas encore testé en conditions réelles
 

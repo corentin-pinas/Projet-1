@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
+/* la liste de tous les patients, cachée par défaut, est ouverte pour ces tests */
+test.beforeEach(({ page }) => page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte")));
+
 test("un bilan supprimé par erreur revient grâce à la copie du jour, et le retour peut s'annuler", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-12T08:00:00"));
   await page.goto("/");
@@ -17,7 +20,7 @@ test("un bilan supprimé par erreur revient grâce à la copie du jour, et le re
   await page.locator("#list .item", { hasText: "Marc D." }).click();
   await page.getByRole("button", { name: "Supprimer ce bilan" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Supprimer" }).click();
-  await expect(page.locator("#list")).toContainText("Aucun bilan");
+  await expect(page.locator("#list")).toContainText("Aucun patient pour l'instant");
 
   await page.locator("#etatbtn").click();
   await expect(page.locator("#copiesetat")).toContainText("1 copie gardée");
@@ -42,7 +45,7 @@ test("un bilan supprimé par erreur revient grâce à la copie du jour, et le re
   await page.locator("dialog.confirm").getByRole("button", { name: "Annuler le retour" }).click();
   await expect(page.locator("#copies li.avant")).toHaveCount(0);
   await page.locator("#etatclose").click();
-  await expect(page.locator("#list")).toContainText("Aucun bilan");
+  await expect(page.locator("#list")).toContainText("Aucun patient pour l'instant");
 });
 
 test("copie hors de Chrome : fichier protégé par mot de passe, restauré sur une tablette neuve", async ({ page, browser }, info) => {
@@ -86,8 +89,9 @@ test("copie hors de Chrome : fichier protégé par mot de passe, restauré sur u
 
   // tablette neuve
   const neuve = await (await browser.newContext()).newPage();
+  await neuve.addInitScript(() => localStorage.setItem("liste-patients", "ouverte"));
   await neuve.goto("/");
-  await expect(neuve.locator("#list")).toContainText("Aucun bilan");
+  await expect(neuve.locator("#list")).toContainText("Aucun patient pour l'instant");
   await neuve.locator("#etatbtn").click();
   // le fichier est passé en mémoire : par son chemin, l'outil de test ne le transmet pas à un second contexte
   await neuve.locator("#extfichier").setInputFiles({ name: "mes-patients.sauvegarde", mimeType: "application/octet-stream", buffer: readFileSync(chemin) });

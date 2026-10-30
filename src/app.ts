@@ -23,6 +23,16 @@ let dicteeVue = false;                    // la dictée groupée occupe la parti
 let nomOpen = false;                      // modification du nom du patient en cours
 const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue || nomOpen;
 let aCle = false;                         // une clé d'IA est enregistrée
+/* La liste de tous les patients est cachée derrière un bouton (l'accueil met en avant « Ma journée ») ;
+   elle s'affiche aussi dès qu'on cherche un patient. Ouverte ou fermée : gardé dans la tablette. */
+const CLE_LISTE = "liste-patients";
+let listeOuverte = (() => { try { return localStorage.getItem(CLE_LISTE) === "ouverte"; } catch { return false; } })();
+function montrerListe() {
+  const cherche = !!$<HTMLInputElement>("#q").value.trim();
+  $("#list").hidden = !listeOuverte && !cherche;
+  $("#listebtn").setAttribute("aria-pressed", String(listeOuverte));
+  $("#listetxt").textContent = listeOuverte ? "Masquer la liste" : "Liste des patients";
+}
 
 const aujourdhui = () => isoDay(new Date());
 const RUBRIQUES = ["État du patient", "Fait en séance", "À faire à la maison", "Autres notes", "À venir"];
@@ -34,27 +44,31 @@ const seancesDe = (d: Dossier) => trierSeances(donnees.seances.filter(s => s.dos
 const ageDe = (d: Dossier) => bilansDe(d).map(ageOf).find(a => a != null) ?? null;
 
 export async function demarrer() {
-  donnees = await db.tout();
+  /* les boutons répondent dès l'ouverture, avant la lecture des données et la vérification de l'IA */
+  $("#add").addEventListener("click", () => { bilanPour = null; $("#file").click(); });
+  $("#dicteebtn").addEventListener("click", ouvrirDictee);
+  $("#agendabtn").addEventListener("click", () => agenda.ouvrir(ouvrirPatient));
+  $<HTMLInputElement>("#file").addEventListener("change", ajouter);
+  $("#q").addEventListener("input", () => { renderList(); montrerListe(); });
+  $("#listebtn").addEventListener("click", () => { listeOuverte = !listeOuverte; try { localStorage.setItem(CLE_LISTE, listeOuverte ? "ouverte" : ""); } catch { /* sans stockage : pour cette fois */ } montrerListe(); });
+  montrerListe();
   db.abonner(async () => {
     donnees = await db.tout();
     if (selD && !donnees.dossiers.some(d => d.id === selD)) selD = null;
     renderList();
     if (!busy()) renderMain();
   });
+  donnees = await db.tout();
   moteur.abonner(() => { renderList(); if (!busy()) renderMain(); });
   moteur.surMessage(toast);
   addEventListener("online", () => moteur.resumerEnAttente());
   await rafraichirIA();
-  $("#add").addEventListener("click", () => { bilanPour = null; $("#file").click(); });
-  $("#dicteebtn").addEventListener("click", ouvrirDictee);
-  $("#agendabtn").addEventListener("click", () => agenda.ouvrir(ouvrirPatient));
-  $<HTMLInputElement>("#file").addEventListener("change", ajouter);
-  $("#q").addEventListener("input", renderList);
-  /* la liste se reclasse quand on revient sur l'appli (le jour a pu changer) */
-  let jourVu = aujourdhui();
+  /* au retour sur l'appli, la liste se reclasse ; nouveau jour ou passage à l'après-midi : « Ma journée » revient sur la demi-journée en cours */
+  const moment = () => aujourdhui() + (new Date().getHours() >= 13 ? " pm" : " am");
+  let momentVu = moment();
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (jourVu !== aujourdhui()) { jourVu = aujourdhui(); journee.revenirAujourdhui(); }
+    if (momentVu !== moment()) { momentVu = moment(); journee.revenirAujourdhui(); }
     renderList(); if (!busy()) renderMain();
   });
   renderList();
@@ -79,11 +93,10 @@ function etatResume(bilans: Bilan[]) {
 function renderList() {
   const t = aujourdhui();
   const lignes = lignesListe(donnees.dossiers, donnees.bilans, $<HTMLInputElement>("#q").value, t);
-  if (!donnees.dossiers.length) { $("#list").innerHTML = `<div class="note">Aucun bilan pour l'instant.</div>`; return; }
   if (!lignes.length) {
     /* patient déjà en soins, sans bilan : on peut le créer d'ici, avec le nom cherché */
     const q = $<HTMLInputElement>("#q").value.trim(), nom = q.includes(" ") ? patientFrom(q) : "";
-    $("#list").innerHTML = `<div class="note">Aucun patient ne correspond.</div>` + (nom ? `<button class="creer" id="creerq">Créer le patient « ${esc(nom)} » (bilan à venir)</button>` : "");
+    $("#list").innerHTML = `<div class="note">${donnees.dossiers.length ? "Aucun patient ne correspond." : "Aucun patient pour l'instant."}</div>` + (nom ? `<button class="creer" id="creerq">Créer le patient « ${esc(nom)} » (bilan à venir)</button>` : "");
     const c = $("#creerq");
     if (c) c.onclick = () => creerPatient(nom);
     return;
@@ -460,7 +473,7 @@ export function ouvrirPatient(id: string) {
 async function creerPatient(nom: string) {
   try {
     const d = await db.creerPatient(nom);
-    $<HTMLInputElement>("#q").value = "";
+    $<HTMLInputElement>("#q").value = ""; montrerListe();
     ouvrirPatient(d.id);
     toast("Patient créé. Notez ses séances dès maintenant ; le bilan pourra être ajouté plus tard.");
   } catch (e) {
