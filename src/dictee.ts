@@ -5,15 +5,15 @@ import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
 import * as voix from "./transcription";
-import { ageDossier, demiFr, isoDay, nomAffiche, nomCorrespond, type Dossier, type Rdv } from "./regles";
+import { ageDossier, demiFr, isoDay, nomAffiche, nomCorrespond, patientFrom, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
 const BROUILLON = "dictee_brouillon";   // { texte, date }
 const DOUTES = "dictee_doutes";         // passages en attente d'un choix de dossier
 
 type Phase = "saisie" | "envoi" | "fini";
-/* avant : rendez-vous des dossiers avant la dictée, pour « Annuler » */
-type Recap = { range: moteur.Range[]; rdvs: string[]; texte: string; date: string; avant: Map<string, Rdv[]> };
+/* avant : rendez-vous des dossiers avant la dictée, pour « Annuler » ; crees : patients créés depuis la dictée (bilan à venir) */
+type Recap = { range: moteur.Range[]; rdvs: string[]; texte: string; date: string; avant: Map<string, Rdv[]>; crees?: string[] };
 
 let phase: Phase = "saisie";
 let texte = "", date = "";
@@ -80,7 +80,7 @@ async function afficher() {
       <div class="row"><button id="dannuler">Annuler cette dictée</button></div></div>` : "";
 
   const blocDoutes = doutes.length ? `<h3>${doutes.length === 1 ? "Un passage à ranger" : doutes.length + " passages à ranger"}</h3>
-    <p class="note">L'appli n'a pas su à quel patient ${doutes.length === 1 ? "il appartient" : "ils appartiennent"}. Touchez le bon patient.</p>
+    <p class="note">L'appli n'a pas su à quel patient ${doutes.length === 1 ? "il appartient" : "ils appartiennent"}. Touchez le bon patient, ou créez-le s'il n'a pas encore de bilan dans l'appli.</p>
     ${doutes.map(d => {
       const cands = d.candidats.map(id => parId.get(id)).filter((x): x is Dossier => !!x);
       const rdvJour = (x: Dossier) => x.rdvs.find(r => r.d === d.date);
@@ -93,6 +93,7 @@ async function afficher() {
         <p><b>${d.seance.nom ? "« " + esc(d.seance.nom) + " »" : "Patient non nommé"}</b>${!d.seance.nom ? "" : cands.some(x => nomCorrespond(d.seance.nom!, x.label)) ? " : plusieurs patients possibles" : " : patient non reconnu"}</p>
         <blockquote>${esc(d.seance.contenu.length > 400 ? d.seance.contenu.slice(0, 400) + "…" : d.seance.contenu)}</blockquote>
         ${choix}
+        ${d.seance.nom && !cands.some(x => x.label === nouveauNom(d.seance.nom!)) ? `<div class="vedit creation"><input type="text" data-nouveau="${esc(d.id)}" value="${esc(nouveauNom(d.seance.nom))}" aria-label="Prénom et initiale du nouveau patient" autocomplete="off"><button class="creer" data-creer="${esc(d.id)}">Nouveau patient (bilan à venir), ranger ici</button></div>` : ""}
         <button class="ignorer" data-ignorer="${esc(d.id)}">Ne pas ranger ce passage</button>
       </div>`;
     }).join("")}` : "";
@@ -116,6 +117,9 @@ async function afficher() {
     ${recap}${blocDoutes}${saisie}</div>`;
   brancher(z);
 }
+
+/* nom proposé pour un patient pas encore dans l'appli : prénom et initiale, comme pour les bilans */
+const nouveauNom = (dicte: string) => dicte.trim().includes(" ") ? patientFrom(dicte.trim()) : dicte.trim();
 
 const duree = (ms: number) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
@@ -191,6 +195,28 @@ function brancher(z: HTMLElement) {
     } catch { toast("L'enregistrement a échoué. Réessayez."); }
     afficher();
   });
+  /* patient pas encore dans l'appli (pas de bilan ajouté) : créé « bilan à venir », puis le passage y est rangé */
+  z.querySelectorAll<HTMLButtonElement>("[data-creer]").forEach(b => b.onclick = async () => {
+    const d = doutes.find(x => x.id === b.dataset.creer);
+    const saisi = z.querySelector<HTMLInputElement>(`[data-nouveau="${b.dataset.creer}"]`)?.value.trim() ?? "";
+    if (!d) return;
+    const label = nouveauNom(saisi);
+    if (!/\s\S/.test(label)) { toast("Ajoutez l'initiale du nom de famille (« Véronique H. »)."); return; }
+    b.disabled = true;
+    try {
+      const patient = await db.creerPatient(label);
+      if (!dernier) dernier = { range: [], rdvs: [], texte: "", date: d.date, avant: new Map() };
+      (dernier.crees ??= []).push(patient.id);
+      const r = await moteur.rangerSeance(patient.id, d.date, d.seance);
+      dernier.range.push(r.range); if (r.rdv) dernier.rdvs.push(r.rdv);
+      doutes = doutes.filter(x => x.id !== d.id); await garderDoutes();
+      toast(`${label} créé (bilan à venir), séance rangée.`);
+    } catch (e) {
+      b.disabled = false;
+      toast(/existe déjà/.test(String((e as Error)?.message)) ? "Un patient porte déjà ce nom : touchez-le plus haut, ou ajoutez la 2e lettre du nom (« Véronique Ha. »)." : "L'enregistrement a échoué. Réessayez.");
+    }
+    afficher();
+  });
   z.querySelectorAll<HTMLButtonElement>("[data-ignorer]").forEach(b => b.onclick = async () => {
     if (!await confirmer("Ne pas ranger ce passage ? Il ne sera enregistré dans aucun dossier.", "Ne pas le ranger")) return;
     doutes = doutes.filter(x => x.id !== b.dataset.ignorer); await garderDoutes();
@@ -227,6 +253,10 @@ async function annulerDictee() {
   if (!await confirmer(`Annuler cette dictée ? Ses ${dernier.range.length} séance(s) sont retirées des dossiers et le texte dicté revient pour être corrigé.`, "Annuler la dictée")) return;
   try {
     for (const r of dernier.range) await db.supprimerSeance(r.seanceId);
+    /* les patients créés pendant cette dictée disparaissent aussi, s'ils n'ont rien reçu d'autre depuis */
+    const apres = await db.tout();
+    for (const id of dernier.crees ?? [])
+      if (!apres.bilans.some(b => b.dossierId === id) && !apres.seances.some(s => s.dossierId === id)) await db.supprimerPatient(id);
     const { dossiers } = await db.tout();
     for (const [id, rdvs] of dernier.avant) {
       const d = dossiers.find(x => x.id === id);

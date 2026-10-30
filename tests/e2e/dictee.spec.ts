@@ -134,6 +134,45 @@ test("deux patients au même prénom vus le même jour : l'appli demande lequel"
   await expect(page.locator(".recap")).toContainText("Marc L.");
 });
 
+test("patient pas encore dans l'appli : créé depuis la dictée (bilan à venir), retiré si on annule", async ({ page }) => {
+  await simulerIA(page);
+  await page.goto("/");
+  await page.locator("#file").setInputFiles([{ name: "Bilan - Marc DUPONT.png", mimeType: "image/png", buffer: png }]);
+  await expect(item(page, "Marc D.")).toHaveCount(1);
+  await page.locator("#etatbtn").click();
+  await page.getByText("Secours : clé API").click();
+  await page.getByLabel("Autoriser l'usage d'une clé API").check();
+  await page.getByLabel("Utiliser la clé API").check();
+  await page.locator("#iacle").fill("sk-ant-api03-cle-de-test-pour-les-essais-0000");
+  await page.getByRole("button", { name: "Enregistrer la clé" }).click();
+  await page.locator("#etatclose").click();
+
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await page.locator("#dtexte").fill(DICTEE);
+  await page.getByRole("button", { name: "Ranger la dictée" }).click();
+  // « Élisabeth G. » n'existe pas : le nom dicté est proposé tel quel
+  const elisabeth = page.locator(".doute", { hasText: "« Élisabeth G. »" });
+  await expect(elisabeth).toContainText("patient non reconnu");
+  await expect(elisabeth.locator("[data-nouveau]")).toHaveValue("Élisabeth G.");
+  await elisabeth.getByRole("button", { name: "Nouveau patient (bilan à venir), ranger ici" }).click();
+  await expect(page.locator(".recap")).toContainText("Élisabeth G.");
+  await expect(page.locator(".recap")).toContainText("Rendez-vous repéré pour Élisabeth G. : demain matin");
+  // « Paul » sans initiale : l'appli la demande
+  const paul = page.locator(".doute", { hasText: "« Paul »" });
+  await paul.getByRole("button", { name: "Nouveau patient (bilan à venir), ranger ici" }).click();
+  await expect(page.getByRole("status").last()).toContainText("Ajoutez l'initiale");
+  await paul.locator("[data-nouveau]").fill("Paul Garcia");
+  await paul.getByRole("button", { name: "Nouveau patient (bilan à venir), ranger ici" }).click();
+  await expect(page.locator(".recap")).toContainText("Paul G.");
+  await expect(item(page, "Paul G.")).toContainText("Bilan à venir");
+  await expect(item(page, "Élisabeth G.")).toContainText("1 séance");
+
+  // annuler la dictée : les patients créés pour elle disparaissent
+  await page.getByRole("button", { name: "Annuler cette dictée" }).click();
+  await page.locator("dialog.confirm").getByRole("button", { name: "Annuler la dictée" }).click();
+  await expect(page.locator("#list .item")).toHaveCount(1);
+});
+
 test("dictée enregistrée : la voix part vers Whisper (simulé) et le texte revient dans la dictée", async ({ page, request }) => {
   await page.goto("/");
   await page.locator("#file").setInputFiles([{ name: "Bilan - Marc DUPONT.png", mimeType: "image/png", buffer: png }]);
