@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  brefDe, journee, prochaineJournee,
+  brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
   agesCompatibles, avecRdv, avenirDe, avenirFrom, heureFr, jourLabel, lignesListe, nomAffiche,
   creneauxLibres, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
@@ -245,5 +245,26 @@ describe("Ma journée", () => {
     expect(c[0].faite).toBeNull();
     expect(prochaineJournee(dossiers, "2026-10-30")).toBe("2026-10-30");
     expect(prochaineJournee(dossiers, "2026-10-31")).toBeNull();
+  });
+});
+
+describe("transmissions", () => {
+  const D = (id: string, label: string, rdvs: { d: string; h: string; t?: "bilan" }[]) => ({ id, label, rdvs, homonyme: false, cree: "" });
+  const dossiers = [
+    D("a", "Marc D.", [{ d: "2026-11-05", h: "10:00" }, { d: "2026-11-03", h: "09:00" }, { d: "2026-10-20", h: "09:00" }]),
+    D("b", "Lucie M.", [{ d: "2026-11-02", h: "08:20", t: "bilan" }]),
+    D("c", "Paul G.", [{ d: "2026-11-20", h: "09:00" }])
+  ];
+  it("patients ayant rendez-vous dans la période, dans l'ordre du premier rendez-vous, avec leurs rendez-vous de la période", () => {
+    const s = [{ id: "1", dossierId: "a", date: "2026-10-20", cree: "x", contenu: "renfo. Pour la prochaine séance tester la force" }];
+    const t = transmissions(dossiers, [], s, "2026-11-02", "2026-11-08");
+    expect(t.map(x => x.dossier.label)).toEqual(["Lucie M.", "Marc D."]);
+    expect(t[1].rdvs.map(r => r.d)).toEqual(["2026-11-03", "2026-11-05"]);
+    expect(t[1].avenir?.texte).toBe("Tester la force");
+    expect(t[0].seances).toEqual([]);
+  });
+  it("jours travaillés sans aucun rendez-vous, et semaine prochaine", () => {
+    expect(joursSansRdv(dossiers, HORAIRES_DEFAUT, "2026-11-02", "2026-11-08")).toEqual(["2026-11-04", "2026-11-06"]);
+    expect(semaineProchaine("2026-10-30")).toEqual(["2026-11-02", "2026-11-08"]);
   });
 });

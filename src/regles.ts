@@ -369,3 +369,38 @@ export function prochaineJournee(dossiers: Dossier[], iso: string): string | nul
   const jours = dossiers.flatMap(d => d.rdvs.map(r => r.d)).filter(d => d >= iso && d <= decalerJours(iso, 14)).sort();
   return jours[0] ?? null;
 }
+
+/* ---------- transmissions pour un remplaçant ---------- */
+
+export type Transmission = {
+  dossier: Dossier; age: number | null; bilan: Bilan | null;
+  rdvs: Rdv[];                                       // rendez-vous de la période, dans l'ordre
+  seances: Seance[];                                 // toutes ses séances, de la plus récente à la plus ancienne
+  avenir: ReturnType<typeof avenirDe>;               // ce qui est prévu pour la suite (dernière séance)
+};
+
+/* Les patients qui ont au moins un rendez-vous entre du et au (inclus), dans l'ordre de leur premier rendez-vous. */
+export function transmissions(dossiers: Dossier[], bilans: Bilan[], seances: Seance[], du: string, au: string): Transmission[] {
+  return dossiers
+    .map(d => {
+      const b = trierBilans(bilans.filter(x => x.dossierId === d.id)), s = trierSeances(seances.filter(x => x.dossierId === d.id));
+      const rdvs = d.rdvs.filter(r => r.d >= du && r.d <= au).sort((x, y) => rdvKey(x) < rdvKey(y) ? -1 : 1);
+      return { dossier: d, age: ageDossier(b), bilan: b[0] ?? null, rdvs, seances: s, avenir: avenirDe(s) };
+    })
+    .filter(t => t.rdvs.length)
+    .sort((x, y) => rdvKey(x.rdvs[0]) < rdvKey(y.rdvs[0]) ? -1 : rdvKey(x.rdvs[0]) > rdvKey(y.rdvs[0]) ? 1 : x.dossier.label.localeCompare(y.dossier.label, "fr"));
+}
+
+/* jours travaillés (d'après les horaires) de la période où aucun rendez-vous n'est noté : un oubli possible */
+export function joursSansRdv(dossiers: Dossier[], horaires: Horaires, du: string, au: string): string[] {
+  const pris = new Set(dossiers.flatMap(d => d.rdvs.map(r => r.d)));
+  const out: string[] = [];
+  for (let j = du; j <= au; j = decalerJours(j, 1)) if ((horaires[String(numeroJour(j))] ?? []).length && !pris.has(j)) out.push(j);
+  return out;
+}
+
+/* la période proposée par défaut : la semaine prochaine, du lundi au dimanche */
+export function semaineProchaine(aujourdhui: string): [string, string] {
+  const lundi = decalerJours(semaine(aujourdhui)[0], 7);
+  return [lundi, decalerJours(lundi, 6)];
+}

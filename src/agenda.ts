@@ -6,6 +6,7 @@ import {
   avecRdv, creneauxLibres, decalerJours, dureeRdv, heureFr, hhmm, HORAIRES_DEFAUT, isoDay, minutes, numeroJour,
   patientFrom, rdvsDuJour, semaine, type Dossier, type Horaires, type Plage
 } from "./regles";
+import * as transmissions from "./transmissions";
 import { confirmer, esc, toast } from "./ui";
 
 const PARAM_HORAIRES = "horaires";
@@ -89,6 +90,7 @@ async function afficher() {
         <button id="aauj">Cette semaine</button>
         <button id="asuiv" aria-label="Semaine suivante">›</button>
         <button id="ahor">Mes horaires</button>
+        <button id="atrans">Transmissions</button>
         <button class="primary" id="afermer">Fermer</button>
       </div>
     </div>
@@ -103,6 +105,7 @@ async function afficher() {
   v.querySelector<HTMLElement>("#asuiv")!.onclick = () => { lundi = decalerJours(lundi, 7); afficher(); };
   v.querySelector<HTMLElement>("#aauj")!.onclick = () => { lundi = semaine(isoDay(new Date()))[0]; afficher(); };
   v.querySelector<HTMLElement>("#ahor")!.onclick = editerHoraires;
+  v.querySelector<HTMLElement>("#atrans")!.onclick = () => { fermer(); transmissions.ouvrir(); };
   v.querySelectorAll<HTMLElement>("[data-patient]").forEach(b => b.onclick = () => { const id = b.dataset.patient!; fermer(); ouvrirFiche(id); });
   v.querySelectorAll<HTMLElement>(".libre").forEach(b => b.onclick = () => placer(b.dataset.jour!, +b.dataset.min!, dossiers));
 }
