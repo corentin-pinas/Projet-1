@@ -42,7 +42,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperl
 [hidden]{display:none!important}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
-.app{max-width:1280px;margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:18px;height:100%}
+.app{max-width:1900px;margin:0 auto;padding:18px;display:grid;grid-template-columns:250px 1fr;gap:18px;height:100%}
 @media (max-width:820px){.app{grid-template-columns:1fr;height:auto}}
 .side{display:flex;flex-direction:column;gap:12px;min-height:0}
 h1{font-size:1.45rem;margin:0}
@@ -310,12 +310,15 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 .p-bois{fill:#8A5A3B}
 .p-bois-fonce{fill:#6B4429}
 .p-feuille{fill:var(--accent)}
-/* écran large (tablette en paysage) : le corbeau et son perchoir, plus grands, dans la marge vide à gauche de l'appli */
-@media (min-width:1620px) and (min-height:600px){
-  .side{position:relative}
-  .side h1 .compagnon{position:absolute;--compagnon:150px;right:calc(100% + 30px);top:30px}
-  .side h1 .corbeau .c-bulle{left:auto;right:80%}
-  .side h1{font-size:1.8rem}
+/* tablette : une colonne étroite à gauche, le corbeau en grand en haut, le nom et tous les boutons dessous ;
+   le reste de l'écran est pour « Ma journée » ou la fiche */
+@media (min-width:821px){
+  .side h1{position:relative;flex-direction:column;align-items:center;text-align:center;gap:4px;font-size:1.6rem;padding-top:4px}
+  .side h1 .compagnon{--compagnon:130px}
+  .side h1::after{position:absolute;top:0;right:4px}
+  .nomappli{align-items:center}
+  .side .duo{grid-template-columns:1fr}
+  .basbar{flex-direction:column}
 }
 .corbeau{position:absolute;left:0;top:0;width:100%;aspect-ratio:1;padding:0;min-height:0;border:0;background:none;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .corbeau svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 40%,transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / .25))}
@@ -393,6 +396,7 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .jchoix{margin-top:0}
 .jcartes{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;margin-top:14px}
 @media (max-width:820px){.jcartes{grid-template-columns:1fr}}
+@media (min-width:821px){.jcartes{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}}
 .jdemi{margin:18px 0 0;font-size:1.1rem;color:var(--accent)}
 .jdemi small{font-size:.8rem;font-weight:400;color:var(--soft)}
 .jcarte{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;text-align:left;padding:14px 16px;border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:12px;background:var(--panel);color:var(--ink);font-weight:400;min-height:0;position:relative}
