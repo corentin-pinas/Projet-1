@@ -49,7 +49,13 @@ export async function demarrer() {
   $("#dicteebtn").addEventListener("click", ouvrirDictee);
   $("#agendabtn").addEventListener("click", () => agenda.ouvrir(ouvrirPatient));
   $<HTMLInputElement>("#file").addEventListener("change", ajouter);
-  $("#q").addEventListener("input", () => { renderList(); montrerListe(); });
+  /* Chrome prend la recherche pour un nom d'utilisateur (à cause des mots de passe d'« État de l'appli »)
+     et y colle un identifiant enregistré, ce qui cache les patients : tout ce qu'il y colle tout seul est effacé */
+  const q = $<HTMLInputElement>("#q");
+  const autoRempli = () => [":autofill", ":-webkit-autofill"].some(s => { try { return q.matches(s); } catch { return false; } });
+  const effacerAutoRemplissage = () => { if (q.value && autoRempli()) { q.value = ""; renderList(); } };
+  q.addEventListener("animationstart", e => { if (e.animationName === "autorempli") effacerAutoRemplissage(); });
+  q.addEventListener("input", () => { if (q.value && autoRempli()) { effacerAutoRemplissage(); return; } renderList(); montrerListe(); });
   $("#listebtn").addEventListener("click", () => { listeOuverte = !listeOuverte; try { localStorage.setItem(CLE_LISTE, listeOuverte ? "ouverte" : ""); } catch { /* sans stockage : pour cette fois */ } montrerListe(); });
   montrerListe();
   db.abonner(async () => {

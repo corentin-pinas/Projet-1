@@ -22,7 +22,7 @@
       <button class="dicteebtn outil" id="dicteebtn" aria-pressed="false" aria-label="Dictée groupée" title="Dictée groupée"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></button>
       <button class="dicteebtn outil" id="agendabtn" aria-label="Agenda" title="Agenda"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 17h2M11 17h2" stroke-width="2.2"/></svg></button>
     </div>
-    <input type="search" id="q" placeholder="Rechercher un patient" aria-label="Rechercher un patient">
+    <input type="search" id="q" name="recherche-patient" autocomplete="off" placeholder="Rechercher un patient" aria-label="Rechercher un patient">
     <button class="dicteebtn" id="listebtn" aria-pressed="false" aria-controls="list" aria-label="Liste des patients"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.7 3.2-6 6.5-6s5.9 2.3 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.4c2 .9 3.2 2.9 3.5 5.6"/></svg> Patients</button>
     <div class="panel list" id="list" hidden><div class="note">Chargement…</div></div>
     <button class="syncmini" id="syncmini" hidden><span class="pastille-mini" aria-hidden="true"></span><span id="syncminitxt"></span></button>

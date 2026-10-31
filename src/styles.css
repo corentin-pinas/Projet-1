@@ -455,3 +455,7 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 @keyframes clignote{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){.syncmini.encours .pastille-mini{animation:none}}
 .commande{display:block;font-family:ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;word-break:break-all;user-select:all}
+
+/* repère le remplissage automatique de Chrome dans la recherche (voir app.ts) */
+#q:-webkit-autofill{animation:autorempli 1ms}
+@keyframes autorempli{from{opacity:1}to{opacity:1}}
