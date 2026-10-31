@@ -102,6 +102,32 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   await pc.context().close();
 });
 
+test("dictée à la voix : relié au PC, la voix est transcrite par le Whisper du PC, sans code de l'IA", async ({ browser, request }) => {
+  const page = await appareil(browser);
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await expect(page.locator(".dictee textarea")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Enregistrer ma dictée/ })).toHaveCount(0);   // ni PC ni serveur : pas de bouton
+  await page.locator("#dfermer").click();
+
+  await relier(page);
+  await expect(page.locator(".toast")).toContainText("Relié au PC");
+  await expect(page.locator("#syncvoix")).toContainText("Whisper est prêt sur le PC");
+  await page.locator("#etatclose").click();
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await page.getByRole("button", { name: /Enregistrer ma dictée/ }).click();
+  await expect(page.locator(".voix")).toContainText("Enregistrement");
+  await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
+  await expect(page.locator("#dtexte")).toHaveValue("avec Odile mobilisation passive, transcrit sur le PC");
+  const recu = await (await request.get("http://localhost:4181/dernier")).json();
+  expect(recu).toMatchObject({ pc: true });
+  expect(recu.type).toContain("audio/");
+  expect(recu.taille).toBeGreaterThan(1000);
+  // sans le code du PC, pas de transcription
+  expect((await fetch(PC + "/api/voix/transcrire", { method: "POST", body: "x" })).status).toBe(401);
+  await page.context().close();
+});
+
 test("le PC injoignable : l'appareil le dit et garde tout", async ({ browser }) => {
   const page = await appareil(browser);
   await page.locator("#etatbtn").click();

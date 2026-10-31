@@ -1,6 +1,7 @@
 /* « Partage avec le PC », dans « État de l'appli » : relier l'appareil au PC (adresse + code), voir où en est l'échange.
    Sous les boutons de gauche, une petite ligne rappelle l'état du partage ; la toucher ouvre « État de l'appli ». */
 import * as synchro from "./synchro";
+import { etatPC } from "./transcription";
 import { confirmer, toast } from "./ui";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -14,6 +15,16 @@ const depuis = (iso: string) => {
   const j = Math.round(h / 24);
   return j === 1 ? "hier" : `il y a ${j} jours`;
 };
+
+/* dictée à la voix : Whisper est-il prêt sur le PC ? (vérifié à l'ouverture d'« État de l'appli ») */
+export async function afficherVoix() {
+  const el = $("#syncvoix");
+  if (!synchro.etatSync().relie) { el.textContent = ""; return; }
+  const v = await etatPC();
+  el.textContent = !v ? "" : v.pret ? "Dictée à la voix : Whisper est prêt sur le PC." : v.installee
+    ? "Dictée à la voix : Whisper se prépare sur le PC (téléchargement du modèle, 5 à 15 minutes la première fois)."
+    : "Dictée à la voix : Whisper n'est pas installé sur le PC. Relancez l'installation de Muninn sur le PC (ligne ci-dessous).";
+}
 
 export function afficherPartage() {
   const e = synchro.etatSync();
@@ -39,7 +50,8 @@ export function afficherPartage() {
 export function brancherPartage() {
   synchro.abonner(afficherPartage);
   setInterval(afficherPartage, 60_000);   // « il y a 3 min » avance tout seul
-  $("#syncmini").addEventListener("click", () => { $<HTMLDialogElement>("#etatdlg").showModal(); $("#synctitre").scrollIntoView({ block: "start" }); });
+  $("#etatbtn").addEventListener("click", () => { afficherVoix(); });
+  $("#syncmini").addEventListener("click", () => { afficherVoix(); $<HTMLDialogElement>("#etatdlg").showModal(); $("#synctitre").scrollIntoView({ block: "start" }); });
 
   $("#syncrelier").addEventListener("click", async () => {
     const adresse = $<HTMLInputElement>("#syncadresse").value, code = $<HTMLInputElement>("#synccode").value;
@@ -49,6 +61,7 @@ export function brancherPartage() {
     try {
       await synchro.relier(adresse, code);
       $<HTMLInputElement>("#synccode").value = "";
+      afficherVoix();
       const e = synchro.etatSync();
       toast(e.erreur ? "Relié au PC, mais le premier échange n'a pas abouti : " + e.erreur : "Relié au PC : les données sont échangées.");
     } catch (err) {

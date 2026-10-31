@@ -7,7 +7,8 @@
 //   donnees.json   tous les éléments partagés, chacun avec son numéro de modification (rev) ;
 //   fichiers/      les PDF et photos des bilans (jamais effacés) ;
 //   copies/        une copie de donnees.json par jour (avant le premier changement), gardée 60 jours ;
-//   code.txt       le code à taper sur chaque appareil.
+//   code.txt       le code à taper sur chaque appareil ;
+//   modeles/       le modèle de Whisper (voix.py, transcription de la voix sur le PC).
 import { createServer } from "node:http";
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
@@ -15,7 +16,8 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const VERSION = 1;
+const VERSION = 2;
+const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
 const hote = process.env.MUNINN_HOTE || "127.0.0.1";
@@ -187,6 +189,30 @@ async function api(req, res, url) {
   json(req, res, 404, { erreur: "Introuvable." });
 }
 
+/* ---------- la voix : relayée vers Whisper sur ce même PC (voix.py), sans rien garder ---------- */
+
+async function apiVoix(req, res, chemin) {
+  if (req.method === "GET" && chemin === "/api/voix/etat") {
+    try {
+      const r = await fetch(voix + "/etat", { signal: AbortSignal.timeout(5_000) });
+      const e = await r.json();
+      return json(req, res, 200, { installee: true, pret: !!e.pret, modele: e.modele, appareil: e.appareil });
+    } catch { return json(req, res, 200, { installee: false, pret: false }); }
+  }
+  if (req.method === "POST" && chemin === "/api/voix/transcrire") {
+    const son = await lireOctets(req, 150e6);
+    if (!son.length) return json(req, res, 400, { erreur: "Enregistrement vide." });
+    let r;
+    try {
+      r = await fetch(voix + "/transcrire", { method: "POST", headers: { "Content-Type": String(req.headers["content-type"] || "audio/webm") }, body: son, signal: AbortSignal.timeout(20 * 60_000) });
+    } catch { return json(req, res, 502, { erreur: "Whisper ne répond pas sur le PC. Redémarrez le PC, ou relancez l'installation de Muninn." }); }
+    let corps = {};
+    try { corps = await r.json(); } catch { /* réponse vide */ }
+    return json(req, res, r.ok ? 200 : r.status === 503 ? 503 : 502, r.ok && corps.texte ? { texte: corps.texte } : { erreur: corps.erreur || "La transcription a échoué sur le PC." });
+  }
+  json(req, res, 404, { erreur: "Introuvable." });
+}
+
 await charger();
 code = await lireCode();
 
@@ -199,9 +225,9 @@ const serveur = createServer(async (req, res) => {
     res.end("Muninn est en marche sur ce PC. Ouvrez Muninn sur vos appareils pour vous en servir.\n");
     return;
   }
-  if (!url.pathname.startsWith("/api/sync/")) return json(req, res, 404, { erreur: "Introuvable." });
+  if (!url.pathname.startsWith("/api/sync/") && !url.pathname.startsWith("/api/voix/")) return json(req, res, 404, { erreur: "Introuvable." });
   if (!autorise(req, res)) return;
-  try { await api(req, res, url); }
+  try { await (url.pathname.startsWith("/api/voix/") ? apiVoix(req, res, url.pathname) : api(req, res, url)); }
   catch (e) {
     console.error(e);
     if (!res.headersSent) json(req, res, e?.message === "trop gros" ? 413 : 400, { erreur: e?.message === "trop gros" ? "Trop volumineux." : "Demande illisible." });

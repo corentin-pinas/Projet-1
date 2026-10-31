@@ -21,7 +21,7 @@ export default defineConfig({
     reuseExistingServer: false
   }, {
     // Muninn du PC, pour le partage entre appareils
-    command: "rm -rf .faux-pc && MUNINN_DOSSIER=.faux-pc MUNINN_PORT=4747 MUNINN_CODE=ESSA-IPCM-UNIN node public/pc/muninn-pc.mjs",
+    command: "rm -rf .faux-pc && MUNINN_DOSSIER=.faux-pc MUNINN_PORT=4747 MUNINN_CODE=ESSA-IPCM-UNIN MUNINN_VOIX_URL=http://localhost:4181 node public/pc/muninn-pc.mjs",
     url: "http://127.0.0.1:4747/",
     reuseExistingServer: false
   }, {
