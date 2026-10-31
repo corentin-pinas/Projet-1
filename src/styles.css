@@ -38,6 +38,13 @@
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%}
 html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Bande sous l'heure et la batterie. Sur iPhone, l'appli passe sous la barre d'état (texte blanc) :
+   on la peint nous-mêmes, couleur principale en clair, fond de l'appli en sombre. Ailleurs, la bande a 0 de hauteur. */
+:root{--barre:var(--accent)}
+:root[data-theme="dark"]{--barre:var(--bg)}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--barre:var(--bg)} }
+html::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--barre);z-index:20;pointer-events:none}
+dialog{max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 24px)}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:calc(var(--taille-texte) * var(--echelle,1));line-height:1.5}
 [hidden]{display:none!important}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -219,7 +226,7 @@ button.lien{background:none;border:0;padding:4px 6px;min-height:0;font-size:.85r
 
 /* agenda */
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.agenda{position:fixed;inset:0;z-index:6;background:var(--bg);display:flex;flex-direction:column;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.agenda{position:fixed;inset:0;z-index:6;background:var(--bg);display:flex;flex-direction:column;padding:calc(12px + env(safe-area-inset-top,0px)) 16px calc(12px + env(safe-area-inset-bottom,0px))}
 .abar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .abar h2{margin:0;font-size:1.25rem}
 .alegende{margin:6px 0 8px}
