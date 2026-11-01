@@ -10,6 +10,8 @@ import os
 import sys
 import tempfile
 import threading
+import traceback
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DOSSIER = os.environ.get("MUNINN_DOSSIER") or os.path.join(os.environ.get("ProgramData", "C:\\ProgramData"), "Muninn")
@@ -27,6 +29,21 @@ VOCABULAIRE = ("Séance de kinésithérapie, dictée par le kiné. Épaule, coif
                "infra-épineux, rotation externe, rotation interne, abduction, antépulsion, rétropulsion, test de Jobe, Neer, "
                "Hawkins, Patte, EVA, capsulite, tendinopathie, conflit sous-acromial, proprioception, mobilisation passive, "
                "renforcement, étirements, massage, cervicales, rachis, coude, épicondylite. Pour la prochaine séance.")
+
+JOURNAL = os.path.join(DOSSIER, "voix.log")
+
+
+def noter(texte):
+    """Journal du PC (voix.log, dans le dossier de Muninn) : ce qui s'est passé, pour comprendre une panne. Jamais le texte dicté."""
+    print(texte, flush=True)
+    try:
+        if os.path.exists(JOURNAL) and os.path.getsize(JOURNAL) > 500_000:
+            os.replace(JOURNAL, JOURNAL + ".ancien")
+        with open(JOURNAL, "a", encoding="utf-8") as f:
+            f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S ") + texte + "\n")
+    except OSError:
+        pass
+
 
 etat = {"pret": False, "modele": MODELE, "appareil": None, "erreur": None}
 modele = None
@@ -58,20 +75,27 @@ def charger():
                 modele = WhisperModel(MODELE, device=appareil, compute_type=calcul, download_root=racine,
                                       cpu_threads=max(1, (os.cpu_count() or 4) - 1))
                 etat.update(pret=True, appareil=appareil, erreur=None)
-                print(f"Whisper prêt : {MODELE} sur {appareil}", flush=True)
+                noter(f"Whisper prêt : {MODELE} sur {appareil}")
                 return
             except Exception as e:  # carte graphique absente ou mal installée : on passe au processeur
-                print(f"Whisper sur {appareil} impossible : {e}", flush=True)
+                noter(f"Whisper sur {appareil} impossible : {e!r}")
                 etat["erreur"] = str(e)
     except Exception as e:
         etat["erreur"] = str(e)
-        print(f"Whisper indisponible : {e}", flush=True)
+        noter(f"Whisper indisponible : {e!r}")
 
 
 def transcrire(chemin):
-    segments, _ = modele.transcribe(chemin, language="fr", initial_prompt=VOCABULAIRE, beam_size=5,
-                                    vad_filter=True, condition_on_previous_text=False)
-    return " ".join(s.text.strip() for s in segments).strip()
+    """Le filtre des silences (VAD) dépend d'une bibliothèque de plus (onnxruntime) : s'il échoue, on transcrit sans lui."""
+    def essai(vad):
+        segments, _ = modele.transcribe(chemin, language="fr", initial_prompt=VOCABULAIRE, beam_size=5,
+                                        vad_filter=vad, condition_on_previous_text=False)
+        return " ".join(s.text.strip() for s in segments).strip()
+    try:
+        return essai(True)
+    except Exception as e:
+        noter(f"Transcription avec filtre des silences impossible, nouvel essai sans : {e!r}")
+        return essai(False)
 
 
 class Demandes(BaseHTTPRequestHandler):
@@ -103,12 +127,14 @@ class Demandes(BaseHTTPRequestHandler):
         try:
             fichier.write(son)
             fichier.close()
+            debut = datetime.now()
             with verrou:
                 texte = transcrire(fichier.name)
+            noter(f"Transcription : {len(son)} octets ({type_}), {(datetime.now() - debut).seconds} s, {len(texte)} caractères")
             self.repondre(200, {"texte": texte} if texte else {"erreur": "Rien n'a été compris dans l'enregistrement."})
         except Exception as e:
-            print(f"Transcription impossible : {e}", flush=True)
-            self.repondre(500, {"erreur": "La transcription a échoué sur le PC."})
+            noter(f"Transcription impossible ({len(son)} octets, {type_}) : {e!r}\n{traceback.format_exc()}")
+            self.repondre(500, {"erreur": f"La transcription a échoué sur le PC ({type(e).__name__} : {str(e)[:160]})."})
         finally:
             try:
                 os.remove(fichier.name)   # l'enregistrement ne reste pas sur le PC
@@ -130,5 +156,5 @@ def charger_jusqua_reussir():
 
 if __name__ == "__main__":
     threading.Thread(target=charger_jusqua_reussir, daemon=True).start()
-    print(f"Voix de Muninn sur http://127.0.0.1:{PORT}", flush=True)
+    noter(f"Voix de Muninn sur http://127.0.0.1:{PORT}")
     ThreadingHTTPServer(("127.0.0.1", PORT), Demandes).serve_forever()

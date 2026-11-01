@@ -77,7 +77,8 @@ else {
   if (-not (Test-Path (Join-Path $env_ "Scripts\python.exe"))) { & $py -m venv $env_ }
   $pyVoix = Join-Path $env_ "Scripts\python.exe"
   Write-Host "Installation de Whisper (quelques minutes)..."
-  & $pyVoix -m pip install --quiet --disable-pip-version-check --upgrade "faster-whisper==1.2.1"
+  # av (lecture du son) figé : à partir de la version 19, faster-whisper 1.2.1 ne sait plus ouvrir un enregistrement
+  & $pyVoix -m pip install --quiet --disable-pip-version-check --upgrade "faster-whisper==1.2.1" "av==18.1.0"
   # carte graphique NVIDIA : Whisper va bien plus vite avec elle ; sinon le processeur suffit
   $nvidia = @(Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match "NVIDIA" }).Count -gt 0
   if ($nvidia) { & $pyVoix -m pip install --quiet --disable-pip-version-check "nvidia-cublas-cu12" "nvidia-cudnn-cu12==9.*" }

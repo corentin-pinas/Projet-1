@@ -28,6 +28,7 @@ let voixOk = false;
 let enCours: voix.Enregistrement | null = null;
 let audioEnAttente: Blob | null = null;
 let transcription = false;
+let erreurVoix = "";   // pourquoi la dernière transcription a échoué
 let chrono: ReturnType<typeof setInterval> | undefined;
 
 const aujourdhui = () => isoDay(new Date());
@@ -128,7 +129,7 @@ function blocVoix(): string {
   if (enCours) return `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="vchrono">${duree(Date.now() - enCours.debut)}</span>
     <button class="primary" id="varreter">Arrêter et transcrire</button><button id="vannuler">Annuler</button></div>`;
   if (transcription) return `<div class="wait encours" role="status">Transcription de votre voix…</div>`;
-  if (audioEnAttente) return `<div class="wait">L'enregistrement n'a pas pu être transcrit. Il est gardé.<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
+  if (audioEnAttente) return `<div class="wait">L'enregistrement n'a pas pu être transcrit. Il est gardé.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
   return `<div class="row"><button class="primary voixbtn" id="venreg">🎙️ Enregistrer ma dictée</button></div>`;
 }
 
@@ -141,7 +142,8 @@ async function envoyerVoix() {
     audioEnAttente = null;
     await garderBrouillon(true);
     toast("Dictée transcrite. Relisez-la si besoin, puis touchez « Ranger la dictée ».");
-  } catch (e) { toast(e instanceof ErreurIA ? e.message : "La transcription a échoué."); }
+    erreurVoix = "";
+  } catch (e) { erreurVoix = e instanceof ErreurIA ? e.message : "La transcription a échoué."; toast(erreurVoix); }
   transcription = false; afficher();
 }
 
