@@ -78,6 +78,11 @@ describe("résumé d'un bilan", () => {
 
   it("transmet les corrections déjà faites par le kiné", () => {
     expect(systemeBilan([{ point: "RE2 30°", correction: "RE2 50°" }])).toContain("Lu « RE2 30° » ; correction : « RE2 50° »");
+    const appris = systemeBilan([{ point: "RE2 30°", correction: "RE2 50°" }], ["« RI2 » lu rotation interne à 90°", "« RI2 » lu rotation interne à 90°"]);
+    expect(appris).toContain("Lectures confirmées justes par le kiné :\n- « RI2 » lu rotation interne à 90°");
+    expect(appris.match(/RI2/g)).toHaveLength(1);   // une lecture confirmée deux fois n'apparaît qu'une fois
+    expect(appris).toContain("Ne remets PAS dans a_verifier");
+    expect(systemeBilan([])).not.toContain("Ne remets PAS");
   });
 
   it("nettoie une réponse imparfaite", () => {

@@ -113,7 +113,8 @@ export async function resumer(bilanId: string, manuel: boolean) {
     const b = bilans.find(x => x.id === bilanId);
     if (!b || b.resume) return;
     const corrections: Correction[] = bilans.flatMap(x => x.corrections.map(c => ({ point: c.point, correction: c.correction })));
-    const r = await resumerBilan(ia.secret, await piecesDe(b), corrections, ia.appel);
+    const confirmees = bilans.flatMap(x => x.valides);   // points « à vérifier » validés par « C'est juste »
+    const r = await resumerBilan(ia.secret, await piecesDe(b), corrections, ia.appel, confirmees);
     await db.majBilan(b.id, { resume: r.donnees, resume_erreur: undefined });
     await db.ajouterConso("bilans", r.usage);
     if (manuel) messages("Bilan résumé.");

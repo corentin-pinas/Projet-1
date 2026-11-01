@@ -134,8 +134,10 @@ export const SCHEMA_RESUME = {
 
 export type Correction = { point: string; correction: string };
 
-export function systemeBilan(corrections: Correction[]): string {
-  const deja = corrections.slice(-30);
+/* corrections : ce que le kiné a corrigé ; confirmees : les lectures qu'il a validées (« C'est juste ») sur ses bilans précédents.
+   Les deux servent d'exemples : l'IA lit mieux ses bilans et ne redemande plus ce qu'il a déjà tranché. */
+export function systemeBilan(corrections: Correction[], confirmees: string[] = []): string {
+  const deja = corrections.slice(-60), justes = [...new Set(confirmees)].slice(-60);
   return [
     "Tu aides un kinésithérapeute en cabinet, surtout orienté épaule, à relire ses fiches de bilan initial.",
     "Tu reçois un bilan en images de pages : une trame PDF tapée, remplie à la main au stylet sur tablette. Lis surtout l'écriture manuscrite et les marques (entourages, croix) ; le texte tapé de la trame t'est aussi donné à part.",
@@ -161,10 +163,21 @@ export function systemeBilan(corrections: Correction[]): string {
     "- Pas de date de naissance, seulement l'âge.",
     "",
     "N'invente rien, n'interprète pas au-delà de ce qui est écrit, ne donne pas de conseil de traitement. Style télégraphique, vocabulaire du kiné.",
+    ...(deja.length || justes.length ? [
+      "",
+      "Ce que le kiné a déjà tranché sur ses bilans précédents. Sers-t'en pour lire celui-ci : son écriture, ses abréviations et ses façons de noter reviennent d'un bilan à l'autre.",
+      "Ne remets PAS dans a_verifier une lecture du même genre que celles ci-dessous (même abréviation, même façon d'écrire, même type de marque) : applique directement ce qu'il a confirmé ou corrigé.",
+      "Garde a_verifier pour ce qui reste vraiment incertain dans ce bilan-ci ; s'il n'y a rien, laisse-le vide."
+    ] : []),
     ...(deja.length ? [
       "",
-      "Corrections déjà faites par le kiné sur des résumés précédents (tiens-en compte pour lire ses bilans) :",
+      "Corrections du kiné :",
       ...deja.map(c => `- Lu « ${c.point} » ; correction : « ${c.correction} »`)
+    ] : []),
+    ...(justes.length ? [
+      "",
+      "Lectures confirmées justes par le kiné :",
+      ...justes.map(v => `- ${v}`)
     ] : [])
   ].join("\n");
 }
@@ -204,8 +217,8 @@ export function contenuBilan(pieces: PieceBilan[]): BetaContentBlockParam[] {
   return blocs;
 }
 
-export async function resumerBilan(cle: string, pieces: PieceBilan[], corrections: Correction[], appel: Appel): Promise<Reponse<Resume>> {
-  const r = await appel({ cle, system: systemeBilan(corrections), contenu: contenuBilan(pieces), schema: SCHEMA_RESUME, effort: "high", maxTokens: 16000, niveau: "puissant" });
+export async function resumerBilan(cle: string, pieces: PieceBilan[], corrections: Correction[], appel: Appel, confirmees: string[] = []): Promise<Reponse<Resume>> {
+  const r = await appel({ cle, system: systemeBilan(corrections, confirmees), contenu: contenuBilan(pieces), schema: SCHEMA_RESUME, effort: "high", maxTokens: 16000, niveau: "puissant" });
   const resume = normaliserResume(r.donnees);
   if (!resume.coup_oeil && !resume.sections?.length) throw new ErreurIA("L'IA n'a rien pu lire dans ce bilan.");
   return { donnees: resume, usage: r.usage };
