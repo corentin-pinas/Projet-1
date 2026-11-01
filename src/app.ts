@@ -357,7 +357,7 @@ function wireSeances(D: Dossier) {
     voixSeance.quitter(); formOpen = false; editing = null; renderMain();
   };
   const ta = $<HTMLTextAreaElement>("#stext"), prev = $("#avprev");
-  if (ta) voixSeance.monter($("#svoix"), ta); else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
+  if (ta) voixSeance.monter($("#svoix"), ta, () => $<HTMLButtonElement>("#ssave")?.click()); else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
   if (ta && prev) {
     const show = () => {
       const a = avenirFrom(ta.value);

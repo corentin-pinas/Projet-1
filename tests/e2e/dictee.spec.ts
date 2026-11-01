@@ -173,7 +173,8 @@ test("patient pas encore dans l'appli : créé depuis la dictée (bilan à venir
   await expect(page.locator("#list .item")).toHaveCount(1);
 });
 
-test("dictée enregistrée : la voix part vers Whisper (simulé) et le texte revient dans la dictée", async ({ page, request }) => {
+test("dictée enregistrée : la voix part vers Whisper (simulé), puis la dictée est rangée toute seule", async ({ page, request }) => {
+  const envois = await simulerIA(page);
   await page.goto("/");
   await page.locator("#file").setInputFiles([{ name: "Bilan - Marc DUPONT.png", mimeType: "image/png", buffer: png }]);
   // sans code d'accès au serveur, pas de bouton d'enregistrement
@@ -182,9 +183,16 @@ test("dictée enregistrée : la voix part vers Whisper (simulé) et le texte rev
   await expect(page.getByRole("button", { name: /Enregistrer ma dictée/ })).toHaveCount(0);
   await page.locator("#dfermer").click();
 
+  // Whisper par le serveur (code d'accès) ; l'IA par la clé API (simulée)
   await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill("code-acces-essai-123");
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
+  await page.getByText("Secours : clé API").click();
+  await page.getByLabel("Autoriser l'usage d'une clé API").check();
+  await page.getByLabel("Utiliser la clé API").check();
+  await page.locator("#iacle").fill("sk-ant-api03-cle-de-test-pour-les-essais-0000");
+  await page.getByRole("button", { name: "Enregistrer la clé" }).click();
+  await expect(page.getByRole("status")).toContainText("Clé vérifiée");
   await page.locator("#etatclose").click();
 
   await page.getByRole("button", { name: "Dictée groupée" }).click();
@@ -193,19 +201,16 @@ test("dictée enregistrée : la voix part vers Whisper (simulé) et le texte rev
   await expect(page.locator(".voix")).toContainText("Enregistrement");
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
-  await expect(page.locator("#dtexte")).toHaveValue("début tapé à la main\navec Marc douleur 3 sur 10 renforcement des rotateurs externes");
-  await expect(page.getByRole("button", { name: /Enregistrer ma dictée/ })).toBeVisible();
+
+  // sitôt transcrite, la dictée part au rangement (choix de Corentin : pas de relecture) ; « Annuler cette dictée » reste possible
+  await expect(page.getByRole("button", { name: "Annuler cette dictée" })).toBeVisible({ timeout: 10_000 });
+  const demande = envois.map(e => e.messages[0].content.map(b => b.text ?? "").join("")).find(t => t.includes("dictée groupée")) ?? "";
+  expect(demande).toContain("début tapé à la main\navec Marc douleur 3 sur 10 renforcement des rotateurs externes");
 
   const recu = await (await request.get("http://localhost:4181/dernier")).json();
   expect(recu).toMatchObject({ model: "whisper-1", language: "fr", fichier: "dictee.webm" });
   expect(recu.prompt).toContain("coiffe des rotateurs");
   expect(recu.taille).toBeGreaterThan(1000);
-
-  // le texte transcrit est gardé comme une dictée tapée
-  await page.waitForTimeout(600);
-  await page.reload();
-  await page.getByRole("button", { name: "Dictée groupée" }).click();
-  await expect(page.locator("#dtexte")).toHaveValue(/rotateurs externes$/);
 });
 
 test("la transcription est réservée à qui connaît le code d'accès", async ({ request }) => {

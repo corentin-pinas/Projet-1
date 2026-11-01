@@ -1,5 +1,6 @@
 /* « Enregistrer ma séance » dans le formulaire d'une séance, sur la fiche d'un patient.
-   La voix part au Whisper du PC (comme la dictée groupée) et le texte s'ajoute à la séance, à relire avant d'enregistrer.
+   La voix part au Whisper du PC (comme la dictée groupée), le texte s'ajoute à la séance et la séance est enregistrée aussitôt
+   (choix de Corentin : pas de relecture ; le texte dicté reste consultable et « Modifier » permet de corriger).
    Le bouton n'apparaît que si Whisper est joignable. Un enregistrement qui n'a pas pu être transcrit reste gardé. */
 import { ErreurIA } from "./ia";
 import * as voix from "./transcription";
@@ -12,14 +13,15 @@ let travail = false;                 // transcription en cours
 let erreur = "";
 let chrono: ReturnType<typeof setInterval> | undefined;
 let zone: HTMLElement | null = null, cible: HTMLTextAreaElement | null = null;
+let apres: () => void = () => {};   // enregistre la séance une fois la voix transcrite
 
 const duree = (ms: number) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
 /* un enregistrement ou une transcription en cours : la séance ne doit pas être enregistrée ni fermée sans le dire */
 export const occupe = () => !!enCours || travail;
 
-export function monter(z: HTMLElement, ta: HTMLTextAreaElement) {
-  zone = z; cible = ta;
+export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () => void) {
+  zone = z; cible = ta; apres = enregistrer;
   dessiner();
   voix.disponible().then(ok => { if (ok !== dispo) { dispo = ok; dessiner(); } }).catch(() => {});
 }
@@ -71,13 +73,15 @@ async function transcrire() {
   travail = true; dessiner();
   try {
     const t = await voix.transcrire(son);
+    if (attente === son) attente = null;
+    erreur = "";
+    travail = false; dessiner();
     if (ta && ta.isConnected) {
       ta.value = ta.value.trim() ? ta.value.trimEnd() + "\n" + t : t;
       ta.dispatchEvent(new Event("input"));   // « À venir repéré » se met à jour
-      toast("Séance transcrite. Relisez-la, puis touchez « Enregistrer la séance ».");
+      apres();
     }
-    if (attente === son) attente = null;
-    erreur = "";
+    return;
   } catch (e) { erreur = e instanceof ErreurIA ? e.message : "La transcription a échoué."; toast(erreur); }
   travail = false; dessiner();
 }

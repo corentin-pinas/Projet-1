@@ -141,10 +141,16 @@ async function envoyerVoix() {
     texte = texte.trim() ? texte.trimEnd() + "\n" + t : t;
     audioEnAttente = null;
     await garderBrouillon(true);
-    toast("Dictée transcrite. Relisez-la si besoin, puis touchez « Ranger la dictée ».");
     erreurVoix = "";
-  } catch (e) { erreurVoix = e instanceof ErreurIA ? e.message : "La transcription a échoué."; toast(erreurVoix); }
-  transcription = false; afficher();
+  } catch (e) {
+    erreurVoix = e instanceof ErreurIA ? e.message : "La transcription a échoué."; toast(erreurVoix);
+    transcription = false; afficher();
+    return;
+  }
+  transcription = false;
+  /* choix de Corentin : la dictée transcrite est rangée tout de suite, sans relecture ;
+     le texte dicté reste consultable dans chaque séance et « Annuler cette dictée » défait tout */
+  await lancer();
 }
 
 function brancher(z: HTMLElement) {

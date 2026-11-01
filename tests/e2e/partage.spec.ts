@@ -128,7 +128,7 @@ test("dictée à la voix : relié au PC, la voix est transcrite par le Whisper d
   await page.context().close();
 });
 
-test("sur la fiche d'un patient : « Enregistrer ma séance », transcrite par le PC, puis enregistrée comme une séance tapée", async ({ browser }) => {
+test("sur la fiche d'un patient : « Enregistrer ma séance », transcrite par le PC et enregistrée aussitôt", async ({ browser }) => {
   const page = await appareil(browser);
   await page.locator("#q").fill("Paul Voix");
   await page.getByRole("button", { name: /Créer le patient/ }).click();
@@ -149,11 +149,11 @@ test("sur la fiche d'un patient : « Enregistrer ma séance », transcrite par l
   await expect(page.locator(".toast")).toContainText("Attendez la fin");
   await page.waitForTimeout(1200);
   await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
-  await expect(page.locator("#stext")).toHaveValue("début tapé\navec Odile mobilisation passive, transcrit sur le PC");
-  await expect(page.getByRole("button", { name: /Enregistrer ma séance/ })).toBeVisible();
-  await page.getByRole("button", { name: "Enregistrer la séance" }).click();
+  // la séance s'enregistre toute seule dès que la voix est transcrite (choix de Corentin)
   await expect(page.locator(".seance")).toHaveCount(1);
+  await expect(page.locator(".seance")).toContainText("début tapé");
   await expect(page.locator(".seance")).toContainText("transcrit sur le PC");
+  await expect(page.locator("#stext")).toHaveCount(0);
   await page.context().close();
 });
 
