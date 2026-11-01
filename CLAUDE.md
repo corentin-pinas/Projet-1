@@ -154,6 +154,7 @@ Points ouverts :
 - Écran Paramètres : sauvegardes, gestion ; sauvegarde hebdomadaire.
 - Lecture automatique d'un dossier de bilans.
 - Conserver le marquage des douleurs sur le schéma corporel (page 1 du bilan).
+- **Suivi de l'évolution et alertes** (1er novembre 2026, grande idée pour plus tard) : repérer les patients qui évoluent favorablement (on continue le protocole) et ceux qui stagnent ou se dégradent, avec une alerte pour Corentin (« rotation externe travaillée, pas de progrès ; amplitude travaillée, pas de progrès ») qui l'invite à changer d'angle, à demander une prescription ou de nouveaux examens. Prérequis : des repères notés de façon comparable d'une séance à l'autre (EVA, amplitudes, tests).
 - **Transmissions** (7 octobre 2026) : un bouton qui, pour une période choisie (une semaine, quinze jours…), résume tous les patients ayant rendez-vous dans la période, pour un remplaçant : pathologie, état à l'arrivée, traitement en cours. Sortie : un **PDF** que Corentin envoie par message (le remplaçant l'imprime s'il veut).
 - **Agenda** (7 octobre 2026) : une vue d'ensemble de l'emploi du temps dans l'appli (Maiia et Doctolib ne sont pas reliés), pour repérer les trous anormaux et ajouter un patient dans un créneau. Sert à fiabiliser les transmissions sur 15 jours ; de petits écarts ensuite sont acceptables.
 
