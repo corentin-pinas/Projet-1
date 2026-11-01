@@ -10,6 +10,7 @@ import * as agenda from "./agenda";
 import * as dictee from "./dictee";
 import * as journee from "./journee";
 import * as moteur from "./moteur";
+import * as voixSeance from "./voix-seance";
 import { confirmer, esc, toast } from "./ui";
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -131,7 +132,7 @@ function renderList() {
 /* ---------- dictée groupée ---------- */
 
 function ouvrirDictee() {
-  dicteeVue = true; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
+  voixSeance.quitter(); dicteeVue = true; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
   $("#dicteebtn").setAttribute("aria-pressed", "true");
   dictee.ouvrir($("#main"), () => { dicteeVue = false; $("#dicteebtn").setAttribute("aria-pressed", "false"); renderList(); renderMain(); });
   if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
@@ -147,7 +148,7 @@ function quitterDictee() {
 export function renderMain() {
   if (dicteeVue) return;   // la dictée groupée gère son propre affichage
   const D = donnees.dossiers.find(d => d.id === selD);
-  if (!D) { journee.afficher($("#main"), donnees, ouvrirPatient); return; }
+  if (!D) { voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient); return; }
   const bilans = bilansDe(D), age = ageDe(D);
   const b = bilans.find(x => x.id === selB) ?? bilans[0] as Bilan | undefined, r = b?.resume;
   const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b ? b.fichier : "Bilan à venir"])].filter(Boolean).join(", ");
@@ -330,6 +331,7 @@ function seancesHtml(D: Dossier) {
   const ed = editing ? donnees.seances.find(s => s.id === editing) : undefined;
   const form = (formOpen || ed) ? `<div class="sform">
       <label for="sdate">Date de la séance</label><input type="date" id="sdate" value="${esc(ed ? ed.date : aujourdhui())}">
+      <div id="svoix"></div>
       <label for="stext">Contenu de la séance</label><textarea id="stext" placeholder="Touchez le micro de votre clavier et dictez en vrac : ce que dit le patient, ce qui a été fait, les exercices donnés, puis « Pour la prochaine séance… ». La mise au propre se fait à l'enregistrement.">${esc(ed ? texteDe(ed) : "")}</textarea>
       <div class="note" id="avprev"></div>
       <div class="row"><button class="primary" id="ssave">${ed ? "Enregistrer les modifications" : "Enregistrer la séance"}</button><button id="scancel">Annuler</button></div></div>` : "";
@@ -350,8 +352,12 @@ function wireSeances(D: Dossier) {
   };
   const add = $("#sadd"); if (add) add.onclick = ouvrir;
   const dict = $("#dict"); if (dict) dict.onclick = ouvrir;
-  const cancel = $("#scancel"); if (cancel) cancel.onclick = () => { formOpen = false; editing = null; renderMain(); };
+  const cancel = $("#scancel"); if (cancel) cancel.onclick = async () => {
+    if (voixSeance.occupe() && !await confirmer("Un enregistrement de votre voix est en cours. Fermer quand même ? Il sera perdu.", "Fermer")) return;
+    voixSeance.quitter(); formOpen = false; editing = null; renderMain();
+  };
   const ta = $<HTMLTextAreaElement>("#stext"), prev = $("#avprev");
+  if (ta) voixSeance.monter($("#svoix"), ta); else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
   if (ta && prev) {
     const show = () => {
       const a = avenirFrom(ta.value);
@@ -363,6 +369,7 @@ function wireSeances(D: Dossier) {
   if (save) save.onclick = async () => {
     const date = $<HTMLInputElement>("#sdate").value, contenu = $<HTMLTextAreaElement>("#stext").value.trim();
     if (!date) { toast("Indiquez la date de la séance."); return; }
+    if (voixSeance.occupe()) { toast("Attendez la fin de l'enregistrement et de sa transcription."); return; }
     if (!contenu) { toast("Écrivez le contenu de la séance."); $("#stext").focus(); return; }
     save.disabled = true;
     const avant = editing ? donnees.seances.find(s => s.id === editing) : undefined;
@@ -384,6 +391,7 @@ function wireSeances(D: Dossier) {
         const s = await enregistrerSansBouger(() => db.ajouterSeance(D.id, date, contenu));
         moteur.analyser(s, false, false);
       }
+      voixSeance.quitter();
       toast(avant ? "Séance modifiée." : "Séance enregistrée.");
     } catch { save.disabled = false; toast("L'enregistrement a échoué. Réessayez."); }
   };
@@ -391,7 +399,7 @@ function wireSeances(D: Dossier) {
     const s = donnees.seances.find(x => x.id === el.dataset.clean); if (s) moteur.analyser(s, true, false);
   });
   $("#main").querySelectorAll<HTMLElement>("[data-edit]").forEach(el => el.onclick = () => {
-    editing = el.dataset.edit!; formOpen = false; rdvOpen = false; renderMain(); $("#stext").focus();
+    voixSeance.quitter(); editing = el.dataset.edit!; formOpen = false; rdvOpen = false; renderMain(); $("#stext").focus();
   });
   $("#main").querySelectorAll<HTMLElement>("[data-sdel]").forEach(el => el.onclick = async () => {
     if (!await confirmer("Supprimer cette séance ? Cette action est définitive.", "Supprimer la séance")) return;

@@ -128,6 +128,35 @@ test("dictée à la voix : relié au PC, la voix est transcrite par le Whisper d
   await page.context().close();
 });
 
+test("sur la fiche d'un patient : « Enregistrer ma séance », transcrite par le PC, puis enregistrée comme une séance tapée", async ({ browser }) => {
+  const page = await appareil(browser);
+  await page.locator("#q").fill("Paul Voix");
+  await page.getByRole("button", { name: /Créer le patient/ }).click();
+  await page.getByRole("button", { name: "Dicter la séance" }).click();
+  await expect(page.locator("#stext")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Enregistrer ma séance/ })).toHaveCount(0);   // pas relié au PC : pas de bouton
+  await page.getByRole("button", { name: "Annuler" }).click();
+
+  await relier(page);
+  await expect(page.locator(".toast")).toContainText("Relié au PC");
+  await page.locator("#etatclose").click();
+  await page.getByRole("button", { name: "Dicter la séance" }).click();
+  await page.locator("#stext").fill("début tapé");
+  await page.getByRole("button", { name: /Enregistrer ma séance/ }).click();
+  await expect(page.locator("#svoix .voix")).toContainText("Enregistrement");
+  // pas d'enregistrement de la séance pendant que le micro tourne
+  await page.getByRole("button", { name: "Enregistrer la séance" }).click();
+  await expect(page.locator(".toast")).toContainText("Attendez la fin");
+  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
+  await expect(page.locator("#stext")).toHaveValue("début tapé\navec Odile mobilisation passive, transcrit sur le PC");
+  await expect(page.getByRole("button", { name: /Enregistrer ma séance/ })).toBeVisible();
+  await page.getByRole("button", { name: "Enregistrer la séance" }).click();
+  await expect(page.locator(".seance")).toHaveCount(1);
+  await expect(page.locator(".seance")).toContainText("transcrit sur le PC");
+  await page.context().close();
+});
+
 test("le PC injoignable : l'appareil le dit et garde tout", async ({ browser }) => {
   const page = await appareil(browser);
   await page.locator("#etatbtn").click();
