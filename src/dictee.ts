@@ -126,7 +126,7 @@ const duree = (ms: number) => { const s = Math.floor(ms / 1000); return Math.flo
 
 function blocVoix(): string {
   if (!voixOk && !enCours && !audioEnAttente) return "";
-  if (enCours) return `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="vchrono">${duree(Date.now() - enCours.debut)}</span>
+  if (enCours) return `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="vchrono">${voix.chrono(enCours, duree)}</span>
     <button class="primary" id="varreter">Arrêter et transcrire</button><button id="vannuler">Annuler</button></div>`;
   if (transcription) return `<div class="wait encours" role="status">Transcription de votre voix…</div>`;
   if (audioEnAttente) return `<div class="wait">L'enregistrement n'a pas pu être transcrit. Il est gardé.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
@@ -157,7 +157,7 @@ function brancher(z: HTMLElement) {
   const venreg = z.querySelector<HTMLElement>("#venreg");
   if (venreg) venreg.onclick = async () => {
     try { enCours = await voix.enregistrer(); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
-    chrono = setInterval(() => { const c = document.querySelector("#vchrono"); if (c && enCours) c.textContent = duree(Date.now() - enCours.debut); }, 1000);
+    chrono = setInterval(() => { const c = document.querySelector("#vchrono"); if (c && enCours) c.textContent = voix.chrono(enCours, duree); }, 1000);
     afficher();
   };
   const varreter = z.querySelector<HTMLElement>("#varreter");

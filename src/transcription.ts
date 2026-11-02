@@ -35,7 +35,12 @@ export async function disponible(): Promise<boolean> {
   } catch { return false; }
 }
 
-export type Enregistrement = { arreter: () => Promise<Blob>; annuler: () => void; debut: number };
+export type Enregistrement = { arreter: () => Promise<Blob>; annuler: () => void; debut: number; coupe: () => boolean };
+
+/* texte du chrono : la durée, ou l'avis que la tablette a coupé le micro (ce qui a été dit avant reste gardé) */
+export function chrono(e: Enregistrement, duree: (ms: number) => string) {
+  return e.coupe() ? "coupé par la tablette (écran éteint ?). Touchez « Arrêter et transcrire » : le début est gardé." : duree(Date.now() - e.debut);
+}
 
 /* démarre le micro ; arreter() rend l'enregistrement, qui reste dans la tablette tant qu'il n'est pas transcrit */
 export async function enregistrer(): Promise<Enregistrement> {
@@ -46,15 +51,24 @@ export async function enregistrer(): Promise<Enregistrement> {
   const rec = new MediaRecorder(flux, type ? { mimeType: type } : undefined);
   const morceaux: Blob[] = [];
   rec.ondataavailable = e => { if (e.data.size) morceaux.push(e.data); };
+  /* la tablette peut couper le micro d'elle-même (écran éteint, appli quittée, autre appli qui prend le micro) :
+     l'enregistrement s'arrête alors seul. Ce qui a été enregistré jusque-là est gardé et « Arrêter » le rend aussitôt,
+     au lieu d'attendre un arrêt qui a déjà eu lieu. */
+  let fini: (() => void) | null = null, arrete = false;
+  rec.onstop = () => { arrete = true; fini?.(); };
   rec.start(1000);
   const couper = () => flux.getTracks().forEach(t => t.stop());
+  const son = () => new Blob(morceaux, { type: rec.mimeType || "audio/webm" });
   return {
     debut: Date.now(),
+    coupe: () => arrete || rec.state === "inactive",
     arreter: () => new Promise(ok => {
-      rec.onstop = () => { couper(); ok(new Blob(morceaux, { type: rec.mimeType || "audio/webm" })); };
-      rec.stop();
+      const rendre = () => { couper(); ok(son()); };
+      if (arrete || rec.state === "inactive") { setTimeout(rendre, 50); return; }   // dernier morceau éventuel
+      fini = rendre;
+      try { rec.stop(); } catch { rendre(); }
     }),
-    annuler: () => { rec.onstop = couper; rec.stop(); }
+    annuler: () => { fini = null; couper(); try { if (rec.state !== "inactive") rec.stop(); } catch { /* déjà arrêté */ } }
   };
 }
 

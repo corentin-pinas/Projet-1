@@ -36,7 +36,7 @@ export function quitter() {
 function dessiner() {
   if (!zone) return;
   zone.innerHTML = enCours
-    ? `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="svchrono">${duree(Date.now() - enCours.debut)}</span>
+    ? `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="svchrono">${voix.chrono(enCours, duree)}</span>
         <button class="primary" id="svarreter">Arrêter et transcrire</button><button id="svannuler">Annuler</button></div>`
     : travail ? `<div class="wait encours" role="status">Transcription de votre voix sur le PC…</div>`
     : attente ? `<div class="wait">L'enregistrement n'a pas pu être transcrit. Il est gardé.${erreur ? `<br><small>${esc(erreur)}</small>` : ""}
@@ -49,7 +49,7 @@ function brancher(z: HTMLElement) {
   const enreg = z.querySelector<HTMLElement>("#svenreg");
   if (enreg) enreg.onclick = async () => {
     try { enCours = await voix.enregistrer(); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
-    chrono = setInterval(() => { const c = document.querySelector("#svchrono"); if (c && enCours) c.textContent = duree(Date.now() - enCours.debut); }, 1000);
+    chrono = setInterval(() => { const c = document.querySelector("#svchrono"); if (c && enCours) c.textContent = voix.chrono(enCours, duree); }, 1000);
     dessiner();
   };
   const arreter = z.querySelector<HTMLElement>("#svarreter");

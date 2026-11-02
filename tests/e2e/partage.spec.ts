@@ -157,6 +157,31 @@ test("sur la fiche d'un patient : « Enregistrer ma séance », transcrite par l
   await page.context().close();
 });
 
+test("micro coupé par la tablette pendant l'enregistrement (écran éteint, appli quittée) : « Arrêter et transcrire » marche quand même", async ({ browser }) => {
+  const page = await appareil(browser);
+  // garde les flux du micro pour pouvoir les couper comme le fait Android
+  await page.addInitScript(() => {
+    const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async c => { const f = await orig(c); ((window as any).flux ||= []).push(f); return f; };
+  });
+  await page.reload();
+  await page.locator("#q").fill("Paula Coupure");
+  await page.getByRole("button", { name: /Créer le patient/ }).click();
+  await relier(page);
+  await expect(page.locator(".toast")).toContainText("Relié au PC");
+  await page.locator("#etatclose").click();
+  await page.getByRole("button", { name: "Dicter la séance" }).click();
+  await page.getByRole("button", { name: /Enregistrer ma séance/ }).click();
+  await expect(page.locator("#svoix .voix")).toContainText("Enregistrement");
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => (window as any).flux.forEach((f: MediaStream) => f.getTracks().forEach(t => t.stop())));
+  await expect(page.locator("#svchrono")).toContainText("coupé par la tablette");
+  await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
+  await expect(page.locator(".seance")).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator(".seance")).toContainText("transcrit sur le PC");
+  await page.context().close();
+});
+
 test("le PC injoignable : l'appareil le dit et garde tout", async ({ browser }) => {
   const page = await appareil(browser);
   await page.locator("#etatbtn").click();
