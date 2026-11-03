@@ -8,15 +8,16 @@
 //   fichiers/      les PDF et photos des bilans (jamais effacés) ;
 //   copies/        une copie de donnees.json par jour (avant le premier changement), gardée 60 jours ;
 //   code.txt       le code à taper sur chaque appareil ;
+//   journal.log    ce qui s'est passé d'inhabituel (fichier abîmé, base reprise d'une copie), jamais le contenu des dossiers ;
 //   modeles/       le modèle de Whisper (voix.py, transcription de la voix sur le PC).
 import { createServer } from "node:http";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const VERSION = 2;
+const VERSION = 3;
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -25,6 +26,8 @@ const COPIES_GARDEES = 60;
 const PAR_PAGE = 500;
 
 const fDonnees = join(dossier, "donnees.json"), dFichiers = join(dossier, "fichiers"), dCopies = join(dossier, "copies"), fCode = join(dossier, "code.txt");
+const fJournal = join(dossier, "journal.log");
+const COPIE = /^\d{4}-\d{2}-\d{2}\.json$/;
 
 /* ---------- les données ---------- */
 
@@ -33,15 +36,58 @@ let base = { rev: 0, elements: {} };
 let file = Promise.resolve();          // les écritures passent une par une
 const enFile = fn => (file = file.then(fn, fn));
 
+async function noter(texte) {
+  console.log(texte);
+  try { await appendFile(fJournal, new Date().toISOString() + " " + texte + "\n"); } catch { /* journal impossible : on continue */ }
+}
+
+/* une base lisible et bien formée, sinon null */
+async function lire(f) {
+  try {
+    const b = JSON.parse(await readFile(f, "utf8"));
+    if (b && typeof b.rev === "number" && b.elements && typeof b.elements === "object") return b;
+  } catch { /* abîmé */ }
+  return null;
+}
+
+/* Au démarrage. Une coupure de courant pendant une écriture peut laisser donnees.json abîmé : Muninn ne doit pas
+   rester arrêté. Ordre de secours : donnees.json, puis donnees.json.tmp (coupure entre l'écriture et le renommage),
+   puis la plus récente copie lisible de copies/. Le fichier abîmé est mis de côté, jamais effacé. */
 async function charger() {
   await mkdir(dFichiers, { recursive: true });
   await mkdir(dCopies, { recursive: true });
-  if (existsSync(fDonnees)) base = JSON.parse(await readFile(fDonnees, "utf8"));
-  else if (existsSync(fDonnees + ".tmp")) base = JSON.parse(await readFile(fDonnees + ".tmp", "utf8"));   // coupure pendant un enregistrement
+  let abime = false;
+  if (existsSync(fDonnees)) {
+    const b = await lire(fDonnees);
+    if (b) { base = b; return; }
+    const cote = fDonnees + ".abime-" + new Date().toISOString().replace(/[:.]/g, "-");
+    await rename(fDonnees, cote);
+    abime = true;
+    await noter(`donnees.json illisible : mis de côté sous ${cote.slice(dossier.length + 1)}.`);
+  }
+  if (existsSync(fDonnees + ".tmp")) {
+    const b = await lire(fDonnees + ".tmp");
+    if (b) { base = b; await noter("Base reprise depuis donnees.json.tmp (dernière écriture interrompue)."); await enregistrer(); return; }
+    await noter("donnees.json.tmp illisible : ignoré.");
+    abime = true;
+  }
+  const copies = (await readdir(dCopies)).filter(n => COPIE.test(n)).sort().reverse();
+  for (const n of copies) {
+    const b = await lire(join(dCopies, n));
+    if (b) { base = b; await noter(`Base reprise depuis la copie ${n} : les changements faits depuis sont à renvoyer par les appareils.`); await enregistrer(); return; }
+    await noter(`Copie ${n} illisible : ignorée.`);
+  }
+  if (abime || copies.length) await noter("Aucune copie lisible : démarrage sur une base vide.");
+}
+
+/* écrit le fichier jusque sur le disque avant de rendre la main (sinon une coupure peut le laisser vide) */
+async function ecrireSur(f, texte) {
+  const h = await open(f, "w");
+  try { await h.writeFile(texte); await h.sync(); } finally { await h.close(); }
 }
 
 async function enregistrer() {
-  await writeFile(fDonnees + ".tmp", JSON.stringify(base));
+  await ecrireSur(fDonnees + ".tmp", JSON.stringify(base));
   await rename(fDonnees + ".tmp", fDonnees);
 }
 
@@ -49,8 +95,8 @@ async function enregistrer() {
 async function copieDuJour(texte) {
   const jour = new Date().toISOString().slice(0, 10), f = join(dCopies, jour + ".json");
   if (existsSync(f)) return;
-  await writeFile(f, texte);
-  const anciennes = (await readdir(dCopies)).filter(n => /^\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().reverse().slice(COPIES_GARDEES);
+  await ecrireSur(f, texte);
+  const anciennes = (await readdir(dCopies)).filter(n => COPIE.test(n)).sort().reverse().slice(COPIES_GARDEES);
   for (const n of anciennes) await rm(join(dCopies, n), { force: true });
 }
 
