@@ -1,6 +1,6 @@
 # CLAUDE.md — Appli de suivi patients (kinésithérapie)
 
-> **Point de reprise le plus récent : `REPRISE.md`** (état au 29 octobre 2026, version 1.2.1 en production, décisions, prochaines étapes).
+> **Point de reprise le plus récent : `REPRISE.md`** (état au 3 novembre 2026, version 1.2.1 en production, audit du code prévu, décisions, prochaines étapes).
 
 Contexte repris du travail fait dans claude.ai (projet « Gestion Patient assistée »), le 2 octobre 2026.
 Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essai : `reference/bilans-seances-essai.html`.
@@ -10,9 +10,9 @@ Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essa
 - Corentin, kinésithérapeute en cabinet à Toulouse. Prise en charge surtout orientée épaule.
 - **Ne sait pas coder et ne relit pas la technique.** Il laisse les choix d'architecture à Claude et veut être guidé de bout en bout.
 - Il dicte ses messages à la voix : attendre des phrases orales, parfois approximatives.
-- Matériel : tablette Android au cabinet (navigateur Brave, usage en paysage), téléphone en complément.
+- Matériel : tablette Android au cabinet (Samsung, usage en paysage, appli installée avec Chrome), iPhone 15 Pro Max, et depuis le 30 octobre 2026 un PC Windows 11 Famille chez lui (il y utilise aussi Muninn ; il fait tourner le partage et Whisper). Tailscale sur les trois.
 - **Brave refuse la protection du stockage** (`navigator.storage.persist()` renvoie faux, constaté le 2 octobre 2026 sur sa tablette). L'appli doit être installée avec Chrome, qui l'accorde aux applis installées. Corentin peut continuer à naviguer avec Brave.
-- **Pas d'ordinateur** : il fait tout sur la tablette et le téléphone, y compris les réglages (GitHub, Railway, compte IA). Toutes les marches à suivre doivent être faisables sur tablette Android. Passer sur ordinateur n'est envisagé que si un projet l'impose vraiment.
+- Les marches à suivre restent pensées pour la tablette (GitHub, Railway, compte IA) ; le PC sert pour ce qui doit tourner dessus (installation par `irm …/pc/installer.ps1 | iex` dans « Terminal (administrateur) »).
 - Agenda du cabinet : Maiia. Aucune connexion possible avec l'appli pour l'instant.
 - Abonnement Claude : **Pro** (quota partagé avec son propre usage de Claude). Volume : 3 à 8 nouveaux bilans et 80 à 110 séances par semaine.
 - Bilans : une trame PDF tapée qu'il remplit au stylet sur la tablette. L'IA reçoit chaque page dessinée en image sur la tablette (écriture au stylet comprise, comme dans la visionneuse) et le texte tapé de la trame à part (`pdfPourIA` dans `src/moteur.ts`, 12 pages au plus). Si l'écriture est visible dans « Voir le bilan complet », l'IA la voit aussi.
@@ -130,7 +130,7 @@ Points ouverts :
 - **Dictée groupée** (étape 4) : plusieurs patients dictés d'un bloc ; rangement automatique quand le patient est le seul de ce nom parmi les rendez-vous du jour, validation seulement en cas de doute ; récapitulatif avec « Annuler ». Nom complet dicté réduit automatiquement à l'initiale.
 - **IA par l'abonnement Claude** (7 octobre 2026) : demandé par Corentin, mode principal ; la clé API devient un secours verrouillé.
 - **Niveaux d'IA** (7 octobre 2026, choix de Corentin) : la plus puissante pour les bilans et la dictée groupée (une ou deux fois par jour : midi et/ou soir), une plus légère pour les séances. `MODELES` dans `src/ia.ts` : puissant = `claude-opus-5-5` / `opus`, léger = `claude-sonnet-5-5` / `sonnet` (clé API / abonnement).
-- **Voix** : micro du clavier pour commencer ; transcription audio par un service dédié envisagée plus tard (Corentin prévoit d'autres applis à commande vocale).
+- **Voix** : micro du clavier au début ; depuis 1.1 (1er novembre 2026), Whisper sur le PC de Corentin (la voix ne sort pas de chez lui).
 
 ## Décisions prises et pistes écartées
 
@@ -192,4 +192,6 @@ Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; «
 - Accueil (0.12.0) : liste de tous les patients cachée (`#listebtn`, `localStorage` « liste-patients » ; la recherche l'affiche) ; « Ma journée » sur la demi-journée en cours (`vueParDefaut` dans `src/journee.ts`). Les tests d'écran qui passent par la liste l'ouvrent par `addInitScript`. Mise en page (0.12.1) : au-delà de 820 px, colonne de gauche de 250 px (corbeau, nom, boutons empilés), appli sur toute la largeur (1900 px au plus), « Ma journée » en colonnes de 340 px minimum (3 en paysage sur la tablette).
 - Partage avec le PC (1.0.0, PC Windows Famille chez Corentin, Tailscale sur tous les appareils) : `public/pc/muninn-pc.mjs` (garde la base, ne répond qu'au code du PC, joignable seulement par Tailscale), `public/pc/installer.ps1`, `src/synchro.ts`, `src/fusion.ts`, `src/partage.ts` ; base IndexedDB version 4. Chaque appareil garde tout et marche seul. Détails et ordre de mise en route dans `REPRISE.md`.
 - Dictée à la voix (1.1 à 1.2) : Whisper (faster-whisper, `public/pc/voix.py`) sur le PC, relayé par `muninn-pc.mjs` (`/api/voix/*`) ; dans l'appli `src/transcription.ts` (PC d'abord, Railway en secours), bouton « Enregistrer ma dictée » (dictée groupée) et « Enregistrer ma séance » (`src/voix-seance.ts`, formulaire d'une séance). Sitôt transcrite, la séance s'enregistre et la dictée se range seule (choix de Corentin, pas de relecture). `av==18.1.0` figé dans l'installateur (av 19 casse faster-whisper 1.2.1).
-- Avant chaque envoi : `npm test` et `npm run test:e2e` doivent passer.
+- Bug corrigé en 1.2.1 : quand Android coupe le micro (écran éteint), l'enregistreur s'arrête seul ; `enregistrer()` le gère (`coupe()`, `chrono()`).
+- Audit de fond prévu (3 novembre 2026) : lecture seule dans une nouvelle conversation, rapport `AUDIT.md`, puis nettoyage par petites étapes sans changement visible. Pas de réécriture complète.
+- Avant chaque envoi : `npm test` (120 tests) et `npm run test:e2e` (53 tests) doivent passer.

@@ -1,8 +1,8 @@
 # Reprise du projet — appli de suivi patients (kiné)
 
-Point de reprise du **29 octobre 2026** (mis à jour le soir : version 0.9.4 en production), à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
+Point de reprise du **3 novembre 2026** (version **1.2.1** en production depuis le 2 novembre), à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
 À lire ensuite : `CLAUDE.md` (contexte détaillé, règles de travail, technique ; certaines parties décrivent encore la version d'essai claude.ai) et `PLAN.md` (plan d'origine).
-Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb — pas mise à jour depuis plusieurs étapes.
+Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb — à jour au 2 novembre (état, schéma des appareils, « Sous le capot » : architecture expliquée, frise, idées, leçons). La tenir à jour à chaque étape, toujours à la même adresse (`edits` sur le même fichier).
 
 ## 1. Qui et comment travailler
 
@@ -24,21 +24,23 @@ Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb �
   4. présenter à Corentin (captures) et **attendre son « oui »** ;
   5. relancer les tests, puis avancer la production en avance rapide : `git push origin HEAD:claude/patient-management-planning-xg8y6k` (vérifier d'abord `git merge-base --is-ancestor`).
 - Pas de pull request sans demande.
-- **Les deux branches sont au même commit** au 29 octobre au soir (version **1.0.0** en production le 31 octobre : partage avec le PC ; avant, 0.12.3 le 30 octobre : création de patient depuis la dictée, transmissions, agenda en demi-journées, accueil épuré en colonne, icônes), à part ce fichier.
+- **Production = version 1.2.1** (commit `8d009ae`, 2 novembre). La branche de travail a en plus des commits de notes (CLAUDE.md, REPRISE.md) : normal, ils partent avec la prochaine mise en production.
 
-## 3. Ce que fait l'appli (version 0.9.4, en production)
+## 3. Ce que fait l'appli (version 1.2.1, en production)
+
+Ajouts depuis 0.9.4, détaillés au § 4 : « Ma journée » à l'accueil, transmissions en PDF, agenda en demi-journées, accueil en colonne avec icônes, **partage entre tablette, iPhone et PC** (1.0), **dictée à la voix par Whisper sur le PC** (1.1 : « Enregistrer ma dictée » ; 1.2 : « Enregistrer ma séance » sur la fiche ; rangement sans relecture), lecture des bilans qui apprend des « C'est juste » (1.1.1).
 
 PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedDB), serveur Railway sans aucune donnée patient.
 
 - **Liste** à gauche : patients classés par rendez-vous (Aujourd'hui, Demain, jours suivants, sans rendez-vous), recherche ; « Bilan à venir » pour les patients sans bilan ; créer un patient depuis la recherche (« Créer le patient « Paul G. » (bilan à venir) »).
 - **Bilans** (PDF ou photos) : nom tiré du fichier (prénom composé gardé : « Marie-Laure D. » ; particules « Le Goff » → « L. ») ; **résumé automatique par l'IA** (coup d'œil, chiffres, rubriques, points « à vérifier ») ; **une correction « à vérifier » est reportée dans le résumé** (IA légère) ; visionneuse ; « Ajouter le bilan » sur la fiche d'un patient sans bilan ; « Modifier le nom ».
 - **Séances** : dictées (micro du clavier), mises au propre par l'IA en rubriques (État du patient, Fait en séance, À faire à la maison, Autres notes, À venir), « À venir » en tête de fiche, rendez-vous dicté placé tout seul.
-- **Dictée groupée** (🎙️) : toute la matinée d'un bloc, une seule demande à l'IA la plus puissante, rangement automatique par patient, question seulement en cas de doute, « Annuler cette dictée ». Date Aujourd'hui / Hier / autre. Bouton « Enregistrer ma dictée » **prêt pour Whisper** mais caché tant que Whisper n'est pas branché.
+- **Dictée groupée** (🎙️) : toute la matinée d'un bloc, une seule demande à l'IA la plus puissante, rangement automatique par patient, question seulement en cas de doute, « Annuler cette dictée ». Date Aujourd'hui / Hier / autre. Bouton « Enregistrer ma dictée » : la voix est transcrite par Whisper sur le PC, puis la dictée se range seule.
 - **Agenda** (📅) : semaine en colonnes, séance 20 min, bilan 40 min, créneaux libres en orange d'après « Mes horaires », toucher un patient → sa fiche, toucher un créneau → y placer un patient existant ou nouveau.
 - **Rendez-vous** : « Séance » ou « Bilan » ; plusieurs possibles, un par jour.
 - **Homonymes** : « même personne ? ».
 - **Sauvegarde** : copie interne automatique chaque jour (7 gardées, retour en arrière annulable) ; **copie hors de Chrome** chiffrée dans « Téléchargements » (mot de passe retenu par la tablette, à noter sur papier), restauration depuis le fichier, rappel orange après 7 jours.
-- **État de l'appli** : installation, hors-connexion, protection du stockage, place, IA (abonnement / clé API de secours), copies de sécurité.
+- **État de l'appli** : installation, hors-connexion, protection du stockage, place, IA (abonnement / clé API de secours), copies de sécurité, **partage avec le PC** (adresse + code, « À jour avec le PC » sous les boutons, état de Whisper).
 - **Réglages** (⚙️) : fond (tablette / clair / sombre), **12 couleurs** (Muninn — bleu nuit / nuit et lune dorée, couleur d'origine depuis 0.9.4 —, vert, turquoise, bleu, indigo, violet, framboise, rouge, orange, or, café, ardoise ; fond assorti en sombre), taille du texte (3), **8 écritures**, contraste fort, décorations de saison oui/non. Gardés dans la tablette (`localStorage`).
 - **Muninn, le petit corbeau, sur son perchoir** (0.9.4 ; le petit kiné a été retiré à la demande de Corentin) : emblème et seule mascotte, style rond « kawaii » choisi par Corentin, présent en toute saison avec le chapeau de saison ; cligne des yeux, gestes tout seul toutes les 20 à 50 s (penche la tête, regarde autour, s'ébroue, sautille, croasse), parfois un tour en vol à travers l'appli puis retour au perchoir ; au toucher : « Croâ ! », battement d'ailes, envol. Dans la marge gauche en paysage large, à côté du titre sinon.
 - **Décorations de saison** : Halloween (24 oct.–1er nov. : toiles, araignée qui remonte quand on la touche, chauve-souris, chapeau de sorcière) ; **Noël tout décembre en 5 niveaux** (flocons → guirlande → bonnet → neige au sol, sapin, cadeaux → étoile, 🎅 du 24 au 26) ; **Pâques** (Rameaux → lundi de Pâques : œufs, lapin qui saute au toucher, oreilles de lapin) ; **anniversaire de Corentin** (10–16 mars, confettis, ballons, chapeau de fête, « Joyeux anniversaire Corentin ! » le 13 mars, prioritaire sur Pâques).
@@ -113,24 +115,28 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 - Icône, nom et barre du bas de l'appli installée : Android ne les met à jour qu'au moment où Chrome régénère l'appli (vérification au plus une fois par jour au lancement depuis l'icône, avec parfois une question « mettre à jour ? »). Au 29 octobre au soir : encore l'ancienne icône verte « Mes patients » et la barre du bas verte.
 
 - Copie hors de Chrome : le fichier arrive-t-il bien dans « Téléchargements », et le sélecteur Android permet-il de le choisir pour restaurer ?
-- Dictée groupée sur une vraie matinée : qualité du découpage, durée (limite serveur 5 min), consommation du quota Pro.
+- Dictée groupée sur une vraie matinée : utilisée par Corentin (dictée à la voix rangée sans erreur le 1er et le 2 nov.) ; à surveiller : durée (limite serveur 5 min), consommation du quota Pro.
+- Vérifié en vrai : partage à 3 appareils (31 oct.), Whisper sur le PC (1er nov. : 2 min de voix en 1 min environ), « Enregistrer ma séance » avec rendez-vous dicté placé (2 nov.).
+- Pas encore vérifié : la lecture des bilans pose-t-elle moins de questions depuis 1.1.1 ? La barre blanche du haut de la tablette reste à creuser.
 - Report des corrections dans le résumé avec la vraie IA.
 - Agenda au doigt (retour du 29 octobre : « ça a l'air très bien, pas de bug »).
 - Réglages, mascotte et décorations sur la tablette (Noël, Pâques, anniversaire seulement simulés en changeant la date dans les tests).
 
 ## 7. Prochaines étapes (dans l'ordre conseillé)
 
-1. **Écran d'accueil « Ma journée »** — fait en 0.9.0, en production depuis le 29 octobre (avec 0.9.4). `src/journee.ts`, règles `journee`, `prochaineJournee`, `brefDe` ; champ `bref` (+ `bref_source`) demandé à l'IA avec la mise au propre (séance seule et dictée groupée) ; sans lui, « État du patient » + « Fait en séance » coupés à 160 caractères. Boutons Aujourd'hui / Demain, fiche « À suivre », fiches déjà notées grisées, « ← Ma journée » en haut de chaque fiche. Idée d'origine : à l'ouverture, à la place de « Choisissez un patient », les patients du jour en **petites fiches** dans l'ordre des rendez-vous : heure, nom, séance ou bilan, pathologie (région du bilan), **ce qui est prévu aujourd'hui** (« À venir » de la dernière séance), **résumé court de la séance d'avant**. Toucher une petite fiche → la vraie fiche. Pas d'IA en plus, sauf un résumé court de chaque séance à produire en même temps que la mise au propre.
-2. **Transmissions en PDF** — faites en 0.10.0 (`src/transmissions.ts`, `src/transmissions-pdf.ts` avec jsPDF chargé à la demande, règles `transmissions`, `joursSansRdv`, `semaineProchaine`). Choix : pas d'IA (fidélité, rapidité, pas de quota) ; une synthèse par l'IA reste possible si Corentin la demande. Idée d'origine : pour une période choisie (une semaine, quinze jours…), tous les patients ayant rendez-vous : pathologie, état à l'arrivée (bilan), traitement en cours (séances). PDF envoyé par message. L'agenda sert à vérifier qu'aucun patient ne manque.
-3. **Whisper**, quand le PC est là : choisir Whisper sur le PC (gratuit, la voix ne sort pas du cabinet ; il faudra que le serveur Railway puisse le joindre : adresse publique ou tunnel) ou l'API d'OpenAI (voix envoyée aux États-Unis). Il suffira de régler les variables Railway `WHISPER_URL` (+ `WHISPER_CLE`, `WHISPER_MODELE`) : le bouton « Enregistrer ma dictée » apparaîtra tout seul.
-4. Idées proposées, non demandées : le petit kiné comme **icône de l'appli** sur l'écran d'accueil de la tablette ; d'autres fêtes.
-5. Plus tard (idées de Corentin) : résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, propositions de séance appuyées sur la littérature, version PC.
+Faits : Ma journée (0.9), transmissions (0.10), Whisper sur le PC (1.1–1.2.1).
+
+1. **Audit de fond du code** (3 nov., accord de Corentin) : lancé dans une **nouvelle conversation** (avec Fable si Corentin accepte les crédits d'utilisation, sinon le modèle habituel), en lecture seule, livrable `AUDIT.md` à la racine. Ensuite, dans la conversation principale : présenter le rapport à Corentin sans jargon, puis nettoyage **par petites étapes** sans changement visible, chacune testée et mise en production seulement sur son « mets en production ». Pas de réécriture complète.
+2. **Suivi de l'évolution et alertes** (grande idée de Corentin, voir CLAUDE.md) : commencer par une maquette et un plan ; l'évolution se lit dans les séances dictées, pas de chiffres à saisir.
+3. Petits chantiers demandés : « État de l'appli » dans la roue dentée ; **absences** (« Madame X absente ce jour », suivi de l'absentéisme) ; barre blanche du haut de la tablette.
+4. Plus tard (idées de Corentin) : résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, propositions de séance appuyées sur la littérature.
 
 ## 8. Repères techniques (détails dans `CLAUDE.md`)
 
-- Fichiers principaux : `src/app.ts` (liste, fiche ; sélection par dossier `selD` / bilan `selB`), `src/db.ts` (IndexedDB, base version 3, copies, export/import, `creerPatient`, `supprimerPatient`), `src/regles.ts` (règles pures : noms, rendez-vous, `rattacher`, agenda), `src/ia.ts` (prompts, garde-fous : `resumerBilan`, `analyserSeance`, `decouperDictee`, `corrigerResume`), `src/moteur.ts` (files d'attente IA), `src/dictee.ts`, `src/agenda.ts`, `src/copies.ts`, `src/fichier-copie.ts`, `src/transcription.ts`, `src/reglages.ts`, `src/palettes.ts`, `src/saisons.ts`, `src/mascotte.ts`, `server.mjs`, `serveur/claude.mjs`, `serveur/transcription.mjs`.
-- Tests : `npm test` (Vitest, 120 tests) et `npm run test:e2e` (Playwright, 50 tests, Muninn du PC lancé sur le port 4747 avec le code `ESSA-IPCM-UNIN`, Chromium `/opt/pw-browsers/chromium`, faux Claude Code `tests/faux/claude.mjs`, faux Whisper `tests/faux/whisper.mjs`, micro simulé). Dans les tests d'écran, `page.clock.setFixedTime(...)` fixe la date (utile pour l'agenda et les saisons).
+- Fichiers principaux : `src/app.ts` (liste, fiche ; sélection par dossier `selD` / bilan `selB`), `src/db.ts` (IndexedDB, base version 4 avec le store `synchro`, copies, export/import, `creerPatient`, `supprimerPatient`), `src/regles.ts` (règles pures : noms, rendez-vous, `rattacher`, agenda), `src/ia.ts` (prompts, garde-fous : `resumerBilan`, `analyserSeance`, `decouperDictee`, `corrigerResume`), `src/moteur.ts` (files d'attente IA), `src/dictee.ts`, `src/agenda.ts`, `src/copies.ts`, `src/fichier-copie.ts`, `src/transcription.ts`, `src/reglages.ts`, `src/palettes.ts`, `src/saisons.ts`, `src/mascotte.ts`, `server.mjs`, `serveur/claude.mjs`, `serveur/transcription.mjs`.
+- Tests : `npm test` (Vitest, 120 tests) et `npm run test:e2e` (Playwright, 53 tests, Muninn du PC lancé sur le port 4747 avec le code `ESSA-IPCM-UNIN`, Chromium `/opt/pw-browsers/chromium`, faux Claude Code `tests/faux/claude.mjs`, faux Whisper `tests/faux/whisper.mjs`, micro simulé). Dans les tests d'écran, `page.clock.setFixedTime(...)` fixe la date (utile pour l'agenda et les saisons).
 - Si `node_modules` manque dans une nouvelle session : `npm ci`.
 - Captures pour Corentin : un test Playwright temporaire `tests/e2e/zz-capture.spec.ts` (viewport 1000 × 625), à supprimer ensuite ; fichiers dans le dossier scratchpad.
-- Railway : `railway.json` lance `node server.mjs` (surtout pas `npm start`, qui faisait envoyer de faux mails « Deploy Crashed » à chaque mise en ligne). Variables : `CODE_ACCES`, volume `/data` (connexion de Claude Code), et plus tard `WHISPER_URL`.
+- Railway : `railway.json` lance `node server.mjs` (surtout pas `npm start`, qui faisait envoyer de faux mails « Deploy Crashed » à chaque mise en ligne). Variables : `CODE_ACCES`, volume `/data` (connexion de Claude Code). `WHISPER_URL` n'est pas réglé : la voix passe par le Whisper du PC (`src/transcription.ts`, Railway seulement en secours).
+- Fichiers ajoutés depuis 0.9 : `src/journee.ts`, `src/transmissions*.ts`, `src/synchro.ts`, `src/fusion.ts`, `src/partage.ts`, `src/voix-seance.ts`, `public/pc/` (muninn-pc.mjs, voix.py, installer.ps1).
 - Le serveur bloque la caméra et la géolocalisation ; le micro est autorisé pour l'appli elle-même (`microphone=(self)`).
