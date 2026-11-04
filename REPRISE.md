@@ -130,7 +130,7 @@ Faits : Ma journée (0.9), transmissions (0.10), Whisper sur le PC (1.1–1.2.1)
 
 1. **Audit de fond du code** : **fait le 3 nov.** (rapport `AUDIT.md` à la racine : 1 critique, 3 élevés, 10 moyens, 10 faibles ; plan de nettoyage en 20 étapes au § 4). Ordre retenu : étape 0 (filet de tests tirés de l'annexe B), puis 1 à 3 (sûreté des données : PC qui redémarre sur un fichier abîmé, liaison où le PC fait foi, PC revenu en arrière détecté), puis les petites étapes 4 à 12. Une étape = une version, chacune sur « mets en production ». Pas de réécriture complète.
 2. **Suivi de l'évolution et alertes** (grande idée de Corentin, voir CLAUDE.md) : commencer par une maquette et un plan ; l'évolution se lit dans les séances dictées, pas de chiffres à saisir.
-3. Petits chantiers demandés : « État de l'appli » dans la roue dentée ; **absences** (« Madame X absente ce jour », suivi de l'absentéisme) ; barre blanche du haut de la tablette.
+3. Petits chantiers demandés : **fermer les fenêtres en touchant à côté** (4 nov.) ; « État de l'appli » dans la roue dentée ; **absences** (« Madame X absente ce jour », suivi de l'absentéisme) ; barre blanche du haut de la tablette.
 4. Plus tard (idées de Corentin) : résumé en tête de fiche (EVA, observance, exercices), suivi des exercices à domicile, clôture de prise en charge, schéma corporel des douleurs, lecture d'un dossier de bilans, propositions de séance appuyées sur la littérature.
 
 ## 8. Repères techniques (détails dans `CLAUDE.md`)
