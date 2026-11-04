@@ -35,6 +35,30 @@ export async function disponible(): Promise<boolean> {
   } catch { return false; }
 }
 
+/* Écran tenu allumé pendant un enregistrement, une transcription ou le rangement d'une dictée : la mise en veille
+   coupe le micro, et sur un PC portable elle peut suspendre Chrome en plein travail (constaté le 3 novembre 2026,
+   dictée de 11 minutes). eveil() renvoie la fonction qui relâche la demande ; l'écran peut s'éteindre quand plus
+   personne n'en a besoin. Sans Wake Lock (vieux navigateur), rien ne change. */
+let verrou: { release: () => Promise<void> } | null = null, demandes = 0;
+async function tenirEveille() {
+  if (!demandes || verrou || typeof document === "undefined" || document.visibilityState !== "visible") return;
+  try {
+    const v = await (navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void>; addEventListener: (e: "release", f: () => void) => void }> } }).wakeLock?.request("screen");
+    if (!v) return;
+    if (!demandes) { v.release().catch(() => {}); return; }
+    verrou = v; v.addEventListener("release", () => { if (verrou === v) verrou = null; });
+  } catch { /* refusé (économie d'énergie…) : on continue sans */ }
+}
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { tenirEveille(); });   // redemandé au retour sur l'appli
+export function eveil(): () => void {
+  demandes++; tenirEveille();
+  let rendu = false;
+  return () => {
+    if (rendu) return; rendu = true;
+    if (--demandes === 0 && verrou) { const v = verrou; verrou = null; v.release().catch(() => {}); }
+  };
+}
+
 export type Enregistrement = { arreter: () => Promise<Blob>; annuler: () => void; debut: number; coupe: () => boolean };
 
 /* texte du chrono : la durée, ou l'avis que la tablette a coupé le micro (ce qui a été dit avant reste gardé) */
@@ -57,7 +81,8 @@ export async function enregistrer(): Promise<Enregistrement> {
   let fini: (() => void) | null = null, arrete = false;
   rec.onstop = () => { arrete = true; fini?.(); };
   rec.start(1000);
-  const couper = () => flux.getTracks().forEach(t => t.stop());
+  const relacher = eveil();
+  const couper = () => { relacher(); flux.getTracks().forEach(t => t.stop()); };
   const son = () => new Blob(morceaux, { type: rec.mimeType || "audio/webm" });
   return {
     debut: Date.now(),
@@ -73,6 +98,11 @@ export async function enregistrer(): Promise<Enregistrement> {
 }
 
 export async function transcrire(audio: Blob): Promise<string> {
+  const relacher = eveil();
+  try { return await transcrireSansVeille(audio); } finally { relacher(); }
+}
+
+async function transcrireSansVeille(audio: Blob): Promise<string> {
   const p = await pc();
   if (p && (await etatPC())?.pret) {
     let r: Response;

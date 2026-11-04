@@ -53,6 +53,8 @@ function executer(args, { entree = "", delai = 20_000 } = {}) {
     if (!bin) return resolve({ code: -1, sortie: "", erreurs: "Claude Code n'est pas installé." });
     const p = spawn(bin, args, { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
     suivre(p);
+    const debut = Date.now(), taille = JSON.stringify(contenu ?? "").length;
+    const fin = quoi => console.log(`Claude (${modele}, effort ${effort}) : ${quoi} en ${Math.round((Date.now() - debut) / 1000)} s, demande de ${taille} caractères.`);   // jamais le contenu
     let sortie = "", erreurs = "";
     p.stdout.on("data", d => sortie += d);
     p.stderr.on("data", d => erreurs += d);
@@ -154,6 +156,11 @@ export function verifierDemande(d) {
 
 let file = Promise.resolve();   // une seule génération à la fois
 
+/* Temps laissé à Claude pour une demande. Une dictée groupée d'un après-midi plein (9 patients, 15 minutes de voix)
+   demande plusieurs minutes d'écriture : 5 minutes ne suffisaient pas (audit M9, constaté le 3 novembre 2026).
+   12 minutes, sous la limite de 15 minutes d'une demande chez Railway. */
+const DELAI_MS = Number(process.env.CLAUDE_DELAI_MS) || 12 * 60_000;
+
 export function travailler(demande) {
   const tour = file.then(() => lancer(demande));
   file = tour.catch(() => {});
@@ -187,11 +194,12 @@ function lancer({ system, contenu, schema, effort, modele = "opus" }) {
       while ((i = tampon.indexOf("\n")) >= 0) { lire(tampon.slice(0, i)); tampon = tampon.slice(i + 1); }
     });
     p.stderr.on("data", d => { erreurs = (erreurs + d).slice(-4000); });
-    const t = setTimeout(() => { tuer(p); resolve({ erreur: "Claude n'a pas répondu à temps (5 minutes)." }); }, 5 * 60_000);
+    const t = setTimeout(() => { tuer(p); fin("arrêté, trop long"); resolve({ erreur: `Claude n'a pas répondu à temps (${Math.round(DELAI_MS / 60_000)} minutes). Votre texte est gardé : réessayez.` }); }, DELAI_MS);
     p.on("error", () => { clearTimeout(t); resolve({ erreur: "Claude Code n'a pas pu démarrer." }); });
     p.on("close", code => {
       clearTimeout(t);
       lire(tampon);
+      fin(resultat && !resultat.is_error && resultat.structured_output ? "réponse" : "échec");
       if (resultat && !resultat.is_error && resultat.structured_output) {
         return resolve({ donnees: resultat.structured_output, tours: resultat.num_turns ?? null, coutIndicatif: resultat.total_cost_usd ?? null });
       }

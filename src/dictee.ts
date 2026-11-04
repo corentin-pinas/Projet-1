@@ -238,6 +238,7 @@ async function lancer() {
   await garderBrouillon(true);
   phase = "envoi"; afficher();
   const envoye = texte, jour = date;
+  const relacher = voix.eveil();   // une longue dictée peut prendre plusieurs minutes : l'écran reste allumé
   try {
     const avant = new Map((await db.tout()).dossiers.map(d => [d.id, d.rdvs] as const));
     const r = await moteur.rangerDictee(jour, envoye);
@@ -250,7 +251,7 @@ async function lancer() {
   } catch (e) {
     phase = "saisie";
     toast(e instanceof ErreurIA ? e.message : "La dictée n'a pas pu être rangée. Elle est gardée : réessayez.");
-  }
+  } finally { relacher(); }
   afficher();
 }
 

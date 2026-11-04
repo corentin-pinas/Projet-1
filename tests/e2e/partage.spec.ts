@@ -182,6 +182,34 @@ test("micro coupé par la tablette pendant l'enregistrement (écran éteint, app
   await page.context().close();
 });
 
+test("dictée à la voix : l'écran reste allumé pendant l'enregistrement, la transcription et le rangement, puis peut s'éteindre", async ({ browser }) => {
+  const page = await appareil(browser);
+  await page.addInitScript(() => {
+    const w = window as any; w.eveil = { demandes: 0, actifs: 0 };
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request: async () => {
+      w.eveil.demandes++; w.eveil.actifs++;
+      const ecoute: (() => void)[] = []; let fini = false;
+      return { release: async () => { if (fini) return; fini = true; w.eveil.actifs--; ecoute.forEach(f => f()); }, addEventListener: (_: string, f: () => void) => ecoute.push(f) };
+    } } });
+  });
+  await page.reload();
+  const eveil = () => page.evaluate(() => (window as any).eveil as { demandes: number; actifs: number });
+  await relier(page);
+  await expect(page.locator(".toast")).toContainText("Relié au PC");
+  await page.locator("#etatclose").click();
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await page.getByRole("button", { name: /Enregistrer ma dictée/ }).click();
+  await expect(page.locator(".voix")).toContainText("Enregistrement");
+  await expect.poll(async () => (await eveil()).actifs).toBe(1);
+  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: "Arrêter et transcrire" }).click();
+  // transcrite puis rangée seule (pas de code d'IA ici : le rangement échoue et la dictée est gardée) ; à la fin, plus rien ne tient l'écran
+  await expect(page.locator("#dtexte")).toHaveValue(/transcrit sur le PC/);
+  await expect.poll(async () => (await eveil()).actifs).toBe(0);
+  expect((await eveil()).demandes).toBeGreaterThanOrEqual(1);
+  await page.context().close();
+});
+
 test("le PC injoignable : l'appareil le dit et garde tout", async ({ browser }) => {
   const page = await appareil(browser);
   await page.locator("#etatbtn").click();
