@@ -8,7 +8,7 @@ import { egal, fusion3 } from "./fusion";
 import type { Bilan } from "./regles";
 
 export const PARAM_ADRESSE = "sync_adresse", PARAM_CODE = "sync_code";
-const PARAM_REV = "sync_rev", PARAM_OK = "sync_ok";
+const PARAM_REV = "sync_rev", PARAM_OK = "sync_ok", PARAM_QUITTE = "sync_adresse_quittee";
 const PAQUET = 200;
 
 export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null };
@@ -56,27 +56,32 @@ async function json<T>(cfg: Config, chemin: string, corps?: unknown): Promise<T>
 
 /* ---------- relier, délier ---------- */
 
-/* Vérifie que le PC répond avec ce code, puis le retient. Relié à un autre PC qu'avant : l'appareil repart de zéro (tout envoyer, tout recevoir). */
+/* Vérifie que le PC répond avec ce code, puis le retient. Relié à un autre PC qu'avant (ou adresse tapée autrement) :
+   l'appareil oublie son historique d'échange ; à l'échange suivant, le PC fait foi pour tout ce qu'il connaît (voir recevoir)
+   et l'appareil n'envoie que ce que le PC n'a jamais vu. Relié de nouveau au PC qu'il avait quitté : il reprend où il en était. */
 export async function relier(adresseTapee: string, code: string): Promise<void> {
   const cfg = { adresse: normaliserAdresse(adresseTapee), code: code.trim() };
   const r = await json<{ muninn?: boolean }>(cfg, "/api/sync/etat");
   if (!r.muninn) throw new ErreurSync("Cette adresse ne répond pas comme Muninn.");
-  if ((await db.lireParametre<string>(PARAM_ADRESSE)) !== cfg.adresse) {
+  const avant = (await db.lireParametre<string>(PARAM_ADRESSE)) ?? (await db.lireParametre<string>(PARAM_QUITTE));
+  if (avant !== cfg.adresse) {
     await db.oublierPartage();
     await db.ecrireParametre(PARAM_REV, 0);
   }
   await db.ecrireParametre(PARAM_ADRESSE, cfg.adresse);
   await db.ecrireParametre(PARAM_CODE, cfg.code);
+  await db.ecrireParametre(PARAM_QUITTE, undefined);
   maj({ relie: true, erreur: null });
   await synchroniser();
 }
 
-/* L'appareil garde ses données mais n'échange plus rien avec le PC. */
+/* L'appareil garde ses données mais n'échange plus rien avec le PC. Il garde aussi l'historique de ses échanges :
+   relié plus tard au même PC, il reprend où il en était, sans que ses vieilles versions écrasent les nouvelles (audit C1). */
 export async function delier() {
+  const adresse = await db.lireParametre<string>(PARAM_ADRESSE);
+  if (adresse) await db.ecrireParametre(PARAM_QUITTE, adresse);
   await db.ecrireParametre(PARAM_ADRESSE, undefined);
   await db.ecrireParametre(PARAM_CODE, undefined);
-  await db.ecrireParametre(PARAM_REV, undefined);
-  await db.oublierPartage();
   maj({ relie: false, enCours: false, erreur: null, derniere: null });
 }
 
@@ -124,7 +129,10 @@ async function recevoir(cfg: Config) {
       const ecritures: { cle: string; valeur: unknown }[] = [], nouvelles: db.Base[] = [];
       for (const c of r.changements) {
         const distant = c.supprime ? null : c.valeur ?? null, ici = local.get(c.cle) ?? null;
-        const v = fusion3(bases.get(c.cle)?.valeur ?? null, ici, distant) ?? null;
+        // sans version commune (appareil neuf, fichier de copie restauré, autre PC) : le PC fait foi pour ce qu'il connaît,
+        // sinon de vieilles versions gardées ici écraseraient partout les nouvelles (audit C1)
+        const b = bases.get(c.cle);
+        const v = b ? fusion3(b.valeur ?? null, ici, distant) ?? null : distant;
         if (!egal(v, ici)) ecritures.push({ cle: c.cle, valeur: v });
         nouvelles.push({ cle: c.cle, valeur: distant, rev: c.rev });
       }

@@ -90,7 +90,9 @@ async function restaurer(fichier: File, mdp: string): Promise<boolean> {
   const { entete, fichiers } = contenu;
   const p = entete.donnees.dossiers.length, s = entete.donnees.seances.length;
   const quand = new Date(entete.cree).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const ok = await confirmer(`Remplacer les données de cette tablette par la copie du ${quand} (${p} patient${p > 1 ? "s" : ""}, ${s} séance${s > 1 ? "s" : ""}) ? Les données actuelles sont gardées : « Annuler le retour en arrière » les remet.`, "Restaurer cette copie");
+  const relie = !!(await db.lireParametre<string>("sync_adresse").catch(() => undefined));
+  const ok = await confirmer(`Remplacer les données de cette tablette par la copie du ${quand} (${p} patient${p > 1 ? "s" : ""}, ${s} séance${s > 1 ? "s" : ""}) ? Les données actuelles sont gardées : « Annuler le retour en arrière » les remet.`
+    + (relie ? " Cet appareil est relié au PC : au prochain échange, le PC remettra ses versions plus récentes ; la copie ne rapportera que ce que le PC n'a jamais connu." : ""), "Restaurer cette copie");
   if (!ok) return true;
   try {
     await db.importer({ donnees: entete.donnees, fichiers: entete.fichiers.map((id, i) => ({ id, blob: fichiers[i] })) });

@@ -273,8 +273,12 @@ export async function exporter(): Promise<Export> {
 }
 
 /* restauration depuis le fichier : l'état actuel est gardé, « Annuler le retour en arrière » le remet */
+/* Restaurer un fichier de copie (souvent ancien) : l'historique d'échange avec le PC est oublié, pour que le PC fasse foi
+   au prochain échange ; le fichier ne rapporte alors que ce que le PC n'a jamais connu (audit C1). */
 export async function importer(e: Export) {
   await remplacer(e.donnees, e.fichiers, true);
+  await oublierPartage();
+  await ecrireParametre("sync_rev", 0);
 }
 
 /* Efface les PDF et photos auxquels plus aucun bilan ni aucune copie ne renvoie. */

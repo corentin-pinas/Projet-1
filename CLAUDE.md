@@ -198,4 +198,4 @@ Bilans mixtes (tapé et manuscrit au stylet). Conventions : MVT = mouvement ; «
 - Audit de fond prévu (3 novembre 2026) : lecture seule dans une nouvelle conversation, rapport `AUDIT.md`, puis nettoyage par petites étapes sans changement visible. Pas de réécriture complète.
 - `README.md` : présentation et architecture (étages, « cloche » de la base, dépendances entre modules). `tests/unite/architecture.test.ts` interdit les dépendances circulaires entre modules de `src/` et garde les règles pures sans dépendance : à mettre à jour (avec le README) si un module est ajouté.
 - Nettoyage de l'audit (depuis 1.2.2) : une étape du plan d'`AUDIT.md` § 4 par version. Tests de partage et du PC dans `tests/unite/` (inclus par `vite.config.ts`, hors `tsconfig` car ils utilisent Node) ; un défaut pas encore corrigé = un `it.fails` qui décrit le bon comportement.
-- Avant chaque envoi : `npm test` (130 tests + 5 défauts connus) et `npm run test:e2e` (54 tests) doivent passer.
+- Avant chaque envoi : `npm test` (134 tests + 3 défauts connus) et `npm run test:e2e` (54 tests) doivent passer.

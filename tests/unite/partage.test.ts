@@ -57,7 +57,7 @@ describe("partage entre appareils", () => {
     expect(t.seances).toHaveLength(2);
   });
 
-  it.fails("défaut connu (C1) : tablette neuve, restaurer le fichier de copie puis relier ne doit pas remettre les anciennes versions", async () => {
+  it("C1 : tablette neuve, restaurer le fichier de copie puis relier ne doit pas remettre les anciennes versions", async () => {
     const pc = await nouveauPC();
     const tab = await appareil();
     const p = await tab.db.creerPatient("Paul T.");
@@ -80,7 +80,7 @@ describe("partage entre appareils", () => {
     }
   });
 
-  it.fails("défaut connu (C1) : délier puis relier un appareil resté en arrière ne doit pas écraser les nouvelles versions", async () => {
+  it("C1 : délier puis relier un appareil resté en arrière ne doit pas écraser les nouvelles versions", async () => {
     const pc = await nouveauPC();
     const tab = await appareil();
     const p = await tab.db.creerPatient("Paul T.");
@@ -95,6 +95,39 @@ describe("partage entre appareils", () => {
     await echanger(tab);
     expect((await seance(tab, s1.id))?.contenu).toBe("version 2, corrigée sur la tablette");
     expect((await seance(tel, s1.id))?.contenu).toBe("version 2, corrigée sur la tablette");
+  });
+
+  it("C1 : un appareil délié qui a travaillé seul garde ses changements en se reliant au même PC", async () => {
+    const pc = await nouveauPC();
+    const tab = await appareil();
+    const p = await tab.db.creerPatient("Paul T.");
+    const s1 = await tab.db.ajouterSeance(p.id, "2026-11-03", "version 1");
+    const s2 = await tab.db.ajouterSeance(p.id, "2026-11-04", "séance 2");
+    await tab.sync.relier(pc.url, CODE);
+    const tel = await appareil();
+    await tel.sync.relier(pc.url, CODE);
+    await tel.sync.delier();
+    await tel.db.majSeance(s1.id, { contenu: "corrigée sur le téléphone, délié" });
+    await tab.db.majSeance(s2.id, { contenu: "séance 2 corrigée sur la tablette" });
+    await echanger(tab);
+    await tel.sync.relier(pc.url, CODE);
+    await echanger(tab);
+    for (const a of [tab, tel]) {
+      expect((await seance(a, s1.id))?.contenu).toBe("corrigée sur le téléphone, délié");
+      expect((await seance(a, s2.id))?.contenu).toBe("séance 2 corrigée sur la tablette");
+    }
+  });
+
+  it("C1 : sur la tablette neuve, ce que le PC n'a jamais connu (créé après la copie, jamais envoyé) est gardé et envoyé", async () => {
+    const pc = await nouveauPC();
+    const tab = await appareil();
+    const p = await tab.db.creerPatient("Paul T.");
+    await tab.sync.relier(pc.url, CODE);
+    const neuve = await appareil();
+    const q = await neuve.db.creerPatient("Léa N.");                     // patient noté sur l'appareil avant de le relier
+    await neuve.sync.relier(pc.url, CODE);
+    await echanger(tab);
+    for (const a of [tab, neuve]) expect((await a.db.tout()).dossiers.map(d => d.id).sort()).toEqual([p.id, q.id].sort());
   });
 
   it.fails("défaut connu (E1) : un PC remis à une copie plus ancienne doit être signalé, pas « À jour »", async () => {
