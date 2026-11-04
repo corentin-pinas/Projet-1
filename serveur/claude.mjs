@@ -53,8 +53,6 @@ function executer(args, { entree = "", delai = 20_000 } = {}) {
     if (!bin) return resolve({ code: -1, sortie: "", erreurs: "Claude Code n'est pas installé." });
     const p = spawn(bin, args, { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
     suivre(p);
-    const debut = Date.now(), taille = JSON.stringify(contenu ?? "").length;
-    const fin = quoi => console.log(`Claude (${modele}, effort ${effort}) : ${quoi} en ${Math.round((Date.now() - debut) / 1000)} s, demande de ${taille} caractères.`);   // jamais le contenu
     let sortie = "", erreurs = "";
     p.stdout.on("data", d => sortie += d);
     p.stderr.on("data", d => erreurs += d);
@@ -182,6 +180,8 @@ function lancer({ system, contenu, schema, effort, modele = "opus" }) {
     ];
     const p = spawn(bin, args, { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
     suivre(p);
+    const debut = Date.now(), taille = JSON.stringify(contenu ?? "").length;
+    const fin = quoi => console.log(`Claude (${modele}, effort ${effort}) : ${quoi} en ${Math.round((Date.now() - debut) / 1000)} s, demande de ${taille} caractères.`);   // jamais le contenu
     let tampon = "", resultat = null, erreurs = "";
     const lire = ligne => {
       if (!ligne.trim()) return;
