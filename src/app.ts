@@ -3,7 +3,7 @@
 import * as db from "./db";
 import {
   ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
-  prochainRdv, propreOk, questionHomonyme, questionRdv, rdvsAVenir, texteDe, trierBilans, trierSeances,
+  prochainRdv, propreOk, questionHomonyme, questionRdv, seancesManquantes, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Demi, type Dossier, type Seance
 } from "./regles";
 import * as agenda from "./agenda";
@@ -11,6 +11,7 @@ import * as dictee from "./dictee";
 import * as journee from "./journee";
 import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
+import * as manquantes from "./seances-manquantes";
 import * as voixSeance from "./voix-seance";
 import { confirmer, esc, toast } from "./ui";
 
@@ -219,6 +220,7 @@ export function renderMain() {
   $("#main").innerHTML = html;
 
   wireSeances(D);
+  manquantes.brancher($("#main"), () => renderMain());
   wireRdv(D);
   prochain.brancher($("#main"));
   const finA = $("#finannuler"); if (finA) finA.onclick = async () => { try { await db.finTraitement(D.id, undefined); toast("Fin de traitement annulée."); } catch { toast("L'enregistrement a échoué. Réessayez."); } };
@@ -344,14 +346,24 @@ function seancesHtml(D: Dossier) {
       <label for="stext">Contenu de la séance</label><textarea id="stext" placeholder="Touchez le micro de votre clavier et dictez en vrac : ce que dit le patient, ce qui a été fait, les exercices donnés, puis « Pour la prochaine séance… ». La mise au propre se fait à l'enregistrement.">${esc(ed ? texteDe(ed) : "")}</textarea>
       <div class="note" id="avprev"></div>
       <div class="row"><button class="primary" id="ssave">${ed ? "Enregistrer les modifications" : "Enregistrer la séance"}</button><button id="scancel">Annuler</button></div></div>` : "";
+  /* séances, jours manquants (rendez-vous passé sans séance) et absences, du plus récent au plus ancien */
+  const trous = seancesManquantes(D, donnees.seances, aujourdhui());
+  const absences = (D.absences ?? []).filter(d => d >= isoDay(new Date(Date.now() - 60 * 864e5)));
+  const elements: { date: string; html: string }[] = [
+    ...trous.map(t => ({ date: t.d, html: manquantes.bloc(D, t.d, t.demi) })),
+    ...absences.map(d => ({ date: d, html: manquantes.absence(D, d) }))
+  ];
+  const avant = (date: string, apres: string | null) => elements.filter(e => e.date > date && (apres === null || e.date <= apres)).sort((a, b) => b.date.localeCompare(a.date)).map(e => e.html).join("");
   return `<div class="seances"><h3>Séances (${list.length})${!form ? `<button class="primary" id="sadd">Ajouter une séance</button>` : ""}</h3>${form}
-    ${list.length ? list.map((s, k) => {
+    ${list.length || elements.length ? list.map((s, k) => {
       const ok = propreOk(s), orig = s.brut || s.contenu;
-      return `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre!) : esc(s.contenu)}</div>
+      return avant(s.date, k ? list[k - 1].date : null) + `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre!) : esc(s.contenu)}</div>
       ${moteur.occupe(s.id) ? `<div class="note">Mise au propre en cours…</div>` : ""}
       ${ok && orig !== s.propre ? `<details class="orig"><summary>Texte d'origine</summary><div class="sc">${esc(orig)}</div></details>` : ""}
       <div class="sa"><button data-edit="${esc(s.id)}">Modifier</button>${!ok && aCle && !moteur.occupe(s.id) ? `<button data-clean="${esc(s.id)}">Mettre au propre</button>` : ""}<button data-sdel="${esc(s.id)}">Supprimer</button></div></div>`;
-    }).join("") : (form ? "" : `<p class="note">Aucune séance enregistrée pour ce patient.</p>`)}</div>`;
+    }).join("") + elements.filter(e => !list.length || e.date <= list[list.length - 1].date).sort((a, b) => b.date.localeCompare(a.date)).map(e => e.html).join("")
+    : (form ? "" : `<p class="note">Aucune séance enregistrée pour ce patient.</p>`)}
+    ${list.length ? manquantes.lienAutreJour(D) : ""}</div>`;
 }
 
 function wireSeances(D: Dossier) {

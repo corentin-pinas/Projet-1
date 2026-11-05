@@ -61,3 +61,13 @@ describe("fusion de deux versions d'un même élément", () => {
     expect(fusion3(null, { id: "x", a: 1, b: 2 }, { id: "x", a: 9, c: 3 })).toEqual({ id: "x", a: 1, b: 2, c: 3 });
   });
 });
+
+describe("dictées gardées et absences, réunies élément par élément", () => {
+  it("deux appareils ajoutent chacun une dictée et une absence : les deux sont gardées", () => {
+    const base = { dictees: [{ id: "a", texte: "1" }] };
+    const r = fusion3(base, { dictees: [{ id: "a", texte: "1" }, { id: "b", texte: "2" }] }, { dictees: [{ id: "a", texte: "1" }, { id: "c", texte: "3" }] }) as { dictees: { id: string }[] };
+    expect(r.dictees.map(x => x.id).sort()).toEqual(["a", "b", "c"]);
+    const d = fusion3({ id: "d", absences: [] }, { id: "d", absences: ["2026-11-03"] }, { id: "d", absences: ["2026-11-04"] }) as { absences: string[] };
+    expect(d.absences.sort()).toEqual(["2026-11-03", "2026-11-04"]);
+  });
+});

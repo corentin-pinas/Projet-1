@@ -5,8 +5,9 @@ import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
+import * as manquantes from "./seances-manquantes";
 import * as voix from "./transcription";
-import { ageDossier, demiFr, isoDay, nomAffiche, nomCorrespond, patientFrom, questionRdv, type Dossier, type Rdv } from "./regles";
+import { ageDossier, demiDe, demiFr, isoDay, nomAffiche, nomCorrespond, patientFrom, questionRdv, sansSeanceCeJour, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
 const BROUILLON = "dictee_brouillon";   // { texte, date }
@@ -82,6 +83,10 @@ async function afficher() {
       ${[...new Set(dernier.range.map(r => r.dossierId))].map(id => parId.get(id)).filter((x): x is Dossier => !!x).map(D => {
         const q = questionRdv(D, seances, aujourdhui());
         return q ? prochain.question(D, q, D.label) : "";
+      }).join("")}
+      ${sansSeanceCeJour(dossiers, seances, dernier.date).map(D => {
+        const r = D.rdvs.find(x => x.d === dernier!.date);
+        return manquantes.bloc(D, dernier!.date, r ? demiDe(r) : null, D.label);
       }).join("")}
       <div class="row"><button id="dannuler">Annuler cette dictée</button></div></div>` : "";
 
@@ -160,6 +165,7 @@ async function envoyerVoix() {
 
 function brancher(z: HTMLElement) {
   prochain.brancher(z, () => { afficher(); });
+  manquantes.brancher(z, () => { afficher(); });
   const venreg = z.querySelector<HTMLElement>("#venreg");
   if (venreg) venreg.onclick = async () => {
     try { enCours = await voix.enregistrer(); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
@@ -245,6 +251,7 @@ async function lancer() {
   phase = "envoi"; afficher();
   const envoye = texte, jour = date;
   const relacher = voix.eveil();   // une longue dictée peut prendre plusieurs minutes : l'écran reste allumé
+  await db.garderDictee(jour, envoye).catch(() => {});   // gardée telle que dictée, même si le rangement échoue (audit E3)
   try {
     const avant = new Map((await db.tout()).dossiers.map(d => [d.id, d.rdvs] as const));
     const r = await moteur.rangerDictee(jour, envoye);

@@ -23,7 +23,9 @@ const estObjet = (v: unknown): v is Objet => !!v && typeof v === "object" && !Ar
 const IDENTITES: Record<string, (x: unknown) => string> = {
   rdvs: x => String((x as Objet)?.d),                                          // un rendez-vous par jour
   corrections: x => String((x as Objet)?.quand) + "|" + String((x as Objet)?.point),
-  valides: x => String(x)
+  valides: x => String(x),
+  absences: x => String(x),                                                      // un jour d'absence
+  dictees: x => String((x as Objet)?.id)                                         // une dictée gardée
 };
 
 function fusionListe(base: unknown, local: unknown, distant: unknown, id: (x: unknown) => string): unknown[] {

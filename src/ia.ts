@@ -249,6 +249,33 @@ export async function corrigerResume(cle: string, resume: Resume, corrections: C
   return { donnees: corrige, usage: r.usage };
 }
 
+/* ---------- retrouver un patient oublié dans une dictée gardée ---------- */
+
+const SCHEMA_PASSAGE = {
+  type: "object", additionalProperties: false, required: ["trouve", "extrait"],
+  properties: { trouve: { type: "boolean" }, extrait: { type: ["string", "null"] } }
+};
+const motsDe = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").match(/[a-z0-9]+/g) ?? [];
+
+/* Le passage rendu doit venir de la dictée : 85 % de ses mots au moins s'y trouvent, sinon il n'est pas proposé. */
+export async function chercherDansDictee(cle: string, dictee: string, patient: string, appel: Appel): Promise<Reponse<string | null>> {
+  const r = await appel({
+    cle, system: "Tu retrouves, dans la dictée d'un kinésithérapeute, le passage qui concerne un patient donné. Tu recopies, tu n'inventes rien.",
+    contenu: [{ type: "text", text:
+      `Retrouve le passage de cette dictée groupée qui concerne le patient « ${patient} » (il a pu être nommé par son seul prénom, ou mal transcrit par la dictée vocale).\n` +
+      "Recopie ce passage mot pour mot, en entier (de l'annonce du patient jusqu'au patient suivant), sans rien corriger ni ajouter. " +
+      'Réponds {"trouve": true, "extrait": "…"} ; s\'il n\'est pas question de ce patient, {"trouve": false, "extrait": null}.\n\n' +
+      "Dictée :\n<<<\n" + dictee.slice(0, 60000) + "\n>>>" }],
+    schema: SCHEMA_PASSAGE, effort: "low", maxTokens: 8000, niveau: "leger"
+  });
+  const o = (r.donnees ?? {}) as { trouve?: unknown; extrait?: unknown };
+  const extrait = o.trouve === true && typeof o.extrait === "string" ? o.extrait.trim() : "";
+  if (!extrait) return { donnees: null, usage: r.usage };
+  const dans = new Set(motsDe(dictee)), mots = motsDe(extrait);
+  if (!mots.length || mots.filter(m => dans.has(m)).length < mots.length * 0.85) throw new ErreurIA("Le passage proposé par l'IA ne vient pas de la dictée : rien n'est rangé.");
+  return { donnees: extrait, usage: r.usage };
+}
+
 /* ---------- analyse d'une séance (reprise de la version d'essai) ---------- */
 
 /* repère de dates donné à l'IA pour qu'elle n'ait aucun calcul à faire */

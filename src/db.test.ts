@@ -260,3 +260,23 @@ describe("partage avec le PC", () => {
     expect(b.origine).toBe(await db.appareil());
   });
 });
+
+describe("dictées gardées et absences", () => {
+  it("une dictée est gardée une fois, les 30 dernières seulement, retrouvées par jour", async () => {
+    await db.garderDictee("2026-11-04", "avec Marc …");
+    await db.garderDictee("2026-11-04", "avec Marc …");                       // relancée à l'identique
+    expect(await db.dicteesDu("2026-11-04")).toHaveLength(1);
+    for (let i = 0; i < 31; i++) await db.garderDictee("2026-11-05", "dictée " + i);
+    expect(await db.dicteesDu("2026-11-04")).toHaveLength(0);                 // la plus ancienne est sortie
+    expect(await db.dicteesDu("2026-11-05")).toHaveLength(30);
+    expect((await db.etatPartage()).has("parametres/dictees")).toBe(true);    // partagée avec le PC
+  });
+
+  it("une absence se note et s'annule sur le dossier", async () => {
+    const p = await db.creerPatient("Victor M.");
+    await db.noterAbsence(p.id, "2026-11-04", true);
+    expect((await db.tout()).dossiers[0].absences).toEqual(["2026-11-04"]);
+    await db.noterAbsence(p.id, "2026-11-04", false);
+    expect((await db.tout()).dossiers[0].absences).toBeUndefined();
+  });
+});

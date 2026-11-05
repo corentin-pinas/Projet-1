@@ -40,7 +40,9 @@ if (args[0] === "auth" && args[1] === "login") {
     process.exit(1);
   }
   const document = contenu.some(b => b.type === "document" || b.type === "image");
-  const sortie = document
+  const texte = contenu.map(b => b.text ?? "").join("");
+  const sortie = texte.includes("Retrouve le passage") ? { trouve: false, extrait: null }
+    : document
     ? { region: "Épaule G", date_bilan: "02/10/2026", age: 61, coup_oeil: "Raideur d'épaule gauche depuis 3 mois (résumé par l'abonnement).", chiffres: [{ label: "EVA", valeur: "4/10" }], sections: [{ titre: "Examen", items: ["Élévation 110°"] }], a_verifier: [] }
     : { propre: "État du patient : douleur 2/10.\nFait en séance : mobilisations passives de l'épaule gauche.\nÀ venir : reprendre le renforcement, dans une semaine.", resume: "Reprendre le renforcement.", bref: "Douleur 2/10. Mobilisations passives de l'épaule gauche.", rdv_date: null, rdv_heure: null };
   console.log("ligne qui n'est pas du JSON");

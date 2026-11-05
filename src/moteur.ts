@@ -1,7 +1,7 @@
 /* Travail de l'IA en arrière-plan : résumé automatique des bilans déposés,
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
-import { analyserSeance, appelerAbonnement, appelerClaude, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
+import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { avecRdv, avenirFrom, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
@@ -278,6 +278,26 @@ export async function rangerDictee(date: string, texte: string): Promise<{ range
     ranges.push(r.range); if (r.rdv) rdvs.push(r.rdv);
   }
   return { ranges, doutes, rdvs };
+}
+
+/* Séance manquante : cherche le patient dans les dictées gardées de ce jour-là. Rend le passage, ou null. */
+export async function chercherSeance(dossierId: string, date: string): Promise<string | null> {
+  const ia = await configIA();
+  if (!ia) throw new ErreurIA(PAS_REGLE);
+  if (!navigator.onLine) throw new ErreurIA("Pas de connexion : réessayez une fois en ligne.");
+  const dictees = await db.dicteesDu(date);
+  if (!dictees.length) throw new ErreurIA("Aucune dictée gardée pour ce jour-là (les dictées sont gardées depuis le 5 novembre 2026).");
+  const dossier = (await db.tout()).dossiers.find(d => d.id === dossierId);
+  if (!dossier) throw new ErreurIA("Patient introuvable.");
+  const { donnees, usage } = await chercherDansDictee(ia.secret, dictees.map(x => x.texte).join("\n\n"), dossier.label, ia.appel);
+  await db.ajouterConso("seances", usage);
+  return donnees;
+}
+
+/* le passage retrouvé devient une séance normale, mise au propre comme les autres */
+export async function rangerPassage(dossierId: string, date: string, extrait: string) {
+  const se = await db.ajouterSeance(dossierId, date, extrait);
+  analyser(se, false, false);
 }
 
 /* enregistre un passage de la dictée comme une séance normale du dossier choisi */

@@ -23,7 +23,11 @@ export type Dossier = {
   homonyme: boolean;                                  // la question « même personne ? » reste à poser
   cree: string;
   fin?: string;                                       // fin de traitement, notée à la séance de ce jour (AAAA-MM-JJ)
+  absences?: string[];                                // jours de rendez-vous où le patient n'est pas venu (AAAA-MM-JJ)
 };
+
+/* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
+export type DicteeGardee = { id: string; date: string; cree: string; texte: string };
 
 export type FichierBilan = { id: string; nom: string; type: string };
 
@@ -236,6 +240,24 @@ export function questionRdv(d: Dossier, seances: Seance[], aujourdhui: string): 
   if (d.fin && d.fin >= derniere) return null;
   if (d.rdvs.some(r => r && r.d > derniere)) return null;
   return derniere;
+}
+
+/* Séances manquantes : un rendez-vous passé (30 jours au plus, avant aujourd'hui) sans séance ce jour-là
+   et sans absence notée. Du plus récent au plus ancien. */
+export const JOURS_MANQUANTES = 30;
+export function seancesManquantes(d: Dossier, seances: Seance[], aujourdhui: string): { d: string; demi: Demi | null }[] {
+  const depuis = decalerJours(aujourdhui, -JOURS_MANQUANTES);
+  const vues = new Set(seances.filter(s => s.dossierId === d.id).map(s => s.date));
+  const absences = new Set(d.absences ?? []);
+  const jours = new Map<string, Demi | null>();
+  for (const r of d.rdvs) if (r && r.d < aujourdhui && r.d >= depuis && !vues.has(r.d) && !absences.has(r.d)) jours.set(r.d, demiDe(r));
+  return [...jours].map(([j, demi]) => ({ d: j, demi })).sort((a, b) => b.d.localeCompare(a.d));
+}
+
+/* après une dictée groupée : les patients qui avaient rendez-vous ce jour-là et n'ont pas de séance ce jour-là */
+export function sansSeanceCeJour(dossiers: Dossier[], seances: Seance[], date: string): Dossier[] {
+  const vus = new Set(seances.filter(s => s.date === date).map(s => s.dossierId));
+  return dossiers.filter(d => d.rdvs.some(r => r && r.d === date) && !vus.has(d.id) && !(d.absences ?? []).includes(date));
 }
 
 export function prochainRdv(rdvs: Rdv[], aujourdhui: string) {

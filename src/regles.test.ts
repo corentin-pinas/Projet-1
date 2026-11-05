@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  demiSeance, questionRdv, brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
+  demiSeance, questionRdv, seancesManquantes, sansSeanceCeJour, brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
   agesCompatibles, avecRdv, avenirDe, avenirFrom, jourLabel, lignesListe, nomAffiche,
   plageDemi, placesPlage, placesPrises, demiDe, rdvKey, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
@@ -298,5 +298,20 @@ describe("prochain rendez-vous (choix de Corentin, 5 novembre 2026)", () => {
 
   it("une séance notée après la fin du traitement repose la question", () => {
     expect(questionRdv(D([], "2026-10-20"), [S("2026-11-04")], "2026-11-05")).toBe("2026-11-04");
+  });
+});
+
+describe("séances manquantes (choix de Corentin, 5 novembre 2026)", () => {
+  const D = (id: string, rdvs: string[], absences?: string[]) => ({ id, label: id, rdvs: rdvs.map(d => ({ d, h: "", p: "pm" as const })), homonyme: false, cree: "", ...(absences ? { absences } : {}) });
+  const S = (dossierId: string, date: string) => ({ id: dossierId + date, dossierId, date, cree: "", contenu: "x" });
+
+  it("rendez-vous passé de moins de 30 jours, sans séance ni absence : signalé, du plus récent au plus ancien", () => {
+    const d = D("v", ["2026-11-04", "2026-10-30", "2026-10-28", "2026-09-01", "2026-11-05", "2026-11-12"], ["2026-10-28"]);
+    expect(seancesManquantes(d, [S("v", "2026-10-30")], "2026-11-05")).toEqual([{ d: "2026-11-04", demi: "pm" }]);
+  });
+
+  it("après une dictée : les patients qui avaient rendez-vous ce jour-là sans séance rangée", () => {
+    const dossiers = [D("m", ["2026-11-04"]), D("v", ["2026-11-04"]), D("a", ["2026-11-04"], ["2026-11-04"]), D("x", ["2026-11-05"])];
+    expect(sansSeanceCeJour(dossiers, [S("m", "2026-11-04")], "2026-11-04").map(d => d.id)).toEqual(["v"]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyserSeance, corrigerResume, promptCorrection, calendrier, decouperDictee, lireDictee, promptDictee, contenuBilan, coutDollars, lireAnalyse, normaliserResume, promptSeance, resumerBilan, systemeBilan, type Appel } from "./ia";
+import { analyserSeance, chercherDansDictee, corrigerResume, promptCorrection, calendrier, decouperDictee, lireDictee, promptDictee, contenuBilan, coutDollars, lireAnalyse, normaliserResume, promptSeance, resumerBilan, systemeBilan, type Appel } from "./ia";
 
 const faux = (donnees: unknown): Appel => async () => ({ donnees, usage: { entree: 1000, sortie: 500 } });
 
@@ -173,5 +173,19 @@ describe("correction reportée dans le résumé", () => {
   it("refuse un résumé corrigé qui a perdu des informations", async () => {
     const appel: Appel = async () => ({ donnees: { ...resume, date_bilan: "12/10/2026", sections: [], chiffres: [] }, usage: { entree: 1, sortie: 1 } });
     await expect(corrigerResume("cle", resume, corr, appel)).rejects.toThrow("pas pu être reportée");
+  });
+});
+
+describe("retrouver un patient dans une dictée gardée", () => {
+  const dictee = "avec Marc mobilisation passive ensuite Victor douleur à 4 il dort mieux rotation externe contre résistance";
+  it("rend le passage s'il vient de la dictée", async () => {
+    const r = await chercherDansDictee("c", dictee, "Victor M.", faux({ trouve: true, extrait: "Victor douleur à 4 il dort mieux rotation externe contre résistance" }));
+    expect(r.donnees).toContain("il dort mieux");
+  });
+  it("rien trouvé : null", async () => {
+    expect((await chercherDansDictee("c", dictee, "Lucie B.", faux({ trouve: false, extrait: null }))).donnees).toBeNull();
+  });
+  it("un passage inventé est refusé", async () => {
+    await expect(chercherDansDictee("c", dictee, "Victor M.", faux({ trouve: true, extrait: "Victor a fait du vélo et de la natation cette semaine sans aucune douleur" }))).rejects.toThrow("ne vient pas de la dictée");
   });
 });

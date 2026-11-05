@@ -1,7 +1,7 @@
 /* Rangement des données dans la tablette (IndexedDB). Rien ne part sur internet.
    Remplace les briques db et assets de claude.ai utilisées par la version d'essai. */
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { avecRdv, isoDay, patientFrom, type Bilan, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
+import { avecRdv, isoDay, patientFrom, type Bilan, type DicteeGardee, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
 
 interface Schema extends DBSchema {
   dossiers: { key: string; value: Dossier };
@@ -171,6 +171,39 @@ export async function fusionner(depuisId: string, versId: string) {
 }
 
 /* « Non, deux personnes différentes » : le dossier en attente prend un nouveau nom (« Sylvie Fr. »). */
+/* Dictées groupées gardées telles que dictées (audit E3) : les 30 dernières, partagées entre les appareils
+   (valeur { dictees: [...] }, réunie élément par élément par le partage). Une dictée relancée à l'identique n'est gardée qu'une fois. */
+export const DICTEES_GARDEES = 30;
+export async function garderDictee(date: string, texte: string) {
+  const t = texte.trim();
+  if (!t) return;
+  const db = await ouvrir();
+  const liste = (((await db.get("parametres", "dictees"))?.valeur as { dictees?: DicteeGardee[] } | undefined)?.dictees ?? []);
+  if (liste.some(x => x.date === date && x.texte === t)) return;
+  const nouvelle: DicteeGardee = { id: nouvelId(), date, cree: new Date().toISOString(), texte: t };
+  const garde = [...liste, nouvelle].sort((a, b) => a.cree.localeCompare(b.cree)).slice(-DICTEES_GARDEES);
+  await db.put("parametres", { cle: "dictees", valeur: { dictees: garde } });
+  prevenir();
+}
+
+export async function dicteesDu(date: string): Promise<DicteeGardee[]> {
+  const liste = (((await (await ouvrir()).get("parametres", "dictees"))?.valeur as { dictees?: DicteeGardee[] } | undefined)?.dictees ?? []);
+  return liste.filter(x => x.date === date).sort((a, b) => a.cree.localeCompare(b.cree));
+}
+
+/* « Il était absent » ce jour-là (ou l'annuler) */
+export async function noterAbsence(dossierId: string, date: string, absent: boolean) {
+  await copieDuJour();
+  const db = await ouvrir();
+  const d = await db.get("dossiers", dossierId);
+  if (!d) throw new Error("Dossier introuvable");
+  const autres = (d.absences ?? []).filter((x: string) => x !== date);
+  const absences = absent ? [...autres, date].sort() : autres;
+  const { absences: _, ...reste } = d;
+  await db.put("dossiers", absences.length ? { ...reste, absences } : reste);
+  prevenir();
+}
+
 /* « Fin de traitement » à la séance de ce jour (ou l'annuler avec undefined) */
 export async function finTraitement(dossierId: string, date: string | undefined) {
   await copieDuJour();
@@ -311,7 +344,7 @@ async function nettoyerFichiers() {
    Les PDF et photos voyagent à part (un fichier ne change jamais une fois déposé).
    Base : la version de l'élément au dernier échange avec le PC (rev : son numéro sur le PC). */
 export type Base = { cle: string; valeur: unknown; rev: number };
-export const PARAMS_PARTAGES = ["horaires", "transmissions_mot"];
+export const PARAMS_PARTAGES = ["horaires", "transmissions_mot", "dictees"];
 const MAGASINS = ["dossiers", "bilans", "seances"] as const;
 
 /* identifiant de cet appareil, créé à la première demande (jamais partagé avec les autres appareils) */
