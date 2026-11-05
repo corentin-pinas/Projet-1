@@ -24,7 +24,10 @@ let bilanPour: string | null = null;     // « Ajouter le bilan » depuis une fi
 let formOpen = false, editing: string | null = null, rdvOpen = false, homoOpen = false;
 let dicteeVue = false;                    // la dictée groupée occupe la partie droite
 let nomOpen = false;                      // modification du nom du patient en cours
-const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue || nomOpen;
+/* une saisie est en cours sur la fiche : pas de redessin automatique, sinon le texte tapé (ou dicté au clavier) s'efface
+   au retour d'une autre appli, à la fin d'un travail de l'IA ou à un échange avec le PC (audit M7) */
+const correctionEnCours = () => !!document.querySelector("#main .vitem .vedit");
+const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue || nomOpen || correctionEnCours();
 let aCle = false;                         // une clé d'IA est enregistrée
 /* La liste de tous les patients est cachée derrière un bouton (l'accueil met en avant « Ma journée ») ;
    elle s'affiche aussi dès qu'on cherche un patient. Ouverte ou fermée : gardé dans la tablette. */
@@ -247,10 +250,10 @@ export function renderMain() {
       d.innerHTML = `<input type="text" placeholder="La bonne information" aria-label="Correction"><button class="primary">Enregistrer</button><button>Annuler</button>`;
       li.append(d);
       const inp = d.querySelector("input")!; inp.focus();
-      const save = () => { const v = inp.value.trim(); if (v) verifier(b, i, v); else inp.focus(); };
+      const save = () => { const v = inp.value.trim(); if (v) { d.remove(); verifier(b, i, v); } else inp.focus(); };
       d.querySelector<HTMLElement>(".primary")!.onclick = save;
       inp.onkeydown = e => { if (e.key === "Enter") save(); };
-      d.querySelector<HTMLElement>("button:last-child")!.onclick = () => d.remove();
+      d.querySelector<HTMLElement>("button:last-child")!.onclick = () => { d.remove(); renderMain(); };
     };
   });
 }
@@ -375,10 +378,10 @@ function wireSeances(D: Dossier) {
   const dict = $("#dict"); if (dict) dict.onclick = ouvrir;
   const cancel = $("#scancel"); if (cancel) cancel.onclick = async () => {
     if (voixSeance.occupe() && !await confirmer("Un enregistrement de votre voix est en cours. Fermer quand même ? Il sera perdu.", "Fermer")) return;
-    voixSeance.quitter(); formOpen = false; editing = null; renderMain();
+    voixSeance.quitter(true); formOpen = false; editing = null; renderMain();
   };
   const ta = $<HTMLTextAreaElement>("#stext"), prev = $("#avprev");
-  if (ta) voixSeance.monter($("#svoix"), ta, () => $<HTMLButtonElement>("#ssave")?.click()); else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
+  if (ta) voixSeance.monter($("#svoix"), ta, () => $<HTMLButtonElement>("#ssave")?.click(), D.id); else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
   if (ta && prev) {
     const show = () => {
       const a = avenirFrom(ta.value);
@@ -468,12 +471,16 @@ async function ajouter(e: Event) {
 }
 
 /* valider (correction = null) ou corriger un point à vérifier */
-async function verifier(b: Bilan, i: number, correction: string | null) {
-  const r = b.resume!, point = r.a_verifier![i];
-  const patch: Partial<Bilan> = { resume: { ...r, a_verifier: r.a_verifier!.filter((_, k) => k !== i) } };
-  if (correction) patch.corrections = [...b.corrections, { point, correction, quand: new Date().toISOString() }];
-  else patch.valides = [...b.valides, point];
+async function verifier(affiche: Bilan, i: number, correction: string | null) {
+  const point = affiche.resume!.a_verifier![i];
   try {
+    /* relu juste avant d'écrire : un autre point a pu être validé ou corrigé depuis l'affichage de la fiche */
+    const b = (await db.tout()).bilans.find(x => x.id === affiche.id);
+    if (!b?.resume) return;
+    const r = b.resume;
+    const patch: Partial<Bilan> = { resume: { ...r, a_verifier: (r.a_verifier ?? []).filter(x => x !== point) } };
+    if (correction) patch.corrections = [...b.corrections, { point, correction, quand: new Date().toISOString() }];
+    else patch.valides = [...b.valides, point];
     await db.majBilan(b.id, patch);
     toast(correction ? "Correction enregistrée. Elle est reportée dans le résumé." : "Validé.");
     if (correction) moteur.integrerCorrections(b.id, false);
@@ -530,7 +537,9 @@ async function ouvrirVisionneuse(b: Bilan) {
   v.innerHTML = `<div class="bar"><b>${esc(dossierDe(b).label)}</b><button id="vclose">Fermer</button></div><div class="pages"><p class="vmsg">Ouverture…</p></div>`;
   document.body.append(v);
   const urls: string[] = [];
-  v.querySelector<HTMLElement>("#vclose")!.onclick = () => { urls.forEach(u => URL.revokeObjectURL(u)); v.remove(); };
+  const lecteurs: { destroy: () => Promise<void> }[] = [];   // libérés à la fermeture (audit M10 : mémoire de la tablette)
+  let ferme = false;
+  v.querySelector<HTMLElement>("#vclose")!.onclick = () => { ferme = true; urls.forEach(u => URL.revokeObjectURL(u)); lecteurs.splice(0).forEach(l => l.destroy().catch(() => {})); v.remove(); };
   const pages = v.querySelector<HTMLElement>(".pages")!;
   try {
     pages.innerHTML = "";
@@ -540,6 +549,8 @@ async function ouvrirVisionneuse(b: Bilan) {
       if (f.type === "application/pdf" || /\.pdf$/i.test(f.nom)) {
         const { pdfjs } = await import("./pdf");
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+        if (ferme) { pdf.destroy().catch(() => {}); return; }
+        lecteurs.push(pdf);
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const dpr = window.devicePixelRatio || 1;

@@ -1,6 +1,7 @@
 /* Rangement des données dans la tablette (IndexedDB). Rien ne part sur internet.
    Remplace les briques db et assets de claude.ai utilisées par la version d'essai. */
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import { stable } from "./fusion";
 import { avecRdv, isoDay, patientFrom, type Bilan, type DicteeGardee, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
 
 interface Schema extends DBSchema {
@@ -21,7 +22,7 @@ export type Donnees = { dossiers: Dossier[]; bilans: Bilan[]; seances: Seance[] 
 /* Copie de sécurité interne : le texte de la base (sans les réglages). Les PDF et photos ne sont pas recopiés :
    un fichier reste gardé tant qu'un bilan ou une copie y renvoie.
    id : le jour (AAAA-MM-JJ) pour la copie quotidienne, AVANT_RETOUR pour l'état gardé avant un retour en arrière. */
-export type Copie = { id: string; cree: string; donnees: Donnees; taille: number };
+export type Copie = { id: string; cree: string; donnees: Donnees; taille: number; posee?: string };   // posee : empreinte de l'état mis en place par un retour (AVANT_RETOUR)
 export const AVANT_RETOUR = "avant-retour";
 export const COPIES_GARDEES = 7;
 
@@ -228,7 +229,7 @@ export async function renommer(dossierId: string, label: string) {
 
 export async function ajouterSeance(dossierId: string, date: string, contenu: string): Promise<Seance> {
   await copieDuJour();
-  const s: Seance = { id: nouvelId(), dossierId, date, contenu, cree: new Date().toISOString() };
+  const s: Seance = { id: nouvelId(), dossierId, date, contenu, cree: new Date().toISOString(), origine: await appareil() };
   await (await ouvrir()).put("seances", s);
   prevenir();
   return s;
@@ -284,12 +285,27 @@ export async function revenirA(id: string) {
 
 /* Remplace dossiers, bilans et séances (les fichiers donnés sont ajoutés). garderActuel : l'état actuel devient AVANT_RETOUR ;
    sinon (annulation d'un retour) la copie AVANT_RETOUR a servi et disparaît. */
+/* empreinte courte d'un état (pour savoir si rien n'a changé depuis le dernier retour en arrière) */
+function empreinte(d: Donnees): string {
+  const t = stable(d);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return t.length + ":" + (h >>> 0).toString(16);
+}
+
 async function remplacer(donnees: Donnees, fichiers: { id: string; blob: Blob }[], garderActuel: boolean) {
   const db = await ouvrir();
   const actuel = await tout();
   const tx = db.transaction(["dossiers", "bilans", "seances", "copies", "fichiers"], "readwrite");
-  if (garderActuel) await tx.objectStore("copies").put({ id: AVANT_RETOUR, cree: new Date().toISOString(), donnees: actuel, taille: JSON.stringify(actuel).length });
-  else await tx.objectStore("copies").delete(AVANT_RETOUR);
+  if (garderActuel) {
+    /* deuxième retour de suite sans rien avoir changé entre les deux : l'état d'avant le PREMIER retour reste gardé,
+       sinon « Annuler le retour en arrière » ramènerait seulement la copie essayée en premier (audit M5) */
+    const ancien = await tx.objectStore("copies").get(AVANT_RETOUR);
+    const rienChange = ancien?.posee && ancien.posee === empreinte(actuel);
+    await tx.objectStore("copies").put(rienChange
+      ? { ...ancien, posee: empreinte(donnees) }
+      : { id: AVANT_RETOUR, cree: new Date().toISOString(), donnees: actuel, taille: JSON.stringify(actuel).length, posee: empreinte(donnees) });
+  } else await tx.objectStore("copies").delete(AVANT_RETOUR);
   for (const f of fichiers) await tx.objectStore("fichiers").put(f);
   for (const nom of ["dossiers", "bilans", "seances"] as const) await tx.objectStore(nom).clear();
   for (const d of donnees.dossiers) await tx.objectStore("dossiers").put(d);

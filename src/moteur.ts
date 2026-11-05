@@ -63,6 +63,11 @@ const PAGES_MAX = 12;
 async function pdfPourIA(blob: Blob): Promise<PieceBilan[]> {
   const { pdfjs } = await import("./pdf");
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  try { return await pagesPourIA(pdf); }
+  finally { pdf.destroy().catch(() => {}); }   // un lecteur par PDF : libéré après usage (audit M10)
+}
+
+async function pagesPourIA(pdf: Awaited<ReturnType<typeof import("./pdf")["pdfjs"]["getDocument"]>["promise"]>): Promise<PieceBilan[]> {
   if (pdf.numPages > PAGES_MAX) throw new ErreurIA(`Ce bilan a ${pdf.numPages} pages : l'IA en lit ${PAGES_MAX} au plus.`);
   const pages: PieceBilan[] = [], textes: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -129,8 +134,24 @@ export async function resumer(bilanId: string, manuel: boolean) {
 
 /* Après un changement de réglage de l'IA : tous les bilans sans résumé ont droit à un nouvel essai. */
 export function relancerEnAttente() {
-  tentes.clear();
+  tentes.clear(); seancesTentees.clear();
   return resumerEnAttente();
+}
+
+/* Séances jamais analysées (réseau coupé pendant la mise au propre, séance notée hors connexion, serveur qui redémarrait) :
+   reprises à l'ouverture et au retour du réseau, une tentative par ouverture, par l'appareil où elles ont été notées
+   (pas de double demande à l'IA), sur les 14 derniers jours. Le rendez-vous dicté est posé à cette occasion (audit M3). */
+const seancesTentees = new Set<string>();
+async function analyserEnAttente() {
+  if (!(await configIA()) || !navigator.onLine) return;
+  const moi = await db.appareil(), depuis = isoDay(new Date(Date.now() - 14 * 864e5));
+  const { seances } = await db.tout();
+  for (const s of seances) {
+    if (s.ia_ok || s.origine !== moi || s.date < depuis || seancesTentees.has(s.id) || enCours.has(s.id)) continue;
+    if (Date.now() - new Date(s.cree).getTime() < 60_000) continue;   // tout juste notée : son analyse est déjà partie
+    seancesTentees.add(s.id);
+    await analyser(s, false, !!s.brut);
+  }
 }
 
 /* Lance, un par un, le résumé des bilans qui n'en ont pas encore (une seule tentative automatique par ouverture de l'appli). */
@@ -150,6 +171,7 @@ export async function resumerEnAttente() {
     }
   } finally { enFile = false; }
   corrigerEnAttente();
+  await analyserEnAttente();
 }
 
 /* ---------- corrections reportées dans le résumé ---------- */

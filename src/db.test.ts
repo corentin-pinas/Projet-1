@@ -117,6 +117,34 @@ describe("copies de sécurité", () => {
     expect(await db.listeCopies()).toEqual([]);
   });
 
+  it("deux retours en arrière de suite, puis « Annuler » : le travail du jour revient (audit M5)", async () => {
+    jour("2026-10-01");
+    await db.creerPatient("Anne A.");
+    jour("2026-10-02");
+    await db.creerPatient("Bruno B.");     // la copie du 2 garde Anne seule
+    jour("2026-10-03");
+    await db.creerPatient("Chloé C.");     // la copie du 3 garde Anne et Bruno ; Chloé = travail du jour
+    const noms = async () => (await db.tout()).dossiers.map(d => d.label).sort();
+    await db.revenirA("2026-10-02");
+    expect(await noms()).toEqual(["Anne A."]);
+    await db.revenirA("2026-10-03");       // essai d'une autre copie, sans rien changer entre les deux
+    expect(await noms()).toEqual(["Anne A.", "Bruno B."]);
+    await db.revenirA(db.AVANT_RETOUR);
+    expect(await noms()).toEqual(["Anne A.", "Bruno B.", "Chloé C."]);
+  });
+
+  it("un changement fait après un retour en arrière est, lui, gardé par le retour suivant", async () => {
+    jour("2026-10-01");
+    await db.creerPatient("Anne A.");
+    jour("2026-10-02");
+    await db.creerPatient("Bruno B.");
+    await db.revenirA("2026-10-02");
+    await db.creerPatient("Denis D.");     // travail fait après le retour
+    await db.revenirA("2026-10-02");
+    await db.revenirA(db.AVANT_RETOUR);
+    expect((await db.tout()).dossiers.map(d => d.label).sort()).toEqual(["Anne A.", "Denis D."]);
+  });
+
   it("revenir à une copie rend un bilan supprimé par erreur, avec son PDF, et peut s'annuler", async () => {
     jour("2026-10-01");
     const b = await db.ajouterBilan([pdf("Bilan - Paul ROUX.pdf")]);

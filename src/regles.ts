@@ -59,6 +59,7 @@ export type Seance = {
   bref?: string;                                      // résumé court de la séance (écran « Ma journée »)
   bref_source?: string;                               // texte dont « bref » est issu
   ia_ok?: boolean;
+  origine?: string;                                   // appareil où la séance a été notée (c'est lui qui la fait analyser)
 };
 
 /* ---------- nom du patient tiré du nom du fichier ---------- */

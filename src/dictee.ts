@@ -11,11 +11,13 @@ import { ageDossier, demiDe, demiFr, isoDay, nomAffiche, nomCorrespond, patientF
 import { confirmer, esc, toast } from "./ui";
 
 const BROUILLON = "dictee_brouillon";   // { texte, date }
+const VOIX_GARDEE = "voix_attente_dictee";   // enregistrement pas encore transcrit, gardé dans la base (audit M1)
 const DOUTES = "dictee_doutes";         // passages en attente d'un choix de dossier
 
 type Phase = "saisie" | "envoi" | "fini";
 /* avant : rendez-vous des dossiers avant la dictée, pour « Annuler » ; crees : patients créés depuis la dictée (bilan à venir) */
-type Recap = { range: moteur.Range[]; rdvs: string[]; texte: string; date: string; avant: Map<string, Rdv[]>; crees?: string[] };
+/* avant / apres : rendez-vous des dossiers touchés par la dictée, avant et juste après leur rangement (pour « Annuler ») */
+type Recap = { range: moteur.Range[]; rdvs: string[]; texte: string; date: string; avant: Map<string, Rdv[]>; apres?: Map<string, Rdv[]>; crees?: string[] };
 
 let phase: Phase = "saisie";
 let texte = "", date = "";
@@ -40,6 +42,7 @@ async function charger() {
   if (charge) return;
   charge = true;
   const b = await db.lireParametre<{ texte: string; date: string }>(BROUILLON).catch(() => undefined);
+  if (!audioEnAttente && !enCours) audioEnAttente = (await db.lireParametre<Blob>(VOIX_GARDEE).catch(() => undefined)) ?? null;
   texte = b?.texte ?? ""; date = b?.date || aujourdhui();
   doutes = (await db.lireParametre<moteur.Doute[]>(DOUTES).catch(() => undefined)) ?? [];
 }
@@ -139,7 +142,7 @@ function blocVoix(): string {
   if (enCours) return `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="vchrono">${voix.chrono(enCours, duree)}</span>
     <button class="primary" id="varreter">Arrêter et transcrire</button><button id="vannuler">Annuler</button></div>`;
   if (transcription) return `<div class="wait encours" role="status">Transcription de votre voix…</div>`;
-  if (audioEnAttente) return `<div class="wait">L'enregistrement n'a pas pu être transcrit. Il est gardé.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
+  if (audioEnAttente) return `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
   return `<div class="row"><button class="primary voixbtn" id="venreg">🎙️ Enregistrer ma dictée</button></div>`;
 }
 
@@ -150,6 +153,7 @@ async function envoyerVoix() {
     const t = await voix.transcrire(audioEnAttente);
     texte = texte.trim() ? texte.trimEnd() + "\n" + t : t;
     audioEnAttente = null;
+    await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {});
     await garderBrouillon(true);
     erreurVoix = "";
   } catch (e) {
@@ -177,6 +181,7 @@ function brancher(z: HTMLElement) {
     const e = enCours; if (!e) return;
     clearInterval(chrono); enCours = null;
     audioEnAttente = await e.arreter();
+    await db.ecrireParametre(VOIX_GARDEE, audioEnAttente).catch(() => {});   // gardé tant qu'il n'est pas transcrit
     envoyerVoix();
   };
   const vannuler = z.querySelector<HTMLElement>("#vannuler");
@@ -184,7 +189,7 @@ function brancher(z: HTMLElement) {
   const vre = z.querySelector<HTMLElement>("#vreessayer");
   if (vre) vre.onclick = envoyerVoix;
   const voub = z.querySelector<HTMLElement>("#voublier");
-  if (voub) voub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { audioEnAttente = null; afficher(); } };
+  if (voub) voub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { audioEnAttente = null; await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {}); afficher(); } };
 
   z.querySelector<HTMLElement>("#dfermer")!.onclick = () => { quitter(); fermer(); };
   const ta = z.querySelector<HTMLTextAreaElement>("#dtexte");
@@ -210,6 +215,7 @@ function brancher(z: HTMLElement) {
       if (avant && !dernier.avant.has(dossierId)) dernier.avant.set(dossierId, avant.rdvs);
       const r = await moteur.rangerSeance(dossierId, d.date, d.seance);
       dernier.range.push(r.range); if (r.rdv) dernier.rdvs.push(r.rdv);
+      await noterApres(dossierId);
       doutes = doutes.filter(x => x.id !== d.id); await garderDoutes();
       toast("Séance rangée.");
     } catch { toast("L'enregistrement a échoué. Réessayez."); }
@@ -229,6 +235,7 @@ function brancher(z: HTMLElement) {
       (dernier.crees ??= []).push(patient.id);
       const r = await moteur.rangerSeance(patient.id, d.date, d.seance);
       dernier.range.push(r.range); if (r.rdv) dernier.rdvs.push(r.rdv);
+      await noterApres(patient.id);
       doutes = doutes.filter(x => x.id !== d.id); await garderDoutes();
       toast(`${label} créé (bilan à venir), séance rangée.`);
     } catch (e) {
@@ -256,6 +263,7 @@ async function lancer() {
     const avant = new Map((await db.tout()).dossiers.map(d => [d.id, d.rdvs] as const));
     const r = await moteur.rangerDictee(jour, envoye);
     dernier = { range: r.ranges, rdvs: r.rdvs, texte: envoye, date: jour, avant };
+    for (const x of r.ranges) await noterApres(x.dossierId);
     doutes = r.doutes; await garderDoutes();
     texte = ""; date = aujourdhui(); await garderBrouillon(true);
     phase = "fini";
@@ -266,6 +274,11 @@ async function lancer() {
     toast(e instanceof ErreurIA ? e.message : "La dictée n'a pas pu être rangée. Elle est gardée : réessayez.");
   } finally { relacher(); }
   afficher();
+}
+
+async function noterApres(dossierId: string) {
+  const d = (await db.tout()).dossiers.find(x => x.id === dossierId);
+  if (dernier && d) (dernier.apres ??= new Map()).set(dossierId, d.rdvs);
 }
 
 /* « Annuler » : les séances de cette dictée disparaissent, les rendez-vous redeviennent ce qu'ils étaient,
@@ -280,9 +293,13 @@ async function annulerDictee() {
     for (const id of dernier.crees ?? [])
       if (!apres.bilans.some(b => b.dossierId === id) && !apres.seances.some(s => s.dossierId === id)) await db.supprimerPatient(id);
     const { dossiers } = await db.tout();
+    /* seuls les dossiers rangés par cette dictée, et seulement si leurs rendez-vous sont encore ceux laissés par la dictée :
+       un rendez-vous posé depuis (ici ou sur un autre appareil) n'est jamais effacé (audit M4) */
+    const touches = new Set(dernier.range.map(r => r.dossierId));
     for (const [id, rdvs] of dernier.avant) {
-      const d = dossiers.find(x => x.id === id);
-      if (d && JSON.stringify(d.rdvs) !== JSON.stringify(rdvs)) await db.setRdvs(id, rdvs);
+      if (!touches.has(id)) continue;
+      const d = dossiers.find(x => x.id === id), apres = dernier.apres?.get(id);
+      if (d && apres && JSON.stringify(d.rdvs) === JSON.stringify(apres) && JSON.stringify(d.rdvs) !== JSON.stringify(rdvs)) await db.setRdvs(id, rdvs);
     }
     if (dernier.texte) { texte = dernier.texte; date = dernier.date; await garderBrouillon(true); }
     dernier = null; doutes = []; await garderDoutes();
