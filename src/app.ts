@@ -3,13 +3,14 @@
 import * as db from "./db";
 import {
   ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
-  prochainRdv, propreOk, questionHomonyme, rdvsAVenir, texteDe, trierBilans, trierSeances,
+  prochainRdv, propreOk, questionHomonyme, questionRdv, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Demi, type Dossier, type Seance
 } from "./regles";
 import * as agenda from "./agenda";
 import * as dictee from "./dictee";
 import * as journee from "./journee";
 import * as moteur from "./moteur";
+import * as prochain from "./prochain-rdv";
 import * as voixSeance from "./voix-seance";
 import { confirmer, esc, toast } from "./ui";
 
@@ -171,7 +172,12 @@ export function renderMain() {
       <div class="choix-type" role="radiogroup" aria-label="Demi-journée"><label class="choix"><input type="radio" name="rdemi" value="am"${rv?.demi === "pm" ? "" : " checked"}> Matin</label><label class="choix"><input type="radio" name="rdemi" value="pm"${rv?.demi === "pm" ? " checked" : ""}> Après-midi</label></div>
       <div class="choix-type" role="radiogroup" aria-label="Type de rendez-vous"><label class="choix"><input type="radio" name="rtype" value="seance"${rv?.bilan ? "" : " checked"}> Séance (20 min)</label><label class="choix"><input type="radio" name="rtype" value="bilan"${rv?.bilan ? " checked" : ""}> Bilan (40 min)</label></div>
       <div class="row"><button class="primary" id="rsave">Enregistrer</button>${rv ? `<button id="rclear">Effacer le rendez-vous</button>` : ""}<button id="rcancel">Annuler</button></div></div>`
-    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.demi ? " " + DEMI_FR[rv.demi] : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span><button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
+    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.demi ? " " + DEMI_FR[rv.demi] : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : D.fin ? `<span class="meta">Fin de traitement notée à la séance du ${esc(frDate(D.fin))}</span>` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span>${!rv && D.fin ? `<button id="finannuler">Annuler la fin</button>` : ""}<button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
+
+  /* « Prochain rendez-vous ? » une fois la séance analysée (l'IA a pu placer le rendez-vous elle-même) */
+  const qrdv = rdvOpen ? null : questionRdv(D, donnees.seances, aujourdhui());
+  const derniere = qrdv ? seancesDe(D).find(s => s.date === qrdv) : undefined;
+  if (qrdv && derniere && !moteur.occupe(derniere.id) && (derniere.ia_ok || !aCle)) html += prochain.question(D, qrdv);
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
@@ -214,6 +220,8 @@ export function renderMain() {
 
   wireSeances(D);
   wireRdv(D);
+  prochain.brancher($("#main"));
+  const finA = $("#finannuler"); if (finA) finA.onclick = async () => { try { await db.finTraitement(D.id, undefined); toast("Fin de traitement annulée."); } catch { toast("L'enregistrement a échoué. Réessayez."); } };
   wireNom(D);
   const mj = $("#majournee"); if (mj) mj.onclick = retourJournee;
   if (autre) wireHomonyme(D, autre);
@@ -299,7 +307,8 @@ function wireHomonyme(D: Dossier, autre: Dossier) {
 /* « Modifier » remplace le prochain rendez-vous, « Effacer » le retire ; les suivants sont gardés */
 async function saveRdv(D: Dossier, date: string, demi: Demi | null, type?: "seance" | "bilan") {
   try {
-    const suite = rdvsAVenir(D.rdvs, aujourdhui()).slice(1);
+    const passes = D.rdvs.filter(r => r && r.d < aujourdhui());   // gardés : historique, futures absences
+    const suite = passes.concat(rdvsAVenir(D.rdvs, aujourdhui()).slice(1));
     rdvOpen = false;
     await db.setRdvs(D.id, date ? avecRdv(suite, date, "", type, demi) : suite);
     toast(date ? "Rendez-vous enregistré." : "Rendez-vous effacé.");

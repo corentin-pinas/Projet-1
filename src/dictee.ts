@@ -4,8 +4,9 @@
 import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
+import * as prochain from "./prochain-rdv";
 import * as voix from "./transcription";
-import { ageDossier, demiFr, isoDay, nomAffiche, nomCorrespond, patientFrom, type Dossier, type Rdv } from "./regles";
+import { ageDossier, demiFr, isoDay, nomAffiche, nomCorrespond, patientFrom, questionRdv, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
 const BROUILLON = "dictee_brouillon";   // { texte, date }
@@ -71,13 +72,17 @@ const jourFr = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("
 async function afficher() {
   const z = ecran;
   if (!z) return;
-  const { dossiers, bilans } = await db.tout();
+  const { dossiers, bilans, seances } = await db.tout();
   const nom = (d: Dossier) => nomAffiche(d, ageDossier(bilans.filter(b => b.dossierId === d.id)), dossiers);
   const parId = new Map(dossiers.map(d => [d.id, d]));
 
   const recap = dernier && dernier.range.length ? `<div class="recap" role="status">
       <p><b>${dernier.range.length} séance${dernier.range.length > 1 ? "s rangées" : " rangée"}</b> : ${esc([...new Set(dernier.range.map(r => parId.get(r.dossierId)?.label ?? "?"))].join(", ").replace(/([^.])$/, "$1."))}</p>
       ${dernier.rdvs.map(m => `<p class="note">${esc(m)}</p>`).join("")}
+      ${[...new Set(dernier.range.map(r => r.dossierId))].map(id => parId.get(id)).filter((x): x is Dossier => !!x).map(D => {
+        const q = questionRdv(D, seances, aujourdhui());
+        return q ? prochain.question(D, q, D.label) : "";
+      }).join("")}
       <div class="row"><button id="dannuler">Annuler cette dictée</button></div></div>` : "";
 
   const blocDoutes = doutes.length ? `<h3>${doutes.length === 1 ? "Un passage à ranger" : doutes.length + " passages à ranger"}</h3>
@@ -154,6 +159,7 @@ async function envoyerVoix() {
 }
 
 function brancher(z: HTMLElement) {
+  prochain.brancher(z, () => { afficher(); });
   const venreg = z.querySelector<HTMLElement>("#venreg");
   if (venreg) venreg.onclick = async () => {
     try { enCours = await voix.enregistrer(); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }

@@ -171,6 +171,17 @@ export async function fusionner(depuisId: string, versId: string) {
 }
 
 /* « Non, deux personnes différentes » : le dossier en attente prend un nouveau nom (« Sylvie Fr. »). */
+/* « Fin de traitement » à la séance de ce jour (ou l'annuler avec undefined) */
+export async function finTraitement(dossierId: string, date: string | undefined) {
+  await copieDuJour();
+  const db = await ouvrir();
+  const d = await db.get("dossiers", dossierId);
+  if (!d) throw new Error("Dossier introuvable");
+  const { fin: _, ...reste } = d;
+  await db.put("dossiers", date ? { ...reste, fin: date } : reste);
+  prevenir();
+}
+
 export async function renommer(dossierId: string, label: string) {
   await copieDuJour();
   const db = await ouvrir();

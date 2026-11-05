@@ -289,13 +289,15 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     '- "propre" : ' + (sansPropre ? "null" : "la note remise au propre. " + REGLES_PROPRE) + "\n" +
     '- "resume" : ' + (brut ? "résumé très court (25 mots maximum, français correct, style télégraphique) de ce qui est prévu pour la prochaine séance, d'après le passage « Prévu » ci-dessous. N'ajoute rien, n'interprète pas, ne retire rien d'important. N'y mets ni la date ni l'heure du rendez-vous. null s'il n'y a rien d'autre que la date." : "null") + "\n" +
     '- "bref" : ' + CONSIGNE_BREF + "\n" +
-    '- "rdv_date" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
+    '- "rdv_date" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. ' + REGLE_JOUR + ' null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
     'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}\n\n' +
     "Note complète :\n" + contenu.slice(0, 8000) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
 }
 
+/* « mardi prochain » (choix de Corentin, 5 novembre 2026) */
+const REGLE_JOUR = "Un jour de la semaine (« mardi », « mardi prochain ») désigne le premier jour de ce nom APRÈS J (dit un lundi, « mardi prochain » est le lendemain) ; « mardi en huit » ou « mardi de la semaine prochaine » : le mardi de la semaine qui suit celle de J.";
 const CONSIGNE_DEMI = "« matin » ou « après-midi » si la note le dit pour cette prochaine séance (ou si l'heure annoncée le dit : avant 13 h, matin), sinon null.";
 /* demi-journée lue dans la réponse, sinon déduite de l'heure */
 const okDemi = (v: unknown, heure: string): Demi | "" => {
@@ -363,7 +365,7 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "propre" : cet extrait remis au propre. ' + REGLES_PROPRE + "\n" +
     '- "resume" : si l\'extrait contient ce qui est prévu pour la prochaine séance (après « pour la prochaine séance », « pour la prochaine », « la prochaine fois » ou « à venir : »), un résumé très court (25 mots maximum, style télégraphique) de ce qui est prévu, sans la date ni l\'heure du rendez-vous. N\'ajoute rien. Sinon null.\n' +
     '- "bref" : ' + CONSIGNE_BREF + "\n" +
-    '- "rdv_date" : si l\'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
+    '- "rdv_date" : si l\'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. ' + REGLE_JOUR + ' null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
     'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}]}\n\n' +

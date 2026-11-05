@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
+  demiSeance, questionRdv, brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
   agesCompatibles, avecRdv, avenirDe, avenirFrom, jourLabel, lignesListe, nomAffiche,
   plageDemi, placesPlage, placesPrises, demiDe, rdvKey, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
@@ -272,5 +272,31 @@ describe("transmissions", () => {
   it("jours travaillés sans aucun rendez-vous, et semaine prochaine", () => {
     expect(joursSansRdv(dossiers, HORAIRES_DEFAUT, "2026-11-02", "2026-11-08")).toEqual(["2026-11-04", "2026-11-06"]);
     expect(semaineProchaine("2026-10-30")).toEqual(["2026-11-02", "2026-11-08"]);
+  });
+});
+
+describe("prochain rendez-vous (choix de Corentin, 5 novembre 2026)", () => {
+  const D = (rdvs: { d: string; h?: string; p?: "am" | "pm" }[], fin?: string) => ({ id: "d1", label: "Paul T.", rdvs: rdvs.map(r => ({ h: "", ...r })), homonyme: false, cree: "", ...(fin ? { fin } : {}) });
+  const S = (date: string) => ({ id: "s" + date, dossierId: "d1", date, cree: "", contenu: "x" });
+
+  it("demi-journée de la séance : celle du rendez-vous de ce jour-là", () => {
+    expect(demiSeance(D([{ d: "2026-11-05", p: "pm" }]).rdvs, "2026-11-05")).toBe("pm");
+    expect(demiSeance(D([{ d: "2026-11-05", h: "09:00" }]).rdvs, "2026-11-05")).toBe("am");
+    expect(demiSeance(D([]).rdvs, "2026-11-05")).toBeNull();
+  });
+
+  it("la question est posée après la dernière séance sans rendez-vous prévu ensuite", () => {
+    expect(questionRdv(D([{ d: "2026-11-05", p: "pm" }]), [S("2026-11-03"), S("2026-11-05")], "2026-11-05")).toBe("2026-11-05");
+  });
+
+  it("pas de question si un rendez-vous est prévu après la séance, si la fin du traitement est notée, ou si la séance est ancienne", () => {
+    expect(questionRdv(D([{ d: "2026-11-12" }]), [S("2026-11-05")], "2026-11-05")).toBeNull();
+    expect(questionRdv(D([], "2026-11-05"), [S("2026-11-05")], "2026-11-05")).toBeNull();
+    expect(questionRdv(D([]), [S("2026-10-01")], "2026-11-05")).toBeNull();
+    expect(questionRdv(D([]), [], "2026-11-05")).toBeNull();
+  });
+
+  it("une séance notée après la fin du traitement repose la question", () => {
+    expect(questionRdv(D([], "2026-10-20"), [S("2026-11-04")], "2026-11-05")).toBe("2026-11-04");
   });
 });

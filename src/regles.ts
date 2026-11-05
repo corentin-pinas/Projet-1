@@ -22,6 +22,7 @@ export type Dossier = {
   rdvs: Rdv[];
   homonyme: boolean;                                  // la question « même personne ? » reste à poser
   cree: string;
+  fin?: string;                                       // fin de traitement, notée à la séance de ce jour (AAAA-MM-JJ)
 };
 
 export type FichierBilan = { id: string; nom: string; type: string };
@@ -218,6 +219,24 @@ export function rdvsAVenir(rdvs: Rdv[], aujourdhui: string): Rdv[] {
 
 export const avecRdv = (list: Rdv[], d: string, h: string, t?: "bilan" | "seance", p?: Demi | null) =>
   list.filter(r => r.d !== d).concat([copieRdv({ d, h: h || "", ...(t === "bilan" ? { t: "bilan" as const } : {}), ...(p ? { p } : {}) })]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+
+/* demi-journée de la séance d'un jour : celle du rendez-vous de ce jour-là, si elle est connue */
+export function demiSeance(rdvs: Rdv[], date: string): Demi | null {
+  const r = rdvs.find(x => x.d === date);
+  return r ? demiDe(r) : null;
+}
+
+/* « Prochain rendez-vous ? » : à demander après la dernière séance du patient (21 jours au plus) quand aucun rendez-vous
+   n'est prévu après elle et que la fin du traitement n'a pas été notée ce jour-là ou après. Rend la date de cette séance. */
+export const JOURS_QUESTION_RDV = 21;
+export function questionRdv(d: Dossier, seances: Seance[], aujourdhui: string): string | null {
+  const derniere = seances.filter(s => s.dossierId === d.id && s.date <= aujourdhui).reduce<string | null>((m, s) => !m || s.date > m ? s.date : m, null);
+  if (!derniere) return null;
+  if (decalerJours(derniere, JOURS_QUESTION_RDV) < aujourdhui) return null;
+  if (d.fin && d.fin >= derniere) return null;
+  if (d.rdvs.some(r => r && r.d > derniere)) return null;
+  return derniere;
+}
 
 export function prochainRdv(rdvs: Rdv[], aujourdhui: string) {
   const l = rdvsAVenir(rdvs, aujourdhui);

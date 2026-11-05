@@ -466,3 +466,8 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 /* repère le remplissage automatique de Chrome dans la recherche (voir app.ts) */
 #q:-webkit-autofill{animation:autorempli 1ms}
 @keyframes autorempli{from{opacity:1}to{opacity:1}}
+
+/* « Prochain rendez-vous ? » (fiche et dictée groupée) */
+.question-rdv{background:var(--accent-bg);color:var(--ink);border-radius:10px;padding:12px 14px;margin-top:12px}
+.question-rdv .row{margin-top:8px;flex-wrap:wrap;align-items:center}
+.question-rdv input[type=date]{min-height:44px}
