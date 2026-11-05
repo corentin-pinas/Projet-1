@@ -117,7 +117,7 @@ details.sec ul{margin:0 0 10px;padding-left:20px}
 .vbtns .ok{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .vedit{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .vedit input{flex:1;min-width:200px;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px}
-.wait{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:14px;margin-top:16px;max-width:70ch}
+.wait,.alerte-pc{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:14px;margin-top:16px;max-width:70ch}
 .head .dict{min-height:48px;padding:10px 20px;font-size:1.05rem}
 
 /* séances */

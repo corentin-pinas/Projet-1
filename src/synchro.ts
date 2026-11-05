@@ -8,10 +8,10 @@ import { egal, fusion3 } from "./fusion";
 import type { Bilan } from "./regles";
 
 export const PARAM_ADRESSE = "sync_adresse", PARAM_CODE = "sync_code";
-const PARAM_REV = "sync_rev", PARAM_OK = "sync_ok", PARAM_QUITTE = "sync_adresse_quittee";
+const PARAM_REV = "sync_rev", PARAM_OK = "sync_ok", PARAM_QUITTE = "sync_adresse_quittee", PARAM_ID = "sync_base_pc";
 const PAQUET = 200;
 
-export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null };
+export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null; pcRevenu?: boolean };
 let etat: EtatSync = { relie: false, enCours: false, derniere: null, erreur: null };
 const abonnes = new Set<() => void>();
 export function abonner(fn: () => void) { abonnes.add(fn); return () => abonnes.delete(fn); }
@@ -19,9 +19,14 @@ export const etatSync = () => etat;
 const maj = (p: Partial<EtatSync>) => { etat = { ...etat, ...p }; abonnes.forEach(fn => fn()); };
 
 export class ErreurSync extends Error {}
+/* la base du PC est repartie d'un état plus ancien : les échanges s'arrêtent tant qu'un appareil ne l'a pas remise à niveau */
+export class ErreurPCRevenu extends ErreurSync {
+  constructor() { super("Le PC est revenu en arrière (il est reparti d'une copie plus ancienne). Les échanges sont arrêtés pour ne rien perdre : remettez le PC à niveau depuis l'appareil le plus à jour."); }
+}
 
 type Config = { adresse: string; code: string };
 type Changement = { cle: string; rev: number; valeur?: unknown; supprime?: boolean };
+type Identite = { id?: string; origine?: string };
 
 async function config(): Promise<Config | null> {
   const [adresse, code] = await Promise.all([db.lireParametre<string>(PARAM_ADRESSE), db.lireParametre<string>(PARAM_CODE)]);
@@ -44,6 +49,7 @@ async function appel(cfg: Config, chemin: string, init: RequestInit = {}, delai 
   }
   if (r.status === 404 && chemin.startsWith("/api/sync/fichiers/")) return null;
   if (r.status === 401) throw new ErreurSync("Le PC refuse le code : vérifiez-le.");
+  if (r.status === 409) throw new ErreurPCRevenu();
   if (r.status === 429) throw new ErreurSync("Trop d'essais avec un mauvais code : patientez 10 minutes.");
   if (!r.ok) throw new ErreurSync(`Le PC a répondu par une erreur (${r.status}).`);
   return r;
@@ -67,6 +73,7 @@ export async function relier(adresseTapee: string, code: string): Promise<void> 
   if (avant !== cfg.adresse) {
     await db.oublierPartage();
     await db.ecrireParametre(PARAM_REV, 0);
+    await db.ecrireParametre(PARAM_ID, undefined);
   }
   await db.ecrireParametre(PARAM_ADRESSE, cfg.adresse);
   await db.ecrireParametre(PARAM_CODE, cfg.code);
@@ -105,17 +112,21 @@ async function unEchange() {
   if (!cfg) { if (etat.relie) maj({ relie: false }); return; }
   maj({ relie: true, enCours: true });
   try {
+    let refus = false;
     for (let essai = 0; essai < 3; essai++) {
       await recevoir(cfg);
-      if (!(await envoyer(cfg))) break;   // un autre appareil a écrit entre-temps : on reçoit et on recommence
+      refus = await envoyer(cfg);
+      if (!refus) break;   // un autre appareil a écrit entre-temps : on reçoit et on recommence
     }
+    // jamais « À jour » si des changements de cet appareil n'ont pas pu partir
+    if (refus) throw new ErreurSync("Des changements de cet appareil n'ont pas pu être envoyés au PC ; nouvel essai à l'échange suivant.");
     await recevoirFichiers(cfg);
     const quand = new Date().toISOString();
     await db.ecrireParametre(PARAM_OK, quand);
-    maj({ enCours: false, derniere: quand, erreur: null });
+    maj({ enCours: false, derniere: quand, erreur: null, pcRevenu: false });
   } catch (e) {
     console.error("Partage avec le PC :", e);
-    maj({ enCours: false, erreur: e instanceof ErreurSync ? e.message : "L'échange avec le PC n'a pas abouti." });
+    maj({ enCours: false, erreur: e instanceof ErreurSync ? e.message : "L'échange avec le PC n'a pas abouti.", pcRevenu: e instanceof ErreurPCRevenu });
   }
 }
 
@@ -123,7 +134,18 @@ async function unEchange() {
 async function recevoir(cfg: Config) {
   let rev = (await db.lireParametre<number>(PARAM_REV)) ?? 0;
   for (;;) {
-    const r = await json<{ rev: number; changements: Changement[]; suite?: boolean }>(cfg, `/api/sync/changements?depuis=${rev}`);
+    const r = await json<{ rev: number; changements: Changement[]; suite?: boolean } & Identite>(cfg, `/api/sync/changements?depuis=${rev}`);
+    if (r.id) {
+      const connu = await db.lireParametre<string>(PARAM_ID);
+      if (!connu) await db.ecrireParametre(PARAM_ID, r.id);
+      else if (connu !== r.id) {
+        // un autre appareil a remis le PC à niveau : on reprend tout depuis le début ; l'historique gardé ici
+        // permet de ne garder de cet appareil que ce qui n'était pas encore parti
+        if (r.origine === "remise" && rev !== 0) { await db.ecrireParametre(PARAM_ID, r.id); rev = 0; await db.ecrireParametre(PARAM_REV, 0); continue; }
+        if (r.origine === "remise") await db.ecrireParametre(PARAM_ID, r.id);
+        else throw new ErreurPCRevenu();
+      }
+    }
     if (r.changements.length) {
       const [local, bases] = await Promise.all([db.etatPartage(), db.basesPartage()]);
       const ecritures: { cle: string; valeur: unknown }[] = [], nouvelles: db.Base[] = [];
@@ -157,23 +179,53 @@ async function envoyer(cfg: Config): Promise<boolean> {
   if (!changements.length) return false;
 
   /* les PDF et photos d'abord : un bilan n'arrive jamais sur le PC sans ses fichiers */
-  const ids = changements.flatMap(c => c.cle.startsWith("bilans/") && c.valeur ? (c.valeur as Bilan).fichiers.map(f => f.id) : []);
-  if (ids.length) {
-    const { absents } = await json<{ absents: string[] }>(cfg, "/api/sync/fichiers/absents", { ids });
-    for (const id of absents) {
-      const blob = await db.fichierBlob(id);
-      if (blob) await appel(cfg, "/api/sync/fichiers/" + encodeURIComponent(id), { method: "PUT", headers: { "Content-Type": blob.type || "application/octet-stream" }, body: blob }, 300_000);
-    }
-  }
+  await envoyerFichiers(cfg, changements.flatMap(c => c.cle.startsWith("bilans/") && c.valeur ? [c.valeur as Bilan] : []));
 
+  const id = await db.lireParametre<string>(PARAM_ID);
   let conflit = false;
   for (let i = 0; i < changements.length; i += PAQUET) {
     const paquet = changements.slice(i, i + PAQUET), parCle = new Map(paquet.map(c => [c.cle, c]));
-    const r = await json<{ acceptes: { cle: string; rev: number }[]; conflits: string[] }>(cfg, "/api/sync/envoi", { changements: paquet });
+    const r = await json<{ acceptes: { cle: string; rev: number }[]; conflits: string[] }>(cfg, "/api/sync/envoi", { changements: paquet, ...(id ? { id } : {}) });
     await db.appliquerPartage([], r.acceptes.map(a => ({ cle: a.cle, valeur: parCle.get(a.cle)?.supprime ? null : parCle.get(a.cle)?.valeur ?? null, rev: a.rev })));
     if (r.conflits.length) conflit = true;
   }
   return conflit;
+}
+
+async function envoyerFichiers(cfg: Config, bilans: Bilan[]) {
+  const ids = bilans.flatMap(b => b.fichiers.map(f => f.id));
+  if (!ids.length) return;
+  const { absents } = await json<{ absents: string[] }>(cfg, "/api/sync/fichiers/absents", { ids });
+  for (const id of absents) {
+    const blob = await db.fichierBlob(id);
+    if (blob) await appel(cfg, "/api/sync/fichiers/" + encodeURIComponent(id), { method: "PUT", headers: { "Content-Type": blob.type || "application/octet-stream" }, body: blob }, 300_000);
+  }
+}
+
+/* Après un retour en arrière du PC : cet appareil (le plus à jour) lui renvoie tout ce qu'il a. Les éléments que
+   l'appareil ne connaît pas restent sur le PC ; les autres appareils reprennent ensuite tout seuls (origine « remise »). */
+export async function remettreLePCaNiveau(): Promise<void> {
+  const cfg = await config();
+  if (!cfg) throw new ErreurSync("Cet appareil n'est pas relié au PC.");
+  maj({ enCours: true });
+  try {
+    const pc = await json<Identite>(cfg, "/api/sync/etat");
+    const [local, bases, { bilans }] = await Promise.all([db.etatPartage(), db.basesPartage(), db.tout()]);
+    const elements: { cle: string; valeur: unknown }[] = [...local].map(([cle, valeur]) => ({ cle, valeur }));
+    for (const [cle, b] of bases) if (!local.has(cle) && b.valeur !== null) elements.push({ cle, valeur: null });   // supprimés ici
+    await envoyerFichiers(cfg, bilans);
+    const r = await json<{ id: string; revs: { cle: string; rev: number }[] }>(cfg, "/api/sync/remplacer", { id: pc.id, elements });
+    const parCle = new Map(elements.map(e => [e.cle, e.valeur]));
+    await db.oublierPartage();
+    await db.appliquerPartage([], r.revs.map(x => ({ cle: x.cle, valeur: parCle.get(x.cle) ?? null, rev: x.rev })));
+    await db.ecrireParametre(PARAM_ID, r.id);
+    await db.ecrireParametre(PARAM_REV, 0);   // reçoit aussi ce que le PC avait et que cet appareil ne connaît pas
+    maj({ enCours: false, erreur: null, pcRevenu: false });
+  } catch (e) {
+    maj({ enCours: false });
+    throw e;
+  }
+  await synchroniser();
 }
 
 /* les PDF et photos des bilans arrivés d'un autre appareil */

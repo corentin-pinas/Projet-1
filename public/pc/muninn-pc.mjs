@@ -8,16 +8,17 @@
 //   fichiers/      les PDF et photos des bilans (jamais effacés) ;
 //   copies/        une copie de donnees.json par jour (avant le premier changement), gardée 60 jours ;
 //   code.txt       le code à taper sur chaque appareil ;
+//   rev-max.txt    le plus grand numéro de modification jamais enregistré (repère pour voir si la base est revenue en arrière) ;
 //   journal.log    ce qui s'est passé d'inhabituel (fichier abîmé, base reprise d'une copie), jamais le contenu des dossiers ;
 //   modeles/       le modèle de Whisper (voix.py, transcription de la voix sur le PC).
 import { createServer } from "node:http";
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
-import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const VERSION = 3;
+const VERSION = 4;
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -26,13 +27,18 @@ const COPIES_GARDEES = 60;
 const PAR_PAGE = 500;
 
 const fDonnees = join(dossier, "donnees.json"), dFichiers = join(dossier, "fichiers"), dCopies = join(dossier, "copies"), fCode = join(dossier, "code.txt");
-const fJournal = join(dossier, "journal.log");
+const fJournal = join(dossier, "journal.log"), fRevMax = join(dossier, "rev-max.txt");
 const COPIE = /^\d{4}-\d{2}-\d{2}\.json$/;
 
 /* ---------- les données ---------- */
 
-/* elements : clé -> { rev, valeur } ou { rev, supprime: true, ancien } (l'ancienne valeur reste, pour pouvoir la retrouver) */
+/* elements : clé -> { rev, valeur } ou { rev, supprime: true, ancien } (l'ancienne valeur reste, pour pouvoir la retrouver).
+   id : l'identité de la base, tirée au hasard. Elle change quand la base repart d'un état plus ancien (copie remise,
+   origine « reprise ») ou quand un appareil la remet à niveau (origine « remise ») : les appareils voient ainsi que
+   leurs numéros ne correspondent plus, au lieu d'afficher « À jour » à tort (audit E1). */
 let base = { rev: 0, elements: {} };
+let revMax = 0;
+const nouvelId = () => randomBytes(9).toString("base64url");
 let file = Promise.resolve();          // les écritures passent une par une
 const enFile = fn => (file = file.then(fn, fn));
 
@@ -54,6 +60,18 @@ async function lire(f) {
    rester arrêté. Ordre de secours : donnees.json, puis donnees.json.tmp (coupure entre l'écriture et le renommage),
    puis la plus récente copie lisible de copies/. Le fichier abîmé est mis de côté, jamais effacé. */
 async function charger() {
+  await chargerFichier();
+  try { revMax = Number((await readFile(fRevMax, "utf8")).trim()) || 0; } catch { revMax = 0; }
+  let change = false;
+  if (!base.id) { base.id = nouvelId(); base.origine = base.origine ?? "neuve"; change = true; }
+  if (base.rev < revMax) {
+    await noter(`La base est revenue en arrière (n° ${base.rev} au lieu de ${revMax}) : nouvelle identité. Les appareils le signaleront et proposeront de remettre le PC à niveau.`);
+    base.id = nouvelId(); base.origine = "reprise"; base.rev = revMax; change = true;
+  }
+  if (change) await enregistrer();
+}
+
+async function chargerFichier() {
   await mkdir(dFichiers, { recursive: true });
   await mkdir(dCopies, { recursive: true });
   let abime = false;
@@ -74,7 +92,11 @@ async function charger() {
   const copies = (await readdir(dCopies)).filter(n => COPIE.test(n)).sort().reverse();
   for (const n of copies) {
     const b = await lire(join(dCopies, n));
-    if (b) { base = b; await noter(`Base reprise depuis la copie ${n} : les changements faits depuis sont à renvoyer par les appareils.`); await enregistrer(); return; }
+    if (b) {
+      base = b; base.id = nouvelId(); base.origine = "reprise";
+      await noter(`Base reprise depuis la copie ${n} : nouvelle identité ; les changements faits depuis sont à renvoyer par les appareils.`);
+      await enregistrer(); return;
+    }
     await noter(`Copie ${n} illisible : ignorée.`);
   }
   if (abime || copies.length) await noter("Aucune copie lisible : démarrage sur une base vide.");
@@ -89,6 +111,7 @@ async function ecrireSur(f, texte) {
 async function enregistrer() {
   await ecrireSur(fDonnees + ".tmp", JSON.stringify(base));
   await rename(fDonnees + ".tmp", fDonnees);
+  if (base.rev > revMax) { revMax = base.rev; await ecrireSur(fRevMax, String(revMax)); }
 }
 
 /* une copie par jour, faite avant le premier changement de la journée : elle garde l'état de la veille au soir */
@@ -164,7 +187,7 @@ const ID_FICHIER = /^[A-Za-z0-9_-]{1,100}$/;
 async function api(req, res, url) {
   const chemin = url.pathname;
   if (req.method === "GET" && chemin === "/api/sync/etat")
-    return json(req, res, 200, { muninn: true, version: VERSION, rev: base.rev, elements: Object.keys(base.elements).length });
+    return json(req, res, 200, { muninn: true, version: VERSION, id: base.id, origine: base.origine, rev: base.rev, elements: Object.keys(base.elements).length });
 
   /* les modifications depuis le numéro donné, dans l'ordre */
   if (req.method === "GET" && chemin === "/api/sync/changements") {
@@ -173,15 +196,16 @@ async function api(req, res, url) {
     const page = liste.slice(0, PAR_PAGE);
     const suite = liste.length > PAR_PAGE;
     return json(req, res, 200, {
-      rev: suite ? page[page.length - 1][1].rev : base.rev, suite,
+      id: base.id, origine: base.origine, rev: suite ? page[page.length - 1][1].rev : base.rev, suite,
       changements: page.map(([cle, e]) => e.supprime ? { cle, rev: e.rev, supprime: true } : { cle, rev: e.rev, valeur: e.valeur })
     });
   }
 
   /* ce qu'un appareil a changé ; refusé pour un élément modifié entre-temps par un autre appareil (l'appareil reçoit puis renvoie) */
   if (req.method === "POST" && chemin === "/api/sync/envoi") {
-    const { changements } = await lireJson(req, 60e6);
+    const { changements, id } = await lireJson(req, 60e6);
     if (!Array.isArray(changements)) return json(req, res, 400, { erreur: "Demande illisible." });
+    if (id !== undefined && id !== base.id) return json(req, res, 409, { erreur: "La base du PC a changé.", id: base.id, origine: base.origine });
     const r = await enFile(async () => {
       if (base.rev) await copieDuJour(JSON.stringify(base));
       const acceptes = [], conflits = [];
@@ -195,6 +219,32 @@ async function api(req, res, url) {
       }
       if (acceptes.length) await enregistrer();
       return { acceptes, conflits, rev: base.rev };
+    });
+    return json(req, res, 200, r);
+  }
+
+  /* Remise à niveau du PC par un appareil, après un retour en arrière : chaque élément envoyé remplace celui du PC
+     (null : supprimé). Les éléments que l'appareil ne connaît pas restent. Une copie de l'état d'avant est gardée. */
+  if (req.method === "POST" && chemin === "/api/sync/remplacer") {
+    const { elements, id } = await lireJson(req, 150e6);
+    if (!Array.isArray(elements)) return json(req, res, 400, { erreur: "Demande illisible." });
+    if (id !== base.id) return json(req, res, 409, { erreur: "La base du PC a changé.", id: base.id, origine: base.origine });
+    const r = await enFile(async () => {
+      await ecrireSur(join(dCopies, "avant-remise-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json"), JSON.stringify(base));
+      const revs = [];
+      for (const e of elements) {
+        if (!e || typeof e.cle !== "string" || !CLE.test(e.cle)) continue;
+        const actuel = base.elements[e.cle];
+        base.rev++;
+        base.elements[e.cle] = e.valeur === null || e.valeur === undefined
+          ? { rev: base.rev, supprime: true, ancien: actuel?.supprime ? actuel.ancien : actuel?.valeur ?? null }
+          : { rev: base.rev, valeur: e.valeur };
+        revs.push({ cle: e.cle, rev: base.rev });
+      }
+      base.id = nouvelId(); base.origine = "remise";
+      await enregistrer();
+      await noter(`PC remis à niveau par un appareil : ${revs.length} éléments.`);
+      return { id: base.id, origine: base.origine, rev: base.rev, revs };
     });
     return json(req, res, 200, r);
   }

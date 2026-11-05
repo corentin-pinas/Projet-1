@@ -32,14 +32,16 @@ export function afficherPartage() {
   mini.hidden = !e.relie;
   mini.classList.toggle("encours", e.enCours);
   mini.classList.toggle("alerte", !!e.erreur && !e.enCours);
-  txt.textContent = e.enCours ? "Échange avec le PC…" : e.erreur ? "PC pas joint" + (e.derniere ? " · à jour " + depuis(e.derniere) : "")
+  txt.textContent = e.enCours ? "Échange avec le PC…" : e.pcRevenu ? "PC revenu en arrière : à remettre à niveau" : e.erreur ? "PC pas joint" + (e.derniere ? " · à jour " + depuis(e.derniere) : "")
     : e.derniere ? "À jour avec le PC · " + depuis(e.derniere) : "Relié au PC";
   mini.title = e.erreur ?? "";
 
   $("#syncform").hidden = e.relie;
   $("#syncactions").hidden = !e.relie;
+  $("#syncrevenu").hidden = !(e.relie && e.pcRevenu && !e.enCours);
   $("#syncetat").textContent = !e.relie ? "Cet appareil n'est pas relié au PC."
     : e.enCours ? "Échange en cours avec le PC…"
+    : e.pcRevenu ? e.erreur ?? ""
     : e.erreur ? e.erreur + (e.derniere ? ` Dernier échange réussi : ${depuis(e.derniere)}.` : "") + " Vos changements restent dans cet appareil et partiront au prochain échange."
     : e.derniere ? `Relié au PC. Dernier échange : ${depuis(e.derniere)}.` : "Relié au PC.";
   const commande = `irm ${location.origin}/pc/installer.ps1 | iex`;
@@ -75,6 +77,17 @@ export function brancherPartage() {
     await synchro.synchroniser();
     const e = synchro.etatSync();
     toast(e.erreur ?? "Échange fait : cet appareil est à jour.");
+  });
+
+  $("#syncremettre").addEventListener("click", async () => {
+    if (!(await confirmer("Renvoyer au PC tout ce que contient cet appareil ? Faites-le depuis l'appareil le plus à jour. Ce que le PC avait en plus est gardé, et une copie de l'état du PC est mise de côté.", "Remettre le PC à niveau"))) return;
+    try {
+      await synchro.remettreLePCaNiveau();
+      const e = synchro.etatSync();
+      toast(e.erreur ?? "PC remis à niveau. Les autres appareils suivront à leur prochain échange.");
+    } catch (err) {
+      toast(err instanceof synchro.ErreurSync ? err.message : "La remise à niveau n'a pas abouti. Réessayez.");
+    }
   });
 
   $("#syncdelier").addEventListener("click", async () => {

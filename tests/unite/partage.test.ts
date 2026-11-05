@@ -130,23 +130,68 @@ describe("partage entre appareils", () => {
     for (const a of [tab, neuve]) expect((await a.db.tout()).dossiers.map(d => d.id).sort()).toEqual([p.id, q.id].sort());
   });
 
-  it.fails("défaut connu (E1) : un PC remis à une copie plus ancienne doit être signalé, pas « À jour »", async () => {
+  it("E1 : un PC remis à une copie plus ancienne est signalé ; remis à niveau depuis la tablette, tout le monde suit", async () => {
     const pc = await nouveauPC();
     const tab = await appareil();
     const p = await tab.db.creerPatient("Paul T.");
     const s1 = await tab.db.ajouterSeance(p.id, "2026-11-03", "version 1");
     await tab.sync.relier(pc.url, CODE);
+    const tel = await appareil();
+    await tel.sync.relier(pc.url, CODE);
     copyFileSync(join(pc.dossier, "donnees.json"), join(pc.dossier, "ancienne-copie.json"));
     await tab.db.majSeance(s1.id, { contenu: "version 2" });
-    await tab.db.ajouterSeance(p.id, "2026-11-04", "séance 2");
+    const s2 = await tab.db.ajouterSeance(p.id, "2026-11-04", "séance 2");
     expect((await echanger(tab)).erreur).toBeNull();
+    expect((await echanger(tel)).erreur).toBeNull();
 
     await pc.arreter();                                           // le PC repart d'une copie de la veille
     copyFileSync(join(pc.dossier, "ancienne-copie.json"), join(pc.dossier, "donnees.json"));
     const pc2 = await nouveauPC(pc.dossier);
-    await tab.db.ecrireParametre("sync_adresse", pc2.url);        // même PC ; nouveau port dans ce test seulement
+    for (const a of [tab, tel]) await a.db.ecrireParametre("sync_adresse", pc2.url);   // même PC ; nouveau port dans ce test seulement
     await tab.db.majSeance(s1.id, { contenu: "version 3" });
-    expect((await echanger(tab)).erreur).not.toBeNull();
+
+    const etat = await echanger(tab);                             // signalé, rien n'est envoyé ni reçu
+    expect(etat.pcRevenu).toBe(true);
+    expect(etat.erreur).toContain("revenu en arrière");
+    expect((await seance(tab, s1.id))?.contenu).toBe("version 3");
+    expect((await echanger(tel)).pcRevenu).toBe(true);
+
+    await tab.sync.remettreLePCaNiveau();                         // depuis la tablette, la plus à jour
+    expect(tab.sync.etatSync().erreur).toBeNull();
+    const surPC = await changementsPC(pc2);
+    expect(surPC.changements.find((c: { cle: string }) => c.cle === "seances/" + s1.id).valeur.contenu).toBe("version 3");
+    expect(surPC.changements.some((c: { cle: string }) => c.cle === "seances/" + s2.id)).toBe(true);
+
+    const e2 = await echanger(tel);                               // le téléphone suit tout seul
+    expect(e2.erreur).toBeNull();
+    expect((await seance(tel, s1.id))?.contenu).toBe("version 3");
+    expect((await seance(tel, s2.id))?.contenu).toBe("séance 2");
+  });
+
+  it("E1 : après une remise à niveau, un changement pas encore envoyé par un autre appareil est gardé", async () => {
+    const pc = await nouveauPC();
+    const tab = await appareil();
+    const p = await tab.db.creerPatient("Paul T.");
+    const s1 = await tab.db.ajouterSeance(p.id, "2026-11-03", "version 1");
+    const s2 = await tab.db.ajouterSeance(p.id, "2026-11-04", "séance 2");
+    await tab.sync.relier(pc.url, CODE);
+    const tel = await appareil();
+    await tel.sync.relier(pc.url, CODE);
+    copyFileSync(join(pc.dossier, "donnees.json"), join(pc.dossier, "ancienne-copie.json"));
+    await tab.db.majSeance(s1.id, { contenu: "version 2" });
+    await echanger(tab);
+    await pc.arreter();
+    copyFileSync(join(pc.dossier, "ancienne-copie.json"), join(pc.dossier, "donnees.json"));
+    const pc2 = await nouveauPC(pc.dossier);
+    for (const a of [tab, tel]) await a.db.ecrireParametre("sync_adresse", pc2.url);
+    await tel.db.majSeance(s2.id, { contenu: "séance 2 corrigée sur le téléphone, pas encore envoyée" });
+    await tab.sync.remettreLePCaNiveau();
+    await echanger(tel);
+    await echanger(tab);
+    for (const a of [tab, tel]) {
+      expect((await seance(a, s1.id))?.contenu).toBe("version 2");
+      expect((await seance(a, s2.id))?.contenu).toBe("séance 2 corrigée sur le téléphone, pas encore envoyée");
+    }
   });
 
   it.fails("défaut connu (F1) : une séance ajoutée hors connexion à un patient supprimé ailleurs ne doit pas devenir invisible", async () => {

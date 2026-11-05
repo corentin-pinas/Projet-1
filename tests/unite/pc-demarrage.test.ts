@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { changementsPC, demarrerPC, dossierPC, type PC } from "./pc";
+import { CODE, changementsPC, demarrerPC, dossierPC, type PC } from "./pc";
 
 const pcs: PC[] = [];
 afterEach(async () => { for (const p of pcs.splice(0)) await p.arreter(); });
@@ -56,6 +56,30 @@ describe("Muninn du PC : démarrage sur un fichier abîmé", () => {
     const pc = await demarre(d);
     expect(await contenuSurPC(pc)).toBe("sain");
     expect(existsSync(join(d, "journal.log"))).toBe(false);
+  });
+
+  it("identité de la base : la même d'un démarrage à l'autre, nouvelle si la base repart d'un état plus ancien", async () => {
+    const d = dossierPC();
+    writeFileSync(join(d, "donnees.json"), base("sain", 4));
+    let pc = await demarre(d);
+    const etat = async () => (await fetch(pc.url + "/api/sync/etat", { headers: { Authorization: "Bearer " + CODE } })).json();
+    const id1 = (await etat()).id;
+    expect(id1).toBeTruthy();
+    await pc.arreter(); pcs.splice(0);
+    pc = await demarre(d);
+    expect((await etat()).id).toBe(id1);
+    // une modification passe le numéro à 5, puis on remet à la main une copie au numéro 4
+    const r = await fetch(pc.url + "/api/sync/envoi", { method: "POST", headers: { Authorization: "Bearer " + CODE, "Content-Type": "application/json" },
+      body: JSON.stringify({ changements: [{ cle: "seances/s2", rev: 0, valeur: { id: "s2" } }] }) });
+    expect(r.ok).toBe(true);
+    await pc.arreter(); pcs.splice(0);
+    writeFileSync(join(d, "donnees.json"), base("copie remise à la main", 4));
+    pc = await demarre(d);
+    const e = await etat();
+    expect(e.id).not.toBe(id1);
+    expect(e.origine).toBe("reprise");
+    expect(e.rev).toBe(5);                                                          // les numéros ne reculent jamais
+    expect(readFileSync(join(d, "journal.log"), "utf8")).toContain("revenue en arrière");
   });
 
   it("premier démarrage (dossier vide) : base vide, sans message", async () => {

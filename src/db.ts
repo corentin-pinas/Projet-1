@@ -279,6 +279,7 @@ export async function importer(e: Export) {
   await remplacer(e.donnees, e.fichiers, true);
   await oublierPartage();
   await ecrireParametre("sync_rev", 0);
+  await ecrireParametre("sync_base_pc", undefined);
 }
 
 /* Efface les PDF et photos auxquels plus aucun bilan ni aucune copie ne renvoie. */
