@@ -75,7 +75,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées | db, ia, pdf, regles |
 | `ia.ts` | consignes données à l'IA, garde-fous, appels | regles |
 | `synchro.ts`, `fusion.ts` | échanges avec le PC ; fusion de deux changements faits sur deux appareils | db, fusion, regles |
-| `transcription.ts` | voix : Whisper du PC d'abord, Railway en secours | db, ia, synchro |
+| `transcription.ts` | voix : Whisper du PC d'abord (en direct, par morceaux coupés aux pauses), Railway en secours | db, ia, regles, synchro |
 | `db.ts` | la base IndexedDB `mes-patients` (version 4) et sa cloche | regles |
 | `regles.ts` | règles du cabinet, pures et testées : noms, classement, « À venir », homonymes, demi-journées | — |
 | `ui.ts`, `pdf.ts`, `verifications.ts` | messages et confirmations, lecteur PDF, vérifications de l'appareil | — |

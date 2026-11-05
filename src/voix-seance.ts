@@ -16,6 +16,13 @@ let chrono: ReturnType<typeof setInterval> | undefined;
 let zone: HTMLElement | null = null, cible: HTMLTextAreaElement | null = null;
 let apres: () => void = () => {};   // enregistre la séance une fois la voix transcrite
 let dossier = "";                    // patient de la fiche ouverte
+let nom = "";                        // son nom, donné à Whisper
+let direct = "";                     // texte transcrit en direct pendant l'enregistrement (1.5.0)
+const montrerDirect = (t: string) => {
+  direct = t;
+  const el = document.querySelector<HTMLElement>("#svdirect");
+  if (el) { el.textContent = t; el.hidden = !t; el.scrollTop = el.scrollHeight; }
+};
 
 /* Un enregistrement pas encore transcrit est gardé dans la base de l'appareil (audit M1) : il survit à un changement
    d'écran, à la fermeture ou à la mise à jour de l'appli, et revient quand on rouvre « Dicter la séance » de ce patient. */
@@ -29,8 +36,8 @@ const duree = (ms: number) => { const s = Math.floor(ms / 1000); return Math.flo
 /* un enregistrement ou une transcription en cours : la séance ne doit pas être enregistrée ni fermée sans le dire */
 export const occupe = () => !!enCours || travail;
 
-export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () => void, dossierId = "") {
-  zone = z; cible = ta; apres = enregistrer;
+export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () => void, dossierId = "", nomPatient = "") {
+  zone = z; cible = ta; apres = enregistrer; nom = nomPatient;
   if (dossierId !== dossier) { dossier = dossierId; if (!enCours && !travail) attente = null; }
   dessiner();
   if (!attente && !enCours && dossierId) db.lireParametre<Garde>(GARDE).then(g => {
@@ -47,14 +54,15 @@ export function quitter(jeter = false) {
   enCours = null;
   if (e && jeter) e.annuler();
   else if (e) e.arreter().then(son => { if (son.size && d) { garder(son, d); toast("Enregistrement arrêté et gardé : rouvrez « Dicter la séance » de ce patient pour le transcrire."); } });
-  attente = null; erreur = ""; zone = null; cible = null;
+  attente = null; erreur = ""; zone = null; cible = null; direct = "";
 }
 
 function dessiner() {
   if (!zone) return;
   zone.innerHTML = enCours
     ? `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="svchrono">${voix.chrono(enCours, duree)}</span>
-        <button class="primary" id="svarreter">Arrêter et transcrire</button><button id="svannuler">Annuler</button></div>`
+        <button class="primary" id="svarreter">Arrêter et transcrire</button><button id="svannuler">Annuler</button></div>
+       <div class="direct" id="svdirect" aria-live="polite" ${direct ? "" : "hidden"}>${esc(direct)}</div>`
     : travail ? `<div class="wait encours" role="status">Transcription de votre voix sur le PC…</div>`
     : attente ? `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreur ? `<br><small>${esc(erreur)}</small>` : ""}
         <div class="row" style="margin-top:10px"><button class="primary" id="svreessayer">Réessayer la transcription</button><button id="svoublier">L'effacer</button></div></div>`
@@ -65,7 +73,8 @@ function dessiner() {
 function brancher(z: HTMLElement) {
   const enreg = z.querySelector<HTMLElement>("#svenreg");
   if (enreg) enreg.onclick = async () => {
-    try { enCours = await voix.enregistrer(); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
+    direct = "";
+    try { enCours = await voix.enregistrer({ noms: nom ? [nom] : [], surTexte: montrerDirect }); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
     chrono = setInterval(() => { const c = document.querySelector("#svchrono"); if (c && enCours) c.textContent = voix.chrono(enCours, duree); }, 1000);
     dessiner();
   };
@@ -75,22 +84,24 @@ function brancher(z: HTMLElement) {
     clearInterval(chrono); enCours = null;
     attente = await e.arreter();
     if (dossier) await garder(attente, dossier);   // gardé tant qu'il n'est pas transcrit
-    transcrire();
+    transcrire(e);
   };
   const annuler = z.querySelector<HTMLElement>("#svannuler");
-  if (annuler) annuler.onclick = () => { clearInterval(chrono); enCours?.annuler(); enCours = null; dessiner(); };
+  if (annuler) annuler.onclick = () => { clearInterval(chrono); enCours?.annuler(); enCours = null; direct = ""; dessiner(); };
   const re = z.querySelector<HTMLElement>("#svreessayer");
-  if (re) re.onclick = transcrire;
+  if (re) re.onclick = () => transcrire();
   const oub = z.querySelector<HTMLElement>("#svoublier");
   if (oub) oub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { attente = null; erreur = ""; oublier(); dessiner(); } };
 }
 
-async function transcrire() {
+/* e : l'enregistrement qui vient d'être arrêté ; son texte transcrit en direct évite de tout retranscrire */
+async function transcrire(e?: voix.Enregistrement) {
   if (!attente) return;
   const son = attente, ta = cible;
   travail = true; dessiner();
   try {
-    const t = await voix.transcrire(son);
+    const t = (e && await e.texteDirect()) || await voix.transcrire(son, nom ? [nom] : []);
+    direct = "";
     if (attente === son) attente = null;
     oublier();
     erreur = "";

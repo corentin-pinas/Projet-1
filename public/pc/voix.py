@@ -7,7 +7,9 @@
 import glob
 import json
 import os
+import re
 import sys
+import urllib.parse
 import tempfile
 import threading
 import traceback
@@ -85,12 +87,53 @@ def charger():
         noter(f"Whisper indisponible : {e!r}")
 
 
-def transcrire(chemin):
-    """Le filtre des silences (VAD) dépend d'une bibliothèque de plus (onnxruntime) : s'il échoue, on transcrit sans lui."""
+# phrases que Whisper invente sur un passage sans voix (sous-titres de vidéos) : retirées
+FANTOMES = [re.compile(m, re.I) for m in (
+    r"sous-titr(?:es|age|é)[^.!?\n]*(?:amara(?:\.org)?|st' ?501|radio-canada|soustitreur|communaut[ée](?: d'amara(?:\.org)?)?)[^.!?\n]*[.!?]?",
+    r"merci d'avoir regardé(?: cette vidéo)?\s*[.!?]?",
+    r"(?:n'oubliez pas de |pensez à )?(?:vous )?abonne[zr][- ]vous[^.!?\n]*[.!?]?",
+    r"n'oubliez pas de liker[^.!?\n]*[.!?]?")]
+
+
+def nettoyer(texte):
+    for f in FANTOMES:
+        texte = f.sub(" ", texte)
+    return " ".join(texte.split())
+
+
+def invite(indice):
+    """Ce que Whisper lit avant d'écouter : le vocabulaire de kiné, les patients du jour (pour écrire leurs noms juste)
+    et la fin du texte déjà transcrit (transcription en direct, morceau par morceau). Le plus utile en dernier :
+    Whisper ne garde que la fin d'une invite trop longue."""
+    texte = VOCABULAIRE
+    noms = [str(n)[:40] for n in (indice.get("noms") or []) if str(n).strip()][:40]
+    if noms:
+        liste = ", ".join(noms)
+        texte += " Patients du jour : " + liste + ("" if liste.endswith(".") else ".")
+    avant = str(indice.get("avant") or "")[-300:].strip()
+    if avant:
+        texte += " " + avant
+    return texte
+
+
+def lire_indice(entete):
+    try:
+        indice = json.loads(urllib.parse.unquote(entete or "")) if entete else {}
+        return indice if isinstance(indice, dict) else {}
+    except ValueError:
+        return {}
+
+
+def transcrire(chemin, indice=None):
+    """Le filtre des silences (VAD) dépend d'une bibliothèque de plus (onnxruntime) : s'il échoue, on transcrit sans lui.
+    Un passage où Whisper lui-même doute qu'il y ait une voix est écarté (il y invente souvent une phrase)."""
+    amorce = invite(indice or {})
+
     def essai(vad):
-        segments, _ = modele.transcribe(chemin, language="fr", initial_prompt=VOCABULAIRE, beam_size=5,
+        segments, _ = modele.transcribe(chemin, language="fr", initial_prompt=amorce, beam_size=5,
                                         vad_filter=vad, condition_on_previous_text=False)
-        return " ".join(s.text.strip() for s in segments).strip()
+        gardes = [s.text.strip() for s in segments if not (s.no_speech_prob > 0.6 and s.avg_logprob < -1.0)]
+        return nettoyer(" ".join(gardes))
     try:
         return essai(True)
     except Exception as e:
@@ -129,7 +172,7 @@ class Demandes(BaseHTTPRequestHandler):
             fichier.close()
             debut = datetime.now()
             with verrou:
-                texte = transcrire(fichier.name)
+                texte = transcrire(fichier.name, lire_indice(self.headers.get("X-Muninn-Indice")))
             noter(f"Transcription : {len(son)} octets ({type_}), {(datetime.now() - debut).seconds} s, {len(texte)} caractères")
             self.repondre(200, {"texte": texte} if texte else {"erreur": "Rien n'a été compris dans l'enregistrement."})
         except Exception as e:

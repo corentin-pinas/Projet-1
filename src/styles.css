@@ -260,6 +260,8 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 /* dictée enregistrée (Whisper) */
 .voix{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--warn-bg);color:var(--warn);border-radius:12px;padding:10px 14px;font-weight:700}
 .voix .point{width:14px;height:14px;border-radius:50%;background:var(--warn);animation:clignote 1s infinite}
+.direct{margin-top:10px;max-height:14em;overflow-y:auto;white-space:pre-wrap;line-height:1.5;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+.direct::before{content:"Transcrit en direct : ";font-weight:700;color:var(--soft)}
 @keyframes clignote{50%{opacity:.25}}
 .voixbtn{min-height:56px;font-size:1.05rem}
 

@@ -18,7 +18,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const VERSION = 4;
+const VERSION = 5;
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -287,7 +287,8 @@ async function api(req, res, url) {
 
 /* ---------- la voix : relayée vers Whisper sur ce même PC (voix.py), sans rien garder ---------- */
 
-async function apiVoix(req, res, chemin) {
+async function apiVoix(req, res, url) {
+  const chemin = url.pathname;
   if (req.method === "GET" && chemin === "/api/voix/etat") {
     try {
       const r = await fetch(voix + "/etat", { signal: AbortSignal.timeout(5_000) });
@@ -300,7 +301,11 @@ async function apiVoix(req, res, chemin) {
     if (!son.length) return json(req, res, 400, { erreur: "Enregistrement vide." });
     let r;
     try {
-      r = await fetch(voix + "/transcrire", { method: "POST", headers: { "Content-Type": String(req.headers["content-type"] || "audio/webm") }, body: son, signal: AbortSignal.timeout(20 * 60_000) });
+      /* indice (1.5.0) : patients du jour et fin du texte précédent, pour aider Whisper ; passé à voix.py, jamais gardé */
+      const indice = (url.searchParams.get("indice") || "").slice(0, 4000);
+      const entetes = { "Content-Type": String(req.headers["content-type"] || "audio/webm") };
+      if (indice) entetes["X-Muninn-Indice"] = encodeURIComponent(indice);
+      r = await fetch(voix + "/transcrire", { method: "POST", headers: entetes, body: son, signal: AbortSignal.timeout(20 * 60_000) });
     } catch { return json(req, res, 502, { erreur: "Whisper ne répond pas sur le PC. Redémarrez le PC, ou relancez l'installation de Muninn." }); }
     let corps = {};
     try { corps = await r.json(); } catch { /* réponse vide */ }
@@ -323,7 +328,7 @@ const serveur = createServer(async (req, res) => {
   }
   if (!url.pathname.startsWith("/api/sync/") && !url.pathname.startsWith("/api/voix/")) return json(req, res, 404, { erreur: "Introuvable." });
   if (!autorise(req, res)) return;
-  try { await (url.pathname.startsWith("/api/voix/") ? apiVoix(req, res, url.pathname) : api(req, res, url)); }
+  try { await (url.pathname.startsWith("/api/voix/") ? apiVoix(req, res, url) : api(req, res, url)); }
   catch (e) {
     console.error(e);
     if (!res.headersSent) json(req, res, e?.message === "trop gros" ? 413 : 400, { erreur: e?.message === "trop gros" ? "Trop volumineux." : "Demande illisible." });

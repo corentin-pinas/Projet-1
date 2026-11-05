@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  demiSeance, questionRdv, seancesManquantes, sansSeanceCeJour, brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
+  nettoyerVoix, sansRepetition, suiteDe, indiceVoix, demiSeance, questionRdv, seancesManquantes, sansSeanceCeJour, brefDe, journee, prochaineJournee, transmissions, joursSansRdv, semaineProchaine, HORAIRES_DEFAUT,
   agesCompatibles, avecRdv, avenirDe, avenirFrom, jourLabel, lignesListe, nomAffiche,
   plageDemi, placesPlage, placesPrises, demiDe, rdvKey, decalerJours, dureeRdv, numeroJour, rdvsDuJour, semaine, nomCorrespond, patientFrom, prochainRdv, questionHomonyme, rattacher, rdvsAVenir,
   type Bilan, type Dossier, type Rdv, type Seance
@@ -313,5 +313,26 @@ describe("séances manquantes (choix de Corentin, 5 novembre 2026)", () => {
   it("après une dictée : les patients qui avaient rendez-vous ce jour-là sans séance rangée", () => {
     const dossiers = [D("m", ["2026-11-04"]), D("v", ["2026-11-04"]), D("a", ["2026-11-04"], ["2026-11-04"]), D("x", ["2026-11-05"])];
     expect(sansSeanceCeJour(dossiers, [S("m", "2026-11-04")], "2026-11-04").map(d => d.id)).toEqual(["v"]);
+  });
+});
+
+describe("transcription en direct", () => {
+  it("retire les phrases inventées par Whisper sur un silence, garde le reste", () => {
+    expect(nettoyerVoix("Victor M., douleur 3 sur 10. Sous-titres réalisés par la communauté d'Amara.org")).toBe("Victor M., douleur 3 sur 10.");
+    expect(nettoyerVoix("Merci d'avoir regardé cette vidéo !")).toBe("");
+    expect(nettoyerVoix("  merci, on se revoit jeudi  ")).toBe("merci, on se revoit jeudi");
+  });
+  it("retire la fin du morceau précédent quand Whisper la recopie au début du suivant", () => {
+    expect(sansRepetition("on a fait des pendulaires matin et soir", "des pendulaires matin et soir. Sylvie F., raide")).toBe("Sylvie F., raide");
+    expect(sansRepetition("on a fait des pendulaires", "matin et soir")).toBe("matin et soir");
+    expect(sansRepetition("douleur 3 sur 10", "sur 10 aussi")).toBe("sur 10 aussi");   // moins de 4 mots : gardé
+  });
+  it("donne à Whisper les patients du jour et la fin du texte précédent, sans doublon", () => {
+    expect(indiceVoix([], "")).toBeNull();
+    expect(indiceVoix(["Victor M.", "Victor M.", " Sylvie F. "], "début")).toEqual({ noms: ["Victor M.", "Sylvie F."], avant: "début" });
+    const long = "mot ".repeat(100);
+    const s = suiteDe(long);
+    expect(s.length).toBeLessThanOrEqual(200);
+    expect(s.startsWith("mot")).toBe(true);
   });
 });

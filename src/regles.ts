@@ -445,3 +445,49 @@ export function semaineProchaine(aujourdhui: string): [string, string] {
   const lundi = decalerJours(semaine(aujourdhui)[0], 7);
   return [lundi, decalerJours(lundi, 6)];
 }
+
+/* ---------- Transcription en direct (1.5.0) : morceaux de voix transcrits pendant la dictée ---------- */
+
+/* Phrases que Whisper invente sur un passage sans voix (apprises des sous-titres de vidéos) : jamais dictées par un kiné. */
+const FANTOMES = [
+  /sous-titr(?:es|age|é)[^.!?\n]*(?:amara(?:\.org)?|st' ?501|radio-canada|soustitreur|communaut[ée](?: d'amara(?:\.org)?)?)[^.!?\n]*[.!?]?/gi,
+  /merci d'avoir regardé(?: cette vidéo)?\s*[.!?]?/gi,
+  /(?:n'oubliez pas de |pensez à )?(?:vous )?abonne[zr][- ]vous[^.!?\n]*[.!?]?/gi,
+  /n'oubliez pas de liker[^.!?\n]*[.!?]?/gi
+];
+export function nettoyerVoix(t: string): string {
+  let r = String(t || "");
+  for (const f of FANTOMES) r = r.replace(f, " ");
+  return r.replace(/\s+/g, " ").trim();
+}
+
+const motsDe = (t: string) => t.split(/\s+/).filter(Boolean);
+const motNu = (m: string) => m.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+/* Whisper reçoit la fin du morceau précédent pour garder le fil ; il lui arrive de la recopier au début du suivant.
+   Ces mots répétés (4 au moins, à la jointure) sont retirés. */
+export function sansRepetition(avant: string, texte: string): string {
+  const a = motsDe(avant).map(motNu), t = motsDe(texte);
+  const tn = t.map(motNu);
+  for (let k = Math.min(15, a.length, t.length); k >= 4; k--) {
+    if (a.slice(a.length - k).every((m, i) => m === tn[i])) return t.slice(k).join(" ");
+  }
+  return texte.trim();
+}
+
+/* la fin du texte déjà transcrit donnée à Whisper pour le morceau suivant : 200 caractères au plus, en mots entiers */
+export function suiteDe(avant: string): string {
+  const t = avant.trim();
+  if (t.length <= 200) return t;
+  const fin = t.slice(t.length - 200);
+  const espace = fin.indexOf(" ");
+  return (espace >= 0 ? fin.slice(espace + 1) : fin).trim();
+}
+
+/* ce qu'on dit à Whisper, en plus de son vocabulaire de kiné : les patients du jour (noms à reconnaître) et la fin du
+   texte précédent ; null s'il n'y a rien à dire */
+export function indiceVoix(noms: string[], avant = ""): { noms: string[]; avant: string } | null {
+  const n = [...new Set(noms.map(x => x.trim()).filter(Boolean))].slice(0, 40);
+  const a = suiteDe(avant);
+  return n.length || a ? { noms: n, avant: a } : null;
+}

@@ -5,16 +5,23 @@
 import { createServer } from "node:http";
 
 let dernier = null;
+const recus = [];   // transcription en direct : l'indice reçu à chaque morceau (GET /recus)
+let suite = 0;
 createServer((req, res) => {
   if (req.method === "GET" && req.url === "/dernier") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(dernier)); }
+  if (req.method === "GET" && req.url === "/recus") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify(recus)); }
   if (req.method === "GET" && req.url === "/etat") { res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify({ pret: true, modele: "large-v3-turbo", appareil: "cpu" })); }
   if (req.method === "POST" && req.url === "/transcrire") {
     let taille = 0;
     req.on("data", d => taille += d.length);
     req.on("end", () => {
-      dernier = { pc: true, type: req.headers["content-type"], taille };
+      let indice = null;
+      try { indice = req.headers["x-muninn-indice"] ? JSON.parse(decodeURIComponent(req.headers["x-muninn-indice"])) : null; } catch { /* illisible */ }
+      dernier = { pc: true, type: req.headers["content-type"], taille, indice };
+      recus.push(indice);
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ texte: "avec Odile mobilisation passive, transcrit sur le PC" }));
+      // un morceau qui suit un autre (indice.avant) rend un texte numéroté, pour vérifier l'ordre et la jointure
+      res.end(JSON.stringify({ texte: indice?.avant ? `suite ${++suite} transcrite sur le PC` : "avec Odile mobilisation passive, transcrit sur le PC" }));
     });
     return;
   }
