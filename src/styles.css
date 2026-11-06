@@ -169,6 +169,7 @@ button.danger{background:var(--warn);color:var(--panel);border-color:var(--warn)
 
 /* bandeau de mise à jour */
 .maj{position:sticky;top:env(safe-area-inset-top,0px);z-index:4;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;background:var(--accent-bg);border-bottom:1px solid var(--accent);padding:8px 16px}
+.maj.alertecode{background:var(--warn-bg);border-bottom-color:var(--warn);color:var(--warn)}
 
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:.95rem;max-width:calc(100vw - 32px);z-index:10}
 .iabox{margin-top:18px;border-top:1px solid var(--line);padding-top:14px;display:grid;gap:8px}

@@ -17,7 +17,17 @@ export const MODELES: Record<Niveau, { api: string; abonnement: "opus" | "sonnet
 export const MODELE = MODELES.puissant.api;
 export const PRIX = MODELES.puissant.prix;
 
-export class ErreurIA extends Error {}
+/* nature d'une erreur, pour décider d'une relance (audit M8, choix de Corentin du 6 novembre 2026) :
+   reseau = pas de connexion (nouvel essai au retour du réseau) ; passager = serveur, PC ou IA qui n'a pas répondu
+   (nouvel essai dans 5 minutes) ; definitif = relancer ne changerait rien (quota atteint, code refusé, réglage manquant…) */
+export type Nature = "reseau" | "passager" | "definitif";
+export class ErreurIA extends Error {
+  constructor(message: string, public nature: Nature = "definitif") { super(message); }
+}
+export const natureDe = (e: unknown): Nature => e instanceof ErreurIA ? e.nature : "passager";
+const horsLigne = () => typeof navigator !== "undefined" && navigator.onLine === false;
+/* temps laissé au serveur de l'appli : Railway coupe une demande au bout de 15 minutes */
+export const DELAI_SERVEUR_MS = 15.5 * 60_000;
 
 /* cout : dollars facturés sur la clé API ; coutIndicatif : équivalent annoncé par Claude Code sur l'abonnement (non facturé) */
 export type Usage = { entree: number; sortie: number; cout?: number; coutIndicatif?: number };
@@ -47,14 +57,16 @@ export const appelerClaude: Appel = async ({ cle, system, contenu, schema, effor
       output_config: { effort, format: { type: "json_schema", schema } }
     });
   } catch (e) {
-    throw new ErreurIA(messageErreur(e));
+    const nature: Nature = e instanceof Anthropic.APIConnectionError ? (horsLigne() ? "reseau" : "passager")
+      : e instanceof Anthropic.RateLimitError || e instanceof Anthropic.InternalServerError ? "passager" : "definitif";
+    throw new ErreurIA(messageErreur(e), nature);
   }
   if (r.stop_reason === "refusal") throw new ErreurIA("L'IA a refusé de traiter ce document.");
-  if (r.stop_reason === "max_tokens") throw new ErreurIA("La réponse de l'IA a été coupée. Réessayez.");
+  if (r.stop_reason === "max_tokens") throw new ErreurIA("La réponse de l'IA a été coupée. Réessayez.", "passager");
   const texte = r.content.find(b => b.type === "text");
-  if (!texte || texte.type !== "text") throw new ErreurIA("L'IA n'a pas répondu.");
+  if (!texte || texte.type !== "text") throw new ErreurIA("L'IA n'a pas répondu.", "passager");
   let donnees: unknown;
-  try { donnees = JSON.parse(texte.text); } catch { throw new ErreurIA("La réponse de l'IA est illisible. Réessayez."); }
+  try { donnees = JSON.parse(texte.text); } catch { throw new ErreurIA("La réponse de l'IA est illisible. Réessayez.", "passager"); }
   const usage = { entree: entreeTotale(r.usage), sortie: r.usage.output_tokens };
   return { donnees, usage: { ...usage, cout: (usage.entree * modele.prix.entree + usage.sortie * modele.prix.sortie) / 1e6 } };
 };
@@ -70,12 +82,20 @@ export const appelerAbonnement: Appel = async ({ cle, system, contenu, schema, e
     r = await fetch("/api/ia/travail", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + cle },
-      body: JSON.stringify({ system, contenu, schema, effort, modele: MODELES[niveau].abonnement })
+      body: JSON.stringify({ system, contenu, schema, effort, modele: MODELES[niveau].abonnement }),
+      signal: AbortSignal.timeout(DELAI_SERVEUR_MS)   // sans réponse, l'appli lâche ; le serveur arrête alors Claude (audit M8)
     });
-  } catch { throw new ErreurIA("Le serveur de l'appli est injoignable. Vérifiez la connexion à internet."); }
-  let corps: { donnees?: unknown; erreur?: string; coutIndicatif?: number | null } = {};
+  } catch (e) {
+    if ((e as Error)?.name === "TimeoutError") throw new ErreurIA("Le serveur de l'appli n'a pas répondu à temps.", "passager");
+    if (horsLigne()) throw new ErreurIA("Pas de connexion à internet.", "reseau");
+    throw new ErreurIA("Le serveur de l'appli est injoignable.", "passager");
+  }
+  let corps: { donnees?: unknown; erreur?: string; nature?: Nature; coutIndicatif?: number | null } = {};
   try { corps = await r.json(); } catch { /* réponse vide */ }
-  if (!r.ok || corps.erreur) throw new ErreurIA(corps.erreur || `Le serveur a répondu par une erreur (${r.status}).`);
+  if (!r.ok || corps.erreur) {
+    const nature: Nature = corps.nature ?? (r.status === 401 || r.status === 503 ? "definitif" : "passager");
+    throw new ErreurIA(corps.erreur || `Le serveur a répondu par une erreur (${r.status}).`, nature);
+  }
   return { donnees: corps.donnees, usage: { entree: 0, sortie: 0, coutIndicatif: corps.coutIndicatif ?? undefined } };
 };
 
@@ -265,7 +285,7 @@ export async function chercherDansDictee(cle: string, dictee: string, patient: s
       `Retrouve le passage de cette dictée groupée qui concerne le patient « ${patient} » (il a pu être nommé par son seul prénom, ou mal transcrit par la dictée vocale).\n` +
       "Recopie ce passage mot pour mot, en entier (de l'annonce du patient jusqu'au patient suivant), sans rien corriger ni ajouter. " +
       'Réponds {"trouve": true, "extrait": "…"} ; s\'il n\'est pas question de ce patient, {"trouve": false, "extrait": null}.\n\n' +
-      "Dictée :\n<<<\n" + dictee.slice(0, 60000) + "\n>>>" }],
+      "Dictée :\n<<<\n" + dictee.slice(0, 150_000) + "\n>>>" }],
     schema: SCHEMA_PASSAGE, effort: "low", maxTokens: 8000, niveau: "leger"
   });
   const o = (r.donnees ?? {}) as { trouve?: unknown; extrait?: unknown };
@@ -277,6 +297,18 @@ export async function chercherDansDictee(cle: string, dictee: string, patient: s
 }
 
 /* ---------- analyse d'une séance (reprise de la version d'essai) ---------- */
+
+/* Longueurs maximales envoyées à l'IA (audit F6) : au-delà, rien n'est coupé en silence, Muninn le dit.
+   60 000 caractères ≈ une heure de dictée groupée ; 20 000 ≈ une demi-heure de parole pour un seul patient. */
+export const MAX_DICTEE = 60_000, MAX_SEANCE = 20_000;
+const milliers = (n: number) => n.toLocaleString("fr-FR");
+export function verifierLongueur(texte: string, max: number, quoi: "dictee" | "seance") {
+  const n = texte.trim().length;
+  if (n <= max) return;
+  throw new ErreurIA(quoi === "dictee"
+    ? `Cette dictée est trop longue pour être rangée d'un coup (${milliers(n)} caractères, ${milliers(max)} au plus, environ une heure de parole). Coupez-la en deux : rangez la première moitié, puis la seconde. Rien n'a été rangé, votre dictée est gardée.`
+    : `Cette note est trop longue pour être mise au propre (${milliers(n)} caractères, ${milliers(max)} au plus). Elle est enregistrée telle quelle.`);
+}
 
 /* repère de dates donné à l'IA pour qu'elle n'ait aucun calcul à faire */
 export function calendrier(depuis: string, avant: number, apres: number): string {
@@ -320,7 +352,7 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
     'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}\n\n' +
-    "Note complète :\n" + contenu.slice(0, 8000) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
+    "Note complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
 }
 
 /* « mardi prochain » (choix de Corentin, 5 novembre 2026) */
@@ -357,10 +389,11 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
 }
 
 export async function analyserSeance(cle: string, date: string, contenu: string, sansPropre: boolean, appel: Appel): Promise<Reponse<AnalyseSeance>> {
+  verifierLongueur(contenu, MAX_SEANCE, "seance");
   const r = await appel({
     cle, system: "Tu remets au propre les notes de séance d'un kinésithérapeute, sans rien ajouter ni retirer.",
     contenu: [{ type: "text", text: promptSeance(date, contenu, sansPropre) }],
-    schema: SCHEMA_SEANCE, effort: "medium", maxTokens: 8000, niveau: "leger"
+    schema: SCHEMA_SEANCE, effort: "medium", maxTokens: 16000, niveau: "leger"
   });
   return { donnees: lireAnalyse(r.donnees, contenu, sansPropre), usage: r.usage };
 }
@@ -382,7 +415,7 @@ export function promptDictee(date: string, texte: string, patients: { label: str
   return "Tu aides un kinésithérapeute. Voici une dictée groupée : il a dicté à la suite les séances de plusieurs patients, toutes du " + date + " (J). " +
     "Une dictée peut contenir des mots mal reconnus (les prénoms aussi : « marque » pour « Marc »), peu de ponctuation, des hésitations et des répétitions.\n\n" +
     "Patients enregistrés dans son appli (prénom et initiale) :\n" +
-    (patients.length ? patients.slice(0, 400).map(p => "- " + p.label + (p.vuCeJour ? " (rendez-vous ce jour-là)" : "")).join("\n") : "(aucun)") + "\n\n" +
+    (patients.length ? [...patients].sort((a, b) => Number(b.vuCeJour) - Number(a.vuCeJour)).slice(0, 400).map(p => "- " + p.label + (p.vuCeJour ? " (rendez-vous ce jour-là)" : "")).join("\n") : "(aucun)") + "\n\n" +
     "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\n" +
     "Découpe la dictée en une entrée par patient, dans l'ordre de la dictée. Il annonce chaque patient par son prénom, parfois suivi d'une initiale (« Avec Marc D. », « ensuite Élisabeth G. », « pour Lucie »). " +
     "Si le même patient revient plus loin, réunis ses passages dans une seule entrée. Un passage qui ne concerne aucun patient nommé forme une entrée avec nom null. Aucun passage de la dictée ne doit être perdu.\n" +
@@ -396,7 +429,7 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
     'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}]}\n\n' +
-    "Dictée :\n" + texte.slice(0, 60000);
+    "Dictée :\n" + texte.slice(0, MAX_DICTEE);
 }
 
 export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string };
@@ -413,11 +446,12 @@ export function lireDictee(x: unknown, texte: string): SeanceDictee[] {
     return { nom, contenu, ...lireAnalyse(it, contenu, false) };
   }).filter(s => s.contenu);
   const total = seances.reduce((n, s) => n + s.contenu.length, 0);
-  if (!seances.length || total < texte.trim().length * 0.6) throw new ErreurIA("L'IA a laissé de côté une partie de la dictée. Rien n'a été rangé : réessayez.");
+  if (!seances.length || total < texte.trim().length * 0.6) throw new ErreurIA("L'IA a laissé de côté une partie de la dictée. Rien n'a été rangé.", "passager");
   return seances;
 }
 
 export async function decouperDictee(cle: string, date: string, texte: string, patients: { label: string; vuCeJour: boolean }[], appel: Appel): Promise<Reponse<SeanceDictee[]>> {
+  verifierLongueur(texte, MAX_DICTEE, "dictee");
   const r = await appel({
     cle, system: "Tu ranges la dictée groupée d'un kinésithérapeute, patient par patient, sans rien ajouter ni retirer.",
     contenu: [{ type: "text", text: promptDictee(date, texte, patients) }],

@@ -27,7 +27,8 @@ export function trouverClaude() {
 /* Environnement minimal transmis à Claude Code : rien des secrets du serveur, et surtout pas de clé API
    (sinon Claude Code facturerait l'API au lieu d'utiliser l'abonnement). */
 function environnement() {
-  const env = { PATH: process.env.PATH || "", HOME: process.env.HOME || homedir(), LANG: process.env.LANG || "C.UTF-8", NO_COLOR: "1", FORCE_COLOR: "0" };
+  // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC : ni vérification de mise à jour ni statistiques d'usage (audit F9-d)
+  const env = { PATH: process.env.PATH || "", HOME: process.env.HOME || homedir(), LANG: process.env.LANG || "C.UTF-8", NO_COLOR: "1", FORCE_COLOR: "0", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
   if (dossierConfig) { mkdirSync(dossierConfig, { recursive: true }); env.CLAUDE_CONFIG_DIR = dossierConfig; }
   for (const k of ["HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE"]) if (process.env[k]) env[k] = process.env[k];
   return env;
@@ -94,7 +95,7 @@ let connexion = null;   // processus « claude auth login » en cours
 export function demarrerConnexion() {
   return new Promise(resolve => {
     const bin = trouverClaude();
-    if (!bin) return resolve({ erreur: "Claude Code n'est pas installé sur le serveur." });
+    if (!bin) return resolve({ erreur: "Claude Code n'est pas installé sur le serveur.", nature: "definitif" });
     if (connexion) tuer(connexion.p);
     const p = spawn(bin, ["auth", "login", "--claudeai"], { env: environnement(), stdio: ["pipe", "pipe", "pipe"], detached: true });
     suivre(p);
@@ -159,16 +160,17 @@ let file = Promise.resolve();   // une seule génération à la fois
    12 minutes, sous la limite de 15 minutes d'une demande chez Railway. */
 const DELAI_MS = Number(process.env.CLAUDE_DELAI_MS) || 12 * 60_000;
 
-export function travailler(demande) {
-  const tour = file.then(() => lancer(demande));
+/* signal : l'appli a abandonné la demande ; si elle attend encore son tour elle est retirée, sinon Claude est arrêté */
+export function travailler(demande, signal) {
+  const tour = file.then(() => signal?.aborted ? { erreur: "Demande abandonnée par l'appli." } : lancer(demande, signal));
   file = tour.catch(() => {});
   return tour;
 }
 
-function lancer({ system, contenu, schema, effort, modele = "opus" }) {
+function lancer({ system, contenu, schema, effort, modele = "opus" }, signal) {
   return new Promise(resolve => {
     const bin = trouverClaude();
-    if (!bin) return resolve({ erreur: "Claude Code n'est pas installé sur le serveur." });
+    if (!bin) return resolve({ erreur: "Claude Code n'est pas installé sur le serveur.", nature: "definitif" });
     const args = [
       "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
       "--model", modele, "--effort", effort,
@@ -194,8 +196,9 @@ function lancer({ system, contenu, schema, effort, modele = "opus" }) {
       while ((i = tampon.indexOf("\n")) >= 0) { lire(tampon.slice(0, i)); tampon = tampon.slice(i + 1); }
     });
     p.stderr.on("data", d => { erreurs = (erreurs + d).slice(-4000); });
-    const t = setTimeout(() => { tuer(p); fin("arrêté, trop long"); resolve({ erreur: `Claude n'a pas répondu à temps (${Math.round(DELAI_MS / 60_000)} minutes). Votre texte est gardé : réessayez.` }); }, DELAI_MS);
-    p.on("error", () => { clearTimeout(t); resolve({ erreur: "Claude Code n'a pas pu démarrer." }); });
+    signal?.addEventListener("abort", () => { tuer(p); fin("arrêté, l'appli a abandonné"); }, { once: true });
+    const t = setTimeout(() => { tuer(p); fin("arrêté, trop long"); resolve({ erreur: `Claude n'a pas répondu à temps (${Math.round(DELAI_MS / 60_000)} minutes).`, nature: "passager" }); }, DELAI_MS);
+    p.on("error", () => { clearTimeout(t); resolve({ erreur: "Claude Code n'a pas pu démarrer.", nature: "passager" }); });
     p.on("close", code => {
       clearTimeout(t);
       lire(tampon);
@@ -205,11 +208,16 @@ function lancer({ system, contenu, schema, effort, modele = "opus" }) {
       }
       const derniere = erreurs.trim().split("\n").pop() || "";
       const texte = resultat?.result || derniere;
-      resolve({ erreur: messageErreur(texte, code) });
+      resolve({ erreur: messageErreur(texte, code), nature: natureErreur(texte) });
     });
     // la demande passe par l'entrée standard, jamais en argument
     p.stdin.end(JSON.stringify({ type: "user", message: { role: "user", content: contenu } }) + "\n");
   });
+}
+
+/* relancer ne sert à rien si la connexion à l'abonnement est perdue ou si le quota est atteint */
+function natureErreur(texte) {
+  return /not logged in|login|authenticat|unauthori|401|usage limit|rate limit|limit reached|429/i.test(texte) ? "definitif" : "passager";
 }
 
 function messageErreur(texte, code) {

@@ -101,10 +101,16 @@ let applique = false;   // pendant qu'on range ce qui arrive du PC : ce n'est pa
 export function synchroniser(): Promise<void> {
   if (course) { encore = true; return course; }
   course = (async () => {
-    try { do { encore = false; await unEchange(); } while (encore); }
+    try { do { encore = false; await unSeul(); } while (encore); }
     finally { course = null; }
   })();
   return course;
+}
+
+/* deux fenêtres de Muninn sur le même appareil (onglet Chrome et appli installée) : leurs échanges passent l'un après l'autre (audit F10) */
+function unSeul(): Promise<void> {
+  const locks = (navigator as Navigator & { locks?: LockManager }).locks;
+  return locks?.request ? locks.request("muninn-echange", () => unEchange()) : unEchange();
 }
 
 async function unEchange() {

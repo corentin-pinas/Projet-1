@@ -4,6 +4,7 @@
    Le bouton n'apparaît que si Whisper est joignable. Un enregistrement qui n'a pas pu être transcrit reste gardé. */
 import * as db from "./db";
 import { ErreurIA } from "./ia";
+import { phrase, Relanceur } from "./relance";
 import * as voix from "./transcription";
 import { confirmer, esc, toast } from "./ui";
 
@@ -12,6 +13,8 @@ let enCours: voix.Enregistrement | null = null;
 let attente: Blob | null = null;     // enregistré, pas encore transcrit
 let travail = false;                 // transcription en cours
 let erreur = "";
+/* relance automatique de la transcription après un échec (5 min, 3 essais au plus), tant que le formulaire est ouvert */
+const relance = new Relanceur(essai => { transcrire(undefined, essai); }, () => dessiner());
 let chrono: ReturnType<typeof setInterval> | undefined;
 let zone: HTMLElement | null = null, cible: HTMLTextAreaElement | null = null;
 let apres: () => void = () => {};   // enregistre la séance une fois la voix transcrite
@@ -49,7 +52,7 @@ export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () 
 /* Le formulaire se ferme (autre patient, autre écran…) : un enregistrement en cours est arrêté et GARDÉ, jamais jeté ;
    il reviendra à la réouverture de « Dicter la séance » de ce patient. */
 export function quitter(jeter = false) {
-  clearInterval(chrono);
+  clearInterval(chrono); relance.annuler();
   const e = enCours, d = dossier;
   enCours = null;
   if (e && jeter) e.annuler();
@@ -64,8 +67,8 @@ function dessiner() {
         <button class="primary" id="svarreter">Arrêter et transcrire</button><button id="svannuler">Annuler</button></div>
        <div class="direct" id="svdirect" aria-live="polite" ${direct ? "" : "hidden"}>${esc(direct)}</div>`
     : travail ? `<div class="wait encours" role="status">Transcription de votre voix sur le PC…</div>`
-    : attente ? `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreur ? `<br><small>${esc(erreur)}</small>` : ""}
-        <div class="row" style="margin-top:10px"><button class="primary" id="svreessayer">Réessayer la transcription</button><button id="svoublier">L'effacer</button></div></div>`
+    : attente ? `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreur ? `<br><small>${esc(erreur)}</small>` : ""}${relance.plan ? `<br><small>${phrase(relance.plan)}</small>` : ""}
+        <div class="row" style="margin-top:10px"><button class="primary" id="svreessayer">${relance.plan ? "Réessayer maintenant" : "Réessayer la transcription"}</button><button id="svoublier">L'effacer</button></div></div>`
     : dispo ? `<div class="row"><button class="primary voixbtn" id="svenreg">🎙️ Enregistrer ma séance</button></div>` : "";
   brancher(zone);
 }
@@ -89,14 +92,15 @@ function brancher(z: HTMLElement) {
   const annuler = z.querySelector<HTMLElement>("#svannuler");
   if (annuler) annuler.onclick = () => { clearInterval(chrono); enCours?.annuler(); enCours = null; direct = ""; dessiner(); };
   const re = z.querySelector<HTMLElement>("#svreessayer");
-  if (re) re.onclick = () => transcrire();
+  if (re) re.onclick = () => { relance.annuler(); transcrire(); };
   const oub = z.querySelector<HTMLElement>("#svoublier");
-  if (oub) oub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { attente = null; erreur = ""; oublier(); dessiner(); } };
+  if (oub) oub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { relance.annuler(); attente = null; erreur = ""; oublier(); dessiner(); } };
 }
 
 /* e : l'enregistrement qui vient d'être arrêté ; son texte transcrit en direct évite de tout retranscrire */
-async function transcrire(e?: voix.Enregistrement) {
-  if (!attente) return;
+async function transcrire(e?: voix.Enregistrement, essai = 1) {
+  relance.annuler();
+  if (!attente || travail) return;
   const son = attente, ta = cible;
   travail = true; dessiner();
   try {
@@ -112,6 +116,10 @@ async function transcrire(e?: voix.Enregistrement) {
       apres();
     }
     return;
-  } catch (e) { erreur = e instanceof ErreurIA ? e.message : "La transcription a échoué."; toast(erreur); }
+  } catch (err) {
+    erreur = err instanceof ErreurIA ? err.message : "La transcription a échoué.";
+    const p = relance.echec(err, essai);
+    toast(erreur + (p ? (p.quand == null ? " Nouvel essai au retour du réseau." : " Nouvel essai dans 5 minutes.") : ""));
+  }
   travail = false; dessiner();
 }

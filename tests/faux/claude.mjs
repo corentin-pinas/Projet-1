@@ -39,6 +39,12 @@ if (args[0] === "auth" && args[1] === "login") {
     console.log(JSON.stringify({ type: "result", subtype: "error", is_error: true, result: "Not logged in · Please run /login" }));
     process.exit(1);
   }
+  // demande « LENTE » : imite une longue génération, pour vérifier que le serveur arrête Claude quand l'appli abandonne
+  if (contenu.some(b => (b.text ?? "").includes("DEMANDE-LENTE"))) {
+    writeFileSync(join(dir, "lent-debut"), "1");
+    await new Promise(r => setTimeout(r, 4000));
+    writeFileSync(join(dir, "lent-fin"), "1");
+  }
   const document = contenu.some(b => b.type === "document" || b.type === "image");
   const texte = contenu.map(b => b.text ?? "").join("");
   const sortie = texte.includes("Retrouve le passage") ? { trouve: false, extrait: null }

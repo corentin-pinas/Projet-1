@@ -52,6 +52,16 @@ async function fichier(chemin) {
 const empreinte = s => createHash("sha256").update(String(s)).digest();
 const codeAcces = process.env.CODE_ACCES || "";
 const echecs = new Map();   // adresse -> { n, depuis }
+/* Mauvais codes reçus, toutes adresses confondues (audit M6). L'adresse d'un appareil n'est pas fiable (un en-tête
+   qu'il peut inventer) : la vraie protection ne dépend donc pas d'elle. Au-delà de ALERTE mauvais codes en une heure,
+   le serveur n'examine plus qu'un code toutes les 3 secondes, pour tout le monde : deviner un code de 12 caractères
+   devient impossible, et le bon code passe toujours (les appareils de Corentin réessaient seuls). Les mauvais codes des
+   dernières 24 heures sont annoncés à l'appli, qui prévient Corentin dès le 3e. Rien n'est écrit sur disque. */
+const refus = [];   // heures des mauvais codes (7 jours au plus)
+const ALERTE = Number(process.env.CODE_ALERTE) || 20;
+let prochainExamen = 0;
+const adresseDe = req => String(req.headers["x-real-ip"] || String(req.headers["x-forwarded-for"] || "").split(",").map(x => x.trim()).filter(Boolean).at(-1) || req.socket.remoteAddress || "");
+const refusRecents = (depuis = Date.now() - 24 * 3600_000) => refus.filter(t => t >= depuis);
 
 function json(res, statut, corps) {
   res.writeHead(statut, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...securite });
@@ -60,14 +70,24 @@ function json(res, statut, corps) {
 
 function autorise(req, res) {
   if (codeAcces.length < 12) { json(res, 503, { erreur: "Le serveur n'a pas de code d'accès. Ajoutez la variable CODE_ACCES sur Railway (12 caractères au moins)." }); return false; }
-  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  const maintenant = Date.now();
+  while (refus.length && refus[0] < maintenant - 7 * 24 * 3600_000) refus.shift();
+  if (refus.length > 5000) refus.splice(0, refus.length - 5000);
+  if (refusRecents(maintenant - 3600_000).length >= ALERTE) {
+    if (maintenant < prochainExamen) { json(res, 429, { erreur: "Le serveur reçoit beaucoup de mauvais codes d'accès : il ralentit. Nouvel essai dans quelques minutes.", nature: "passager" }); return false; }
+    prochainExamen = maintenant + 3000;
+  }
+  const ip = adresseDe(req);
   const e = echecs.get(ip);
-  if (e && e.n >= 5 && Date.now() - e.depuis < 10 * 60_000) { json(res, 429, { erreur: "Trop d'essais avec un mauvais code. Patientez 10 minutes." }); return false; }
+  if (e && e.n >= 5 && maintenant - e.depuis < 10 * 60_000) { json(res, 429, { erreur: "Trop d'essais avec un mauvais code. Patientez 10 minutes.", nature: "passager" }); return false; }
   const recu = /^Bearer (.+)$/.exec(String(req.headers.authorization || ""))?.[1] || "";
   if (!timingSafeEqual(empreinte(recu), empreinte(codeAcces))) {
-    const n = e && Date.now() - e.depuis < 10 * 60_000 ? e.n + 1 : 1;
-    echecs.set(ip, { n, depuis: n === 1 ? Date.now() : e.depuis });
-    json(res, 401, { erreur: "Code d'accès refusé." });
+    const n = e && maintenant - e.depuis < 10 * 60_000 ? e.n + 1 : 1;
+    echecs.set(ip, { n, depuis: n === 1 ? maintenant : e.depuis });
+    if (echecs.size > 10_000) echecs.clear();
+    refus.push(maintenant);
+    console.log(`Code d'accès refusé (${refusRecents(maintenant - 3600_000).length} dans l'heure).`);   // jamais le code reçu
+    json(res, 401, { erreur: "Code d'accès refusé.", nature: "definitif" });
     return false;
   }
   echecs.delete(ip);
@@ -94,7 +114,10 @@ function lireOctets(req, max) {
 async function api(req, res, chemin) {
   if (!autorise(req, res)) return;
   try {
-    if (req.method === "GET" && chemin === "/api/ia/etat") return json(res, 200, { ...await claude.etat(), transcription: transcription.disponible() });
+    if (req.method === "GET" && chemin === "/api/ia/etat") {
+      const r = refusRecents();
+      return json(res, 200, { ...await claude.etat(), transcription: transcription.disponible(), refus: { n: r.length, dernier: r.length ? new Date(r.at(-1)).toISOString() : null } });
+    }
     if (req.method === "POST" && chemin === "/api/ia/transcrire") {
       const audio = await lireOctets(req, 25e6);
       if (!audio.length) return json(res, 400, { erreur: "Enregistrement vide." });
@@ -112,7 +135,11 @@ async function api(req, res, chemin) {
       const demande = await lireCorps(req, 40e6);
       const refus = claude.verifierDemande(demande);
       if (refus) return json(res, 400, { erreur: refus });
-      const r = await claude.travailler(demande);
+      /* l'appli a lâché (délai dépassé, appli fermée, réseau coupé) : la demande est retirée ou Claude arrêté (audit M8) */
+      const abandon = new AbortController();
+      res.on("close", () => { if (!res.writableEnded) abandon.abort(); });
+      const r = await claude.travailler(demande, abandon.signal);
+      if (abandon.signal.aborted) return;
       return json(res, r.erreur ? 502 : 200, r);
     }
     json(res, 404, { erreur: "Introuvable." });

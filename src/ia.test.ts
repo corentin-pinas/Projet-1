@@ -189,3 +189,17 @@ describe("retrouver un patient dans une dictée gardée", () => {
     await expect(chercherDansDictee("c", dictee, "Victor M.", faux({ trouve: true, extrait: "Victor a fait du vélo et de la natation cette semaine sans aucune douleur" }))).rejects.toThrow("ne vient pas de la dictée");
   });
 });
+
+describe("textes trop longs (audit F6)", () => {
+  it("une dictée ou une note trop longue est refusée avec un message clair, jamais coupée en silence", async () => {
+    const { verifierLongueur, MAX_DICTEE, MAX_SEANCE } = await import("./ia");
+    expect(() => verifierLongueur("a".repeat(MAX_DICTEE), MAX_DICTEE, "dictee")).not.toThrow();
+    expect(() => verifierLongueur("a".repeat(MAX_DICTEE + 1), MAX_DICTEE, "dictee")).toThrow(/trop longue.*Coupez-la en deux/);
+    expect(() => verifierLongueur("a".repeat(MAX_SEANCE + 1), MAX_SEANCE, "seance")).toThrow(/enregistrée telle quelle/);
+  });
+  it("les patients ayant rendez-vous ce jour-là passent en tête de la liste donnée à l'IA", async () => {
+    const { promptDictee } = await import("./ia");
+    const patients = [...Array.from({ length: 450 }, (_, i) => ({ label: "Patient " + i + ".", vuCeJour: false })), { label: "Zoé V.", vuCeJour: true }];
+    expect(promptDictee("2026-11-06", "texte", patients)).toContain("Zoé V. (rendez-vous ce jour-là)");
+  });
+});

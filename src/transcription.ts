@@ -3,7 +3,7 @@
    Sinon, secours : le serveur de l'appli, s'il a un Whisper branché (variable WHISPER_URL sur Railway).
    Le texte revient dans la dictée. Sans Whisper joignable, le bouton n'apparaît pas. */
 import * as db from "./db";
-import { ErreurIA } from "./ia";
+import { ErreurIA, type Nature } from "./ia";
 import { indiceVoix, nettoyerVoix, sansRepetition } from "./regles";
 import { PARAM_ADRESSE, PARAM_CODE } from "./synchro";
 
@@ -205,17 +205,22 @@ export async function enregistrer(direct?: Direct): Promise<Enregistrement> {
   };
 }
 
+const horsLigne = (): Nature => navigator.onLine === false ? "reseau" : "passager";
+
 /* envoie un son au Whisper du PC ; indice : patients du jour et fin du texte précédent (ignoré par un PC pas à jour) */
 async function versPC(p: { adresse: string; code: string }, audio: Blob, indice: ReturnType<typeof indiceVoix>, delai?: number): Promise<string> {
   const q = indice ? "?indice=" + encodeURIComponent(JSON.stringify(indice)) : "";
   let r: Response;
   try {
     r = await fetch(p.adresse + "/api/voix/transcrire" + q, { method: "POST", headers: { Authorization: "Bearer " + p.code, "Content-Type": audio.type || "audio/webm" }, body: audio,
-      signal: delai ? AbortSignal.timeout(delai) : undefined });
-  } catch { throw new ErreurIA("Le PC est injoignable. L'enregistrement est gardé : réessayez."); }
+      signal: AbortSignal.timeout(delai ?? 21 * 60_000) });   // le PC laisse 20 minutes à Whisper
+  } catch (e) {
+    if ((e as Error)?.name === "TimeoutError") throw new ErreurIA("Le PC n'a pas répondu à temps.", "passager");
+    throw new ErreurIA("Le PC est injoignable (éteint, ou Tailscale coupé ?).", horsLigne());
+  }
   let corps: { texte?: string; erreur?: string } = {};
   try { corps = await r.json(); } catch { /* réponse vide */ }
-  if (!r.ok) throw new ErreurIA(corps.erreur || `Le PC a répondu par une erreur (${r.status}).`);
+  if (!r.ok) throw new ErreurIA(corps.erreur || `Le PC a répondu par une erreur (${r.status}).`, r.status === 401 ? "definitif" : "passager");
   return corps.texte || "";   // réponse sans texte : rien compris (silence, bruit)
 }
 
@@ -232,14 +237,16 @@ async function transcrireSansVeille(audio: Blob, noms: string[]): Promise<string
     if (!t) throw new ErreurIA("Rien n'a été compris dans l'enregistrement.");
     return t;
   }
+  /* PC relié mais injoignable : c'est lui qu'on attend (le secours du serveur n'est pas branché aujourd'hui) */
+  const pcAbsent = () => { if (p) throw new ErreurIA("Le PC est injoignable (éteint, ou Tailscale coupé ?).", horsLigne()); };
   const c = await code();
-  if (!c) throw new ErreurIA("Le code d'accès au serveur n'est pas réglé.");
+  if (!c) { pcAbsent(); throw new ErreurIA("Le code d'accès au serveur n'est pas réglé."); }
   let r: Response;
   try {
-    r = await fetch("/api/ia/transcrire", { method: "POST", headers: { Authorization: "Bearer " + c, "Content-Type": audio.type || "audio/webm" }, body: audio });
-  } catch { throw new ErreurIA("Le serveur de l'appli est injoignable. L'enregistrement est gardé : réessayez."); }
+    r = await fetch("/api/ia/transcrire", { method: "POST", headers: { Authorization: "Bearer " + c, "Content-Type": audio.type || "audio/webm" }, body: audio, signal: AbortSignal.timeout(6 * 60_000) });
+  } catch { pcAbsent(); throw new ErreurIA("Le serveur de l'appli est injoignable.", horsLigne()); }
   let corps: { texte?: string; erreur?: string } = {};
   try { corps = await r.json(); } catch { /* réponse vide */ }
-  if (!r.ok || !corps.texte) throw new ErreurIA(corps.erreur || `Le serveur a répondu par une erreur (${r.status}).`);
+  if (!r.ok || !corps.texte) { pcAbsent(); throw new ErreurIA(corps.erreur || `Le serveur a répondu par une erreur (${r.status}).`, r.ok ? "definitif" : "passager"); }
   return corps.texte;
 }

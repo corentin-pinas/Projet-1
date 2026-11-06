@@ -2,6 +2,7 @@
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
+import { Relanceur } from "./relance";
 import { avecRdv, avenirFrom, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
@@ -9,6 +10,14 @@ const tentes = new Set<string>();       // bilans déjà tentés automatiquement
 const abonnes = new Set<() => void>();
 
 export const occupe = (id: string) => enCours.has(id);
+
+/* Deux fenêtres de Muninn sur le même appareil : un même travail d'IA n'est fait que par l'une d'elles, l'autre passe
+   son tour (pas de quota consommé deux fois ; audit F10). Sans ce mécanisme (vieux navigateur), comme avant. */
+async function seul(cle: string, f: () => Promise<void>): Promise<void> {
+  const locks = typeof navigator !== "undefined" ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+  if (!locks?.request) return f();
+  await locks.request("muninn-ia:" + cle, { ifAvailable: true }, async l => { if (l) await f(); });
+}
 export function abonner(fn: () => void) { abonnes.add(fn); return () => abonnes.delete(fn); }
 const prevenir = () => abonnes.forEach(fn => fn());
 
@@ -107,7 +116,11 @@ async function piecesDe(b: Bilan): Promise<PieceBilan[]> {
 
 /* ---------- bilans ---------- */
 
-export async function resumer(bilanId: string, manuel: boolean) {
+export function resumer(bilanId: string, manuel: boolean) {
+  tentes.add(bilanId);   // tenté, même si une autre fenêtre s'en charge : la file automatique passe au suivant
+  return seul("bilan:" + bilanId, () => resumerSeul(bilanId, manuel));
+}
+async function resumerSeul(bilanId: string, manuel: boolean) {
   if (enCours.has(bilanId)) return;
   const ia = await configIA();
   if (!ia) { if (manuel) messages(PAS_REGLE); return; }
@@ -117,8 +130,10 @@ export async function resumer(bilanId: string, manuel: boolean) {
     const { bilans } = await db.tout();
     const b = bilans.find(x => x.id === bilanId);
     if (!b || b.resume) return;
-    const corrections: Correction[] = bilans.flatMap(x => x.corrections.map(c => ({ point: c.point, correction: c.correction })));
-    const confirmees = bilans.flatMap(x => x.valides);   // points « à vérifier » validés par « C'est juste »
+    /* du plus ancien au plus récent : l'IA reçoit les 60 derniers (audit F7) */
+    const parDate = [...bilans].sort((a, b) => String(a.ajoute).localeCompare(String(b.ajoute)));
+    const corrections: Correction[] = parDate.flatMap(x => x.corrections).sort((a, b) => String(a.quand).localeCompare(String(b.quand))).map(c => ({ point: c.point, correction: c.correction }));
+    const confirmees = parDate.flatMap(x => x.valides);   // points « à vérifier » validés par « C'est juste »
     const r = await resumerBilan(ia.secret, await piecesDe(b), corrections, ia.appel, confirmees);
     await db.majBilan(b.id, { resume: r.donnees, resume_erreur: undefined });
     await db.ajouterConso("bilans", r.usage);
@@ -147,7 +162,7 @@ async function analyserEnAttente() {
   const moi = await db.appareil(), depuis = isoDay(new Date(Date.now() - 14 * 864e5));
   const { seances } = await db.tout();
   for (const s of seances) {
-    if (s.ia_ok || s.origine !== moi || s.date < depuis || seancesTentees.has(s.id) || enCours.has(s.id)) continue;
+    if (s.ia_ok || s.origine !== moi || s.date < depuis || seancesTentees.has(s.id) || enCours.has(s.id) || relancesSeances.has(s.id)) continue;
     if (Date.now() - new Date(s.cree).getTime() < 60_000) continue;   // tout juste notée : son analyse est déjà partie
     seancesTentees.add(s.id);
     await analyser(s, false, !!s.brut);
@@ -164,8 +179,10 @@ export async function resumerEnAttente() {
     const moi = await db.appareil();
     for (;;) {
       const { bilans } = await db.tout();
-      /* un bilan déposé sur un autre appareil (reçu du PC) est résumé là-bas : pas de double demande à l'IA */
-      const b = bilans.find(x => !x.resume && !tentes.has(x.id) && !enCours.has(x.id) && (!x.origine || x.origine === moi));
+      /* un bilan déposé sur un autre appareil (reçu du PC) est résumé là-bas : pas de double demande à l'IA ;
+         mais s'il y attend depuis plus de 15 minutes sans avoir été tenté (IA pas réglée sur le PC…), cet appareil s'en charge (audit F5) */
+      const delaisse = (x: Bilan) => !x.resume_erreur && Date.now() - new Date(x.ajoute).getTime() > 15 * 60_000;
+      const b = bilans.find(x => !x.resume && !tentes.has(x.id) && !enCours.has(x.id) && (!x.origine || x.origine === moi || delaisse(x)));
       if (!b) break;
       await resumer(b.id, false);
     }
@@ -180,7 +197,11 @@ export const cleCorrection = (bilanId: string) => "corr:" + bilanId;
 export const correctionsEnAttente = (b: Bilan) => b.resume ? b.corrections.filter(c => !c.appliquee) : [];
 
 /* Quand Corentin corrige un point « à vérifier », l'IA reporte la correction dans le résumé (date, chiffres, rubriques…). */
-export async function integrerCorrections(bilanId: string, manuel: boolean) {
+export function integrerCorrections(bilanId: string, manuel: boolean) {
+  tentes.add(cleCorrection(bilanId));
+  return seul("correction:" + bilanId, () => integrerSeul(bilanId, manuel));
+}
+async function integrerSeul(bilanId: string, manuel: boolean) {
   const id = cleCorrection(bilanId);
   if (enCours.has(id)) return;
   const ia = await configIA();
@@ -251,8 +272,24 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
 
 /* Après l'enregistrement d'une séance : mise au propre de la dictée, résumé du « À venir » et,
    si la note le dit, date du prochain rendez-vous. sansPropre = le texte a été corrigé à la main, on n'y retouche pas. */
-export async function analyser(se: Seance, manuel: boolean, sansPropre: boolean) {
+/* séances dont la mise au propre a échoué : nouvel essai prévu (5 min, 3 essais au plus ; audit M8) */
+const relancesSeances = new Map<string, Relanceur>();
+async function relancerSeance(id: string, essai: number, sansPropre: boolean) {
+  relancesSeances.delete(id);
+  const s = (await db.tout()).seances.find(x => x.id === id);
+  if (s && !s.ia_ok) await analyser(s, false, sansPropre, essai);
+}
+
+export function analyser(se: Seance, manuel: boolean, sansPropre: boolean, essai = 1) {
+  return seul("seance:" + se.id, async () => {
+    /* une autre fenêtre a pu la mettre au propre entre-temps (elle ne l'était pas quand on nous l'a confiée) */
+    if (!manuel && !se.ia_ok) { const s = (await db.tout()).seances.find(x => x.id === se.id); if (!s || (s.ia_ok && s.contenu === se.contenu)) return; }
+    await analyserSeul(se, manuel, sansPropre, essai);
+  });
+}
+async function analyserSeul(se: Seance, manuel: boolean, sansPropre: boolean, essai: number) {
   if (enCours.has(se.id)) return;
+  relancesSeances.get(se.id)?.annuler(); relancesSeances.delete(se.id);
   const brut = avenirFrom(se.contenu);
   if (sansPropre && !brut && !parleRdv(se.contenu)) return;
   const ia = await configIA();
@@ -269,8 +306,12 @@ export async function analyser(se: Seance, manuel: boolean, sansPropre: boolean)
     if (rdv) messages(rdv);
     else if (manuel) messages(a.propre ? "Séance mise au propre." : a.resume ? "Résumé mis à jour." : "Rien à reformuler dans cette note.");
   } catch (e) {
-    if (manuel || !(e instanceof ErreurIA)) messages(e instanceof ErreurIA ? e.message : "La mise au propre n'a pas abouti. Réessayez.");
-    else messages("Séance enregistrée, mais la mise au propre n'a pas abouti : " + e.message.charAt(0).toLowerCase() + e.message.slice(1));
+    const r = new Relanceur(n => { relancerSeance(se.id, n, sansPropre); });
+    const p = r.echec(e, essai);
+    if (p) relancesSeances.set(se.id, r);
+    const suite = p ? (p.quand == null ? " Nouvel essai au retour du réseau." : " Nouvel essai dans 5 minutes.") : "";
+    if (manuel || !(e instanceof ErreurIA)) messages((e instanceof ErreurIA ? e.message : "La mise au propre n'a pas abouti.") + (suite || " Réessayez."));
+    else messages("Séance enregistrée, mais la mise au propre n'a pas abouti : " + e.message.charAt(0).toLowerCase() + e.message.slice(1) + suite);
   } finally {
     enCours.delete(se.id); prevenir();
   }
@@ -287,7 +328,7 @@ export type Range = { seanceId: string; dossierId: string };
 export async function rangerDictee(date: string, texte: string): Promise<{ ranges: Range[]; doutes: Doute[]; rdvs: string[] }> {
   const ia = await configIA();
   if (!ia) throw new ErreurIA(PAS_REGLE);
-  if (!navigator.onLine) throw new ErreurIA("Pas de connexion : votre dictée est gardée, réessayez une fois en ligne.");
+  if (!navigator.onLine) throw new ErreurIA("Pas de connexion à internet.", "reseau");
   const { dossiers } = await db.tout();
   const patients = dossiers.map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));
   const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel);

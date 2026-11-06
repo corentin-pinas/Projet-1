@@ -155,7 +155,7 @@ function json(req, res, statut, corps) {
 }
 
 function autorise(req, res) {
-  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  const ip = req.socket.remoteAddress || "";   // joint en direct par Tailscale : l'en-tête X-Forwarded-For serait inventé (audit M6)
   const e = echecs.get(ip);
   if (e && e.n >= 5 && Date.now() - e.depuis < 10 * 60_000) { json(req, res, 429, { erreur: "Trop d'essais avec un mauvais code. Patientez 10 minutes." }); return false; }
   const recu = /^Bearer (.+)$/.exec(String(req.headers.authorization || ""))?.[1] || "";

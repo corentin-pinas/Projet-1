@@ -5,6 +5,7 @@ import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
+import { phrase, Relanceur } from "./relance";
 import * as manquantes from "./seances-manquantes";
 import * as voix from "./transcription";
 import { ageDossier, demiDe, demiFr, isoDay, rdvsDuJour, nomAffiche, nomCorrespond, patientFrom, questionRdv, sansSeanceCeJour, type Dossier, type Rdv } from "./regles";
@@ -34,6 +35,9 @@ let audioEnAttente: Blob | null = null;
 let transcription = false;
 let erreurVoix = "";   // pourquoi la dernière transcription a échoué
 let chrono: ReturnType<typeof setInterval> | undefined;
+/* relances automatiques après un échec (5 min, 3 essais au plus) : rangement de la dictée, transcription de la voix */
+const relanceRange = new Relanceur(essai => { lancer(essai); }, () => { afficher(); });
+const relanceVoix = new Relanceur(essai => { envoyerVoix(undefined, essai); }, () => { afficher(); });
 let direct = "";       // texte transcrit en direct pendant l'enregistrement (1.5.0)
 let noms: string[] = [];   // patients du jour donnés à Whisper
 
@@ -136,6 +140,8 @@ async function afficher() {
           <input type="date" id="ddate" value="${esc(date)}" max="${aujourdhui()}" aria-label="Autre date">
         </div>
         ${blocVoix()}
+        ${relanceRange.plan ? `<div class="wait relance" role="status">⏳ <b>Rangement pas encore fait :</b> ${esc(relanceRange.plan.cause)}<br>${phrase(relanceRange.plan)} Votre dictée est gardée.
+          <div class="row" style="margin-top:10px"><button class="primary" id="drelance">Réessayer maintenant</button></div></div>` : ""}
         <textarea id="dtexte" placeholder="Touchez le micro du clavier et dictez tous vos patients à la suite : « Avec Marc D., … Ensuite Élisabeth G., … ». Rien à toucher entre deux patients.">${esc(texte)}</textarea>
         <p class="note">Séances du ${esc(jourFr(date))}. Votre dictée est gardée pendant que vous parlez : si le micro s'arrête, touchez-le à nouveau et continuez.</p>
         <div class="row"><button class="primary" id="dranger">Ranger la dictée</button></div>`;
@@ -157,12 +163,13 @@ function blocVoix(): string {
     <button class="primary" id="varreter">Arrêter et transcrire</button><button id="vannuler">Annuler</button></div>
     <div class="direct" id="vdirect" aria-live="polite" ${direct ? "" : "hidden"}>${esc(direct)}</div>`;
   if (transcription) return `<div class="wait encours" role="status">Transcription de votre voix…</div>`;
-  if (audioEnAttente) return `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">Réessayer la transcription</button><button id="voublier">L'effacer</button></div></div>`;
+  if (audioEnAttente) return `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}${relanceVoix.plan ? `<br><small>${phrase(relanceVoix.plan)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">${relanceVoix.plan ? "Réessayer maintenant" : "Réessayer la transcription"}</button><button id="voublier">L'effacer</button></div></div>`;
   return `<div class="row"><button class="primary voixbtn" id="venreg">🎙️ Enregistrer ma dictée</button></div>`;
 }
 
 /* e : l'enregistrement qui vient d'être arrêté ; son texte transcrit en direct évite de tout retranscrire */
-async function envoyerVoix(e?: voix.Enregistrement) {
+async function envoyerVoix(e?: voix.Enregistrement, essai = 1) {
+  relanceVoix.annuler();
   if (!audioEnAttente) return;
   transcription = true; afficher();
   try {
@@ -173,8 +180,10 @@ async function envoyerVoix(e?: voix.Enregistrement) {
     await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {});
     await garderBrouillon(true);
     erreurVoix = "";
-  } catch (e) {
-    erreurVoix = e instanceof ErreurIA ? e.message : "La transcription a échoué."; toast(erreurVoix);
+  } catch (err) {
+    erreurVoix = err instanceof ErreurIA ? err.message : "La transcription a échoué.";
+    const p = relanceVoix.echec(err, essai);
+    toast(erreurVoix + (p ? (p.quand == null ? " Nouvel essai au retour du réseau." : " Nouvel essai dans 5 minutes.") : ""));
     transcription = false; afficher();
     return;
   }
@@ -205,9 +214,9 @@ function brancher(z: HTMLElement) {
   const vannuler = z.querySelector<HTMLElement>("#vannuler");
   if (vannuler) vannuler.onclick = () => { clearInterval(chrono); enCours?.annuler(); enCours = null; direct = ""; afficher(); };
   const vre = z.querySelector<HTMLElement>("#vreessayer");
-  if (vre) vre.onclick = () => envoyerVoix();
+  if (vre) vre.onclick = () => { relanceVoix.annuler(); envoyerVoix(); };
   const voub = z.querySelector<HTMLElement>("#voublier");
-  if (voub) voub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { audioEnAttente = null; await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {}); afficher(); } };
+  if (voub) voub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { relanceVoix.annuler(); audioEnAttente = null; await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {}); afficher(); } };
 
   z.querySelector<HTMLElement>("#dfermer")!.onclick = () => { quitter(); fermer(); };
   const ta = z.querySelector<HTMLTextAreaElement>("#dtexte");
@@ -216,7 +225,9 @@ function brancher(z: HTMLElement) {
   const dd = z.querySelector<HTMLInputElement>("#ddate");
   if (dd) dd.onchange = () => { if (dd.value) { date = dd.value; garderBrouillon(); afficher(); } };
   const ranger = z.querySelector<HTMLButtonElement>("#dranger");
-  if (ranger) ranger.onclick = lancer;
+  if (ranger) ranger.onclick = () => { relanceRange.annuler(); lancer(); };
+  const drelance = z.querySelector<HTMLButtonElement>("#drelance");
+  if (drelance) drelance.onclick = () => relanceRange.maintenant();
   const nouvelle = z.querySelector<HTMLButtonElement>("#dnouvelle");
   if (nouvelle) nouvelle.onclick = () => { dernier = null; phase = "saisie"; afficher(); };
   const annuler = z.querySelector<HTMLButtonElement>("#dannuler");
@@ -269,9 +280,11 @@ function brancher(z: HTMLElement) {
   });
 }
 
-async function lancer() {
-  if (!texte.trim()) { toast("Dictez d'abord vos séances."); return; }
-  if (doutes.length) { toast("Rangez d'abord les passages en attente, plus haut."); return; }
+async function lancer(essai = 1) {
+  relanceRange.annuler();
+  if (phase === "envoi") return;
+  if (!texte.trim()) { if (essai === 1) toast("Dictez d'abord vos séances."); return; }
+  if (doutes.length) { if (essai === 1) toast("Rangez d'abord les passages en attente, plus haut."); return; }
   await garderBrouillon(true);
   phase = "envoi"; afficher();
   const envoye = texte, jour = date;
@@ -289,7 +302,9 @@ async function lancer() {
     toast(n ? `${n} séance${n > 1 ? "s rangées" : " rangée"}${m ? `, ${m} à ranger à la main` : ""}.` : `${m} passage${m > 1 ? "s" : ""} à ranger à la main.`);
   } catch (e) {
     phase = "saisie";
-    toast(e instanceof ErreurIA ? e.message : "La dictée n'a pas pu être rangée. Elle est gardée : réessayez.");
+    const p = relanceRange.echec(e, essai);
+    const cause = e instanceof ErreurIA ? e.message : "La dictée n'a pas pu être rangée.";
+    toast(cause + (p ? (p.quand == null ? " Votre dictée est gardée : nouvel essai au retour du réseau." : " Votre dictée est gardée : nouvel essai dans 5 minutes.") : " Votre dictée est gardée."));
   } finally { relacher(); }
   afficher();
 }
