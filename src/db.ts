@@ -1,7 +1,7 @@
 /* Rangement des données dans la tablette (IndexedDB). Rien ne part sur internet.
    Remplace les briques db et assets de claude.ai utilisées par la version d'essai. */
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { stable } from "./fusion";
+import { egal, fusion3, stable } from "./fusion";
 import { avecRdv, isoDay, patientFrom, type Bilan, type DicteeGardee, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
 
 interface Schema extends DBSchema {
@@ -26,8 +26,21 @@ export type Copie = { id: string; cree: string; donnees: Donnees; taille: number
 export const AVANT_RETOUR = "avant-retour";
 export const COPIES_GARDEES = 7;
 
+/* Montée de version de la base avec deux fenêtres de Muninn ouvertes (audit F4) : la vieille fenêtre ferme sa connexion
+   pour laisser passer la nouvelle version et demande à être rechargée ; la nouvelle, si elle attend, le dit. */
+export type Blocage = "recharger" | "attente";
+let surBlocage: (b: Blocage) => void = () => {};
+export function quandBloque(f: (b: Blocage) => void) { surBlocage = f; }
+
 let base: Promise<IDBPDatabase<Schema>> | null = null;
 const ouvrir = () => base ??= openDB<Schema>("mes-patients", 4, {
+  blocking() {
+    const b = base; base = null;
+    b?.then(d => d.close()).catch(() => {});
+    surBlocage("recharger");
+  },
+  blocked() { surBlocage("attente"); },
+  terminated() { base = null; },
   upgrade(db, ancienne) {
     if (ancienne < 1) {
       db.createObjectStore("dossiers", { keyPath: "id" });
@@ -116,12 +129,14 @@ export async function supprimerPatient(dossierId: string) {
   prevenir();
 }
 
+/* lecture et écriture dans la même transaction : un changement fait entre les deux ne peut pas être écrasé (audit A3) */
 export async function majBilan(id: string, patch: Partial<Bilan>) {
   await copieDuJour();
-  const db = await ouvrir();
-  const b = await db.get("bilans", id);
-  if (!b) throw new Error("Bilan introuvable");
-  await db.put("bilans", { ...b, ...patch, id });
+  const tx = (await ouvrir()).transaction("bilans", "readwrite");
+  const b = await tx.store.get(id);
+  if (!b) { tx.abort(); await tx.done.catch(() => {}); throw new Error("Bilan introuvable"); }
+  await tx.store.put({ ...b, ...patch, id });
+  await tx.done;
   prevenir();
 }
 
@@ -146,14 +161,21 @@ export async function supprimerBilan(id: string) {
 
 /* ---------- dossiers ---------- */
 
-export async function setRdvs(dossierId: string, rdvs: Rdv[]) {
+/* Modifie un dossier à partir de sa version du moment, lue et réécrite dans la même transaction (audit A3) :
+   f reçoit le dossier tel qu'il est dans la base, pas une version lue plus tôt à l'écran. */
+export async function modifierDossier(dossierId: string, f: (d: Dossier) => Dossier) {
   await copieDuJour();
-  const db = await ouvrir();
-  const d = await db.get("dossiers", dossierId);
-  if (!d) throw new Error("Dossier introuvable");
-  await db.put("dossiers", { ...d, rdvs });
+  const tx = (await ouvrir()).transaction("dossiers", "readwrite");
+  const d = await tx.store.get(dossierId);
+  if (!d) { tx.abort(); await tx.done.catch(() => {}); throw new Error("Dossier introuvable"); }
+  await tx.store.put({ ...f(d), id: dossierId });
+  await tx.done;
   prevenir();
 }
+
+/* les rendez-vous d'un dossier, calculés à partir de ceux du moment */
+export const modifierRdvs = (dossierId: string, f: (rdvs: Rdv[]) => Rdv[]) => modifierDossier(dossierId, d => ({ ...d, rdvs: f(d.rdvs ?? []) }));
+export const setRdvs = (dossierId: string, rdvs: Rdv[]) => modifierRdvs(dossierId, () => rdvs);
 
 /* « Oui, même personne » : le dossier en attente rejoint l'autre (bilans, séances, rendez-vous). */
 export async function fusionner(depuisId: string, versId: string) {
@@ -237,10 +259,11 @@ export async function ajouterSeance(dossierId: string, date: string, contenu: st
 
 export async function majSeance(id: string, patch: Partial<Seance>) {
   await copieDuJour();
-  const db = await ouvrir();
-  const s = await db.get("seances", id);
-  if (!s) throw new Error("Séance introuvable");
-  await db.put("seances", { ...s, ...patch, id });
+  const tx = (await ouvrir()).transaction("seances", "readwrite");
+  const s = await tx.store.get(id);
+  if (!s) { tx.abort(); await tx.done.catch(() => {}); throw new Error("Séance introuvable"); }
+  await tx.store.put({ ...s, ...patch, id });
+  await tx.done;
   prevenir();
 }
 
@@ -411,6 +434,48 @@ export async function appliquerPartage(ecritures: { cle: string; valeur: unknown
   for (const b of bases) await tx.objectStore("synchro").put(b);
   await tx.done;
   if (ecritures.length) { await nettoyerFichiers(); prevenir(); }
+}
+
+/* Ce qui arrive du PC, réuni avec ce qui a changé ici, DANS la transaction d'écriture : un changement fait sur cet
+   appareil pendant l'échange ne peut plus être écrasé (audit F2). base : la version commune au dernier échange
+   (absente : appareil neuf ou copie restaurée, le PC fait foi ; audit C1). Un patient supprimé ailleurs alors qu'une
+   séance d'ici y renvoie encore est gardé : il repartira comme modifié au prochain envoi, et la séance reste visible
+   partout (audit F1). Rend le nombre d'éléments changés ici. */
+export type Arrivee = { cle: string; distant: unknown; base: Base | undefined; rev: number };
+export async function recevoirPartage(arrivees: Arrivee[]): Promise<number> {
+  if (!arrivees.length) return 0;
+  await copieDuJour();   // un échange malheureux peut être annulé depuis « Copies de sécurité »
+  const db = await ouvrir();
+  const tx = db.transaction(["dossiers", "bilans", "seances", "parametres", "synchro"], "readwrite");
+  let changes = 0;
+  const dossiersSupprimes = new Map<string, unknown>();   // id -> version d'ici avant la suppression
+  for (const a of arrivees) {
+    const i = a.cle.indexOf("/"), nom = a.cle.slice(0, i), id = a.cle.slice(i + 1);
+    const param = nom === "parametres";
+    if (param ? !PARAMS_PARTAGES.includes(id) : !(MAGASINS as readonly string[]).includes(nom)) continue;
+    const ici: unknown = param ? (await tx.objectStore("parametres").get(id))?.valeur ?? null
+      : (await tx.objectStore(nom as typeof MAGASINS[number]).get(id)) ?? null;
+    const v = a.base ? fusion3(a.base.valeur ?? null, ici, a.distant) ?? null : a.distant;
+    if (!egal(v, ici)) {
+      changes++;
+      if (param) {
+        if (v === null) await tx.objectStore("parametres").delete(id);
+        else await tx.objectStore("parametres").put({ cle: id, valeur: v });
+      } else {
+        const m = tx.objectStore(nom as typeof MAGASINS[number]);
+        if (v === null) { await m.delete(id); if (nom === "dossiers" && ici) dossiersSupprimes.set(id, ici); }
+        else await m.put({ ...(v as object), id } as never);
+      }
+    }
+    await tx.objectStore("synchro").put({ cle: a.cle, valeur: a.distant, rev: a.rev });
+  }
+  if (dossiersSupprimes.size) {
+    const vivants = new Set((await tx.objectStore("seances").getAll()).map(s => s.dossierId));
+    for (const [id, ici] of dossiersSupprimes) if (vivants.has(id)) await tx.objectStore("dossiers").put(ici as Dossier);
+  }
+  await tx.done;
+  if (changes) { await nettoyerFichiers(); prevenir(); }
+  return changes;
 }
 
 /* appareil délié du PC, ou relié à un autre : il repartira de zéro (tout envoyer, tout recevoir) */

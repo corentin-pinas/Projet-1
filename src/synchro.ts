@@ -153,19 +153,13 @@ async function recevoir(cfg: Config) {
       }
     }
     if (r.changements.length) {
-      const [local, bases] = await Promise.all([db.etatPartage(), db.basesPartage()]);
-      const ecritures: { cle: string; valeur: unknown }[] = [], nouvelles: db.Base[] = [];
-      for (const c of r.changements) {
-        const distant = c.supprime ? null : c.valeur ?? null, ici = local.get(c.cle) ?? null;
-        // sans version commune (appareil neuf, fichier de copie restauré, autre PC) : le PC fait foi pour ce qu'il connaît,
-        // sinon de vieilles versions gardées ici écraseraient partout les nouvelles (audit C1)
-        const b = bases.get(c.cle);
-        const v = b ? fusion3(b.valeur ?? null, ici, distant) ?? null : distant;
-        if (!egal(v, ici)) ecritures.push({ cle: c.cle, valeur: v });
-        nouvelles.push({ cle: c.cle, valeur: distant, rev: c.rev });
-      }
+      // sans version commune (appareil neuf, fichier de copie restauré, autre PC) : le PC fait foi pour ce qu'il connaît,
+      // sinon de vieilles versions gardées ici écraseraient partout les nouvelles (audit C1). La réunion avec ce qui a
+      // changé ici se fait dans la transaction d'écriture (audit F2).
+      const bases = await db.basesPartage();
+      const arrivees = r.changements.map(c => ({ cle: c.cle, distant: c.supprime ? null : c.valeur ?? null, base: bases.get(c.cle), rev: c.rev }));
       applique = true;
-      try { await db.appliquerPartage(ecritures, nouvelles); } finally { applique = false; }
+      try { await db.recevoirPartage(arrivees); } finally { applique = false; }
     }
     rev = r.rev;
     await db.ecrireParametre(PARAM_REV, rev);

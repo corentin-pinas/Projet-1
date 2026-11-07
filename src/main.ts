@@ -109,6 +109,18 @@ matchMedia("(display-mode: standalone)").addEventListener("change", afficherEtat
   afficherEtat();
 })();
 
+/* une autre fenêtre de Muninn passe à une nouvelle version de la base : celle-ci doit être rechargée (audit F4) */
+db.quandBloque(b => {
+  const el = $("#maj");
+  el.querySelector("span")!.textContent = b === "recharger"
+    ? "Muninn a été mis à jour dans une autre fenêtre : rechargez celle-ci pour continuer."
+    : "Une autre fenêtre de Muninn, plus ancienne, est ouverte : fermez-la (ou rechargez-la) pour finir la mise à jour.";
+  const btn = $<HTMLButtonElement>("#majbtn");
+  btn.textContent = "Recharger"; btn.disabled = false;
+  btn.onclick = () => location.reload();
+  el.hidden = false;
+});
+
 surveillerCopies();
 brancherPartage();
 alerteCode.brancher();

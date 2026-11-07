@@ -194,7 +194,7 @@ describe("partage entre appareils", () => {
     }
   });
 
-  it.fails("défaut connu (F1) : une séance ajoutée hors connexion à un patient supprimé ailleurs ne doit pas devenir invisible", async () => {
+  it("F1 : une séance ajoutée hors connexion à un patient supprimé ailleurs ne devient pas invisible (le patient est gardé)", async () => {
     const pc = await nouveauPC();
     const tab = await appareil();
     const p = await tab.db.creerPatient("Paul T.");
@@ -212,7 +212,7 @@ describe("partage entre appareils", () => {
     }
   });
 
-  it.fails("défaut connu (F2) : un rendez-vous posé pendant la réception d'un échange ne doit pas être écrasé", async () => {
+  it("F2 : un rendez-vous posé pendant la réception d'un échange n'est pas écrasé", async () => {
     const pc = await nouveauPC();
     const tab = await appareil();
     const p = await tab.db.creerPatient("Paul T.");
@@ -222,11 +222,12 @@ describe("partage entre appareils", () => {
     await tel.sync.relier(pc.url, CODE);
     await tel.db.setRdvs(p.id, [{ d: "2026-11-10", h: "", p: "am" }]);
     await echanger(tel);
-    const vrai = tab.db.appliquerPartage;
+    const vrai = tab.db.recevoirPartage;
     let fait = false;
-    vi.spyOn(tab.db, "appliquerPartage").mockImplementation(async (e, b) => {
-      if (!fait && e.length) { fait = true; await tab.db.setRdvs(p.id, [{ d: "2026-11-12", h: "", p: "pm" }]); }
-      return vrai(e, b);
+    vi.spyOn(tab.db, "recevoirPartage").mockImplementation(async a => {
+      // le rendez-vous est posé après la lecture de ce qui arrive du PC, juste avant son rangement
+      if (!fait && a.length) { fait = true; await tab.db.setRdvs(p.id, [{ d: "2026-11-12", h: "", p: "pm" }]); }
+      return vrai(a);
     });
     await echanger(tab);
     expect(fait).toBe(true);

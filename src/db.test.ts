@@ -308,3 +308,28 @@ describe("dictées gardées et absences", () => {
     expect((await db.tout()).dossiers[0].absences).toBeUndefined();
   });
 });
+
+describe("fondations (1.5.2)", () => {
+  it("F4 : une nouvelle version de la base ouverte ailleurs n'est pas bloquée ; cette fenêtre demande à être rechargée", async () => {
+    const vu: string[] = [];
+    db.quandBloque(b => vu.push(b));
+    await db.creerPatient("Paul T.");
+    const ouverte = await new Promise<string>(ok => {
+      const r = indexedDB.open("mes-patients", 5);
+      r.onsuccess = () => { r.result.close(); ok("ouverte"); };
+      r.onblocked = () => setTimeout(() => ok("bloquée"), 500);
+    });
+    expect(ouverte).toBe("ouverte");
+    expect(vu).toContain("recharger");
+    db.quandBloque(() => {});
+  });
+
+  it("A3 : un rendez-vous est calculé sur les rendez-vous du moment, pas sur une lecture ancienne", async () => {
+    const p = await db.creerPatient("Paul T.");
+    const lu = (await db.tout()).dossiers[0].rdvs;   // lecture « à l'écran »
+    await db.setRdvs(p.id, [{ d: "2026-11-10", h: "", p: "am" }]);   // posé entre-temps ailleurs
+    await db.modifierRdvs(p.id, rdvs => [...rdvs, { d: "2026-11-12", h: "", p: "pm" }]);
+    expect(lu).toEqual([]);
+    expect((await db.tout()).dossiers[0].rdvs.map(r => r.d)).toEqual(["2026-11-10", "2026-11-12"]);
+  });
+});

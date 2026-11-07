@@ -180,18 +180,29 @@ export function avenirDe(seancesDuDossier: Seance[]) {
   if (!s) return null;
   const brut = avenirFrom(s.contenu);
   if (!brut) return null;
-  const ok = !!s.avenir_resume && s.avenir_source === brut;
+  const ok = !!s.avenir_resume && memeSource(s.avenir_source, brut);
   return { s, brut, texte: ok ? s.avenir_resume! : brut, resume: ok };
 }
 
 /* texte mis au propre par l'IA, valable tant que la note d'origine n'a pas changé */
-export const propreOk = (s: Seance) => !!s.propre && s.propre_source === s.contenu;
+/* Empreinte courte d'un texte (audit A5) : propre_source, bref_source et avenir_source gardaient une copie complète du
+   texte d'origine ; elles gardent désormais son empreinte. Les deux formes sont acceptées (séances d'avant, appareils
+   pas encore à jour). */
+export function empreinteTexte(t: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  let h2 = 0x9747b28c;
+  for (let i = t.length - 1; i >= 0; i--) { h2 ^= t.charCodeAt(i); h2 = Math.imul(h2, 0x5bd1e995) >>> 0; }
+  return "#" + t.length.toString(36) + "." + h.toString(36) + h2.toString(36);
+}
+export const memeSource = (source: string | undefined, texte: string) => source === texte || source === empreinteTexte(texte);
+export const propreOk = (s: Seance) => !!s.propre && memeSource(s.propre_source, s.contenu);
 export const texteDe = (s: Seance) => propreOk(s) ? s.propre! : s.contenu;
 
 /* résumé court d'une séance : celui de l'IA tant que la note n'a pas changé,
    sinon « État du patient » et « Fait en séance » de la note, coupés à 160 caractères */
 export function brefDe(s: Seance): string {
-  if (s.bref && s.bref_source === s.contenu) return s.bref;
+  if (s.bref && memeSource(s.bref_source, s.contenu)) return s.bref;
   const t = texteDe(s);
   const lignes = t.split("\n").map(l => /^(État du patient|Fait en séance) ?: ?(.*)$/.exec(l.trim())).filter(Boolean).map(m => m![2].trim());
   const out = (lignes.length ? lignes.join(" ; ") : t.replace(/\s+/g, " ")).trim();

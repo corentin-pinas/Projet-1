@@ -336,3 +336,13 @@ describe("transcription en direct", () => {
     expect(s.startsWith("mot")).toBe(true);
   });
 });
+
+describe("empreinte du texte d'origine (A5)", () => {
+  it("la mise au propre reste valable avec l'empreinte comme avec l'ancienne copie complète ; un texte modifié l'invalide", async () => {
+    const { empreinteTexte, memeSource } = await import("./regles");
+    expect(memeSource(empreinteTexte("douleur 3 sur 10"), "douleur 3 sur 10")).toBe(true);
+    expect(memeSource("douleur 3 sur 10", "douleur 3 sur 10")).toBe(true);                 // séances d'avant
+    expect(memeSource(empreinteTexte("douleur 3 sur 10"), "douleur 4 sur 10")).toBe(false);
+    expect(empreinteTexte("x".repeat(5000)).length).toBeLessThan(30);
+  });
+});

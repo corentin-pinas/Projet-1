@@ -127,7 +127,7 @@ function placer(jour: string, demi: Demi, dossiers: Dossier[]) {
     const deja = x.rdvs.find(r => r.d === jour);
     if (deja && !await confirmer(`${x.label} a déjà rendez-vous ce jour-là${demiFr(deja) ? " (" + demiFr(deja) + ")" : ""}. Le mettre ${demi === "am" ? "le matin" : "l'après-midi"} ?`, "Déplacer")) return;
     try {
-      await db.setRdvs(x.id, avecRdv(x.rdvs, jour, "", type(), demi));
+      await db.modifierRdvs(x.id, rdvs => avecRdv(rdvs, jour, "", type(), demi));
       d.close();
       toast(`${x.label} : ${type() === "bilan" ? "bilan" : "séance"} ${jourLong(jour)} ${DEMI_FR[demi]}.` + (nouveau ? " Patient créé, bilan à venir." : ""));
     } catch { toast("L'enregistrement a échoué. Réessayez."); }

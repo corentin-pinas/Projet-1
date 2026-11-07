@@ -7,7 +7,8 @@ import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
 import { phrase, Relanceur } from "./relance";
 import * as manquantes from "./seances-manquantes";
-import * as voix from "./transcription";
+import { Enregistreur } from "./enregistreur";
+import { eveil } from "./transcription";
 import { ageDossier, demiDe, demiFr, isoDay, rdvsDuJour, nomAffiche, nomCorrespond, patientFrom, questionRdv, sansSeanceCeJour, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
@@ -28,31 +29,30 @@ let charge = false;
 let ecran: HTMLElement | null = null;   // zone où la dictée est affichée, null si elle est fermée
 let fermer: () => void = () => {};
 
-/* dictée enregistrée (Whisper) : micro en cours, enregistrement en attente de transcription, transcription en cours */
-let voixOk = false;
-let enCours: voix.Enregistrement | null = null;
-let audioEnAttente: Blob | null = null;
-let transcription = false;
-let erreurVoix = "";   // pourquoi la dernière transcription a échoué
-let chrono: ReturnType<typeof setInterval> | undefined;
-/* relances automatiques après un échec (5 min, 3 essais au plus) : rangement de la dictée, transcription de la voix */
+/* relance automatique du rangement après un échec (5 min, 3 essais au plus) ; la voix a les siennes dans l'enregistreur */
 const relanceRange = new Relanceur(essai => { lancer(essai); }, () => { afficher(); });
-const relanceVoix = new Relanceur(essai => { envoyerVoix(undefined, essai); }, () => { afficher(); });
-let direct = "";       // texte transcrit en direct pendant l'enregistrement (1.5.0)
-let noms: string[] = [];   // patients du jour donnés à Whisper
+
+/* dictée enregistrée (Whisper) : l'enregistreur commun avec « Enregistrer ma séance » (audit A2) */
+const enr = new Enregistreur({
+  id: "v", libelle: "Enregistrer ma dictée", enTranscription: "Transcription de votre voix…",
+  noms: () => nomsDuJour(),
+  garder: son => db.ecrireParametre(VOIX_GARDEE, son),
+  oublier: () => db.ecrireParametre(VOIX_GARDEE, undefined),
+  /* choix de Corentin : la dictée transcrite est rangée tout de suite, sans relecture ;
+     le texte dicté reste consultable dans chaque séance et « Annuler cette dictée » défait tout */
+  transcrit: async t => {
+    texte = texte.trim() ? texte.trimEnd() + "\n" + t : t;
+    await garderBrouillon(true);
+    await lancer();
+  },
+  redessiner: () => { afficher(); }
+});
 
 /* les patients qui ont rendez-vous le jour de la dictée : Whisper écrit leurs noms juste */
 async function nomsDuJour(): Promise<string[]> {
   const t = await db.tout().catch(() => null);
   return t ? [...new Set(rdvsDuJour(t.dossiers, date).map(r => r.dossier.label))] : [];
 }
-const montrerDirect = (t: string) => {
-  direct = t;
-  const el = document.querySelector<HTMLElement>("#vdirect");
-  if (!el) return;
-  el.textContent = t; el.hidden = !t; el.scrollTop = el.scrollHeight;
-};
-
 const aujourdhui = () => isoDay(new Date());
 const hier = () => { const d = new Date(); d.setDate(d.getDate() - 1); return isoDay(d); };
 
@@ -60,7 +60,7 @@ async function charger() {
   if (charge) return;
   charge = true;
   const b = await db.lireParametre<{ texte: string; date: string }>(BROUILLON).catch(() => undefined);
-  if (!audioEnAttente && !enCours) audioEnAttente = (await db.lireParametre<Blob>(VOIX_GARDEE).catch(() => undefined)) ?? null;
+  if (!enr.attente && !enr.enCours) enr.attente = (await db.lireParametre<Blob>(VOIX_GARDEE).catch(() => undefined)) ?? null;
   texte = b?.texte ?? ""; date = b?.date || aujourdhui();
   doutes = (await db.lireParametre<moteur.Doute[]>(DOUTES).catch(() => undefined)) ?? [];
 }
@@ -82,7 +82,7 @@ export async function ouvrir(zone: HTMLElement, surFermeture: () => void) {
   await charger();
   if (phase === "fini" && !doutes.length && !dernier) phase = "saisie";
   await afficher();
-  voix.disponible().then(ok => { if (ok !== voixOk) { voixOk = ok; afficher(); } });
+  enr.verifierDispo();
   const ta = zone.querySelector<HTMLTextAreaElement>("#dtexte");
   if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
@@ -139,7 +139,7 @@ async function afficher() {
           <button data-jour="${hier()}" aria-pressed="${date === hier()}">Hier</button>
           <input type="date" id="ddate" value="${esc(date)}" max="${aujourdhui()}" aria-label="Autre date">
         </div>
-        ${blocVoix()}
+        ${enr.html()}
         ${relanceRange.plan ? `<div class="wait relance" role="status">⏳ <b>Rangement pas encore fait :</b> ${esc(relanceRange.plan.cause)}<br>${phrase(relanceRange.plan)} Votre dictée est gardée.
           <div class="row" style="margin-top:10px"><button class="primary" id="drelance">Réessayer maintenant</button></div></div>` : ""}
         <textarea id="dtexte" placeholder="Touchez le micro du clavier et dictez tous vos patients à la suite : « Avec Marc D., … Ensuite Élisabeth G., … ». Rien à toucher entre deux patients.">${esc(texte)}</textarea>
@@ -155,68 +155,10 @@ async function afficher() {
 /* nom proposé pour un patient pas encore dans l'appli : prénom et initiale, comme pour les bilans */
 const nouveauNom = (dicte: string) => dicte.trim().includes(" ") ? patientFrom(dicte.trim()) : dicte.trim();
 
-const duree = (ms: number) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-
-function blocVoix(): string {
-  if (!voixOk && !enCours && !audioEnAttente) return "";
-  if (enCours) return `<div class="voix enreg" role="status"><span class="point" aria-hidden="true"></span> Enregistrement <span id="vchrono">${voix.chrono(enCours, duree)}</span>
-    <button class="primary" id="varreter">Arrêter et transcrire</button><button id="vannuler">Annuler</button></div>
-    <div class="direct" id="vdirect" aria-live="polite" ${direct ? "" : "hidden"}>${esc(direct)}</div>`;
-  if (transcription) return `<div class="wait encours" role="status">Transcription de votre voix…</div>`;
-  if (audioEnAttente) return `<div class="wait">Un enregistrement de votre voix est gardé : il n'a pas encore été transcrit.${erreurVoix ? `<br><small>${esc(erreurVoix)}</small>` : ""}${relanceVoix.plan ? `<br><small>${phrase(relanceVoix.plan)}</small>` : ""}<div class="row" style="margin-top:10px"><button class="primary" id="vreessayer">${relanceVoix.plan ? "Réessayer maintenant" : "Réessayer la transcription"}</button><button id="voublier">L'effacer</button></div></div>`;
-  return `<div class="row"><button class="primary voixbtn" id="venreg">🎙️ Enregistrer ma dictée</button></div>`;
-}
-
-/* e : l'enregistrement qui vient d'être arrêté ; son texte transcrit en direct évite de tout retranscrire */
-async function envoyerVoix(e?: voix.Enregistrement, essai = 1) {
-  relanceVoix.annuler();
-  if (!audioEnAttente) return;
-  transcription = true; afficher();
-  try {
-    const t = (e && await e.texteDirect()) || await voix.transcrire(audioEnAttente, noms.length ? noms : await nomsDuJour());
-    direct = "";
-    texte = texte.trim() ? texte.trimEnd() + "\n" + t : t;
-    audioEnAttente = null;
-    await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {});
-    await garderBrouillon(true);
-    erreurVoix = "";
-  } catch (err) {
-    erreurVoix = err instanceof ErreurIA ? err.message : "La transcription a échoué.";
-    const p = relanceVoix.echec(err, essai);
-    toast(erreurVoix + (p ? (p.quand == null ? " Nouvel essai au retour du réseau." : " Nouvel essai dans 5 minutes.") : ""));
-    transcription = false; afficher();
-    return;
-  }
-  transcription = false;
-  /* choix de Corentin : la dictée transcrite est rangée tout de suite, sans relecture ;
-     le texte dicté reste consultable dans chaque séance et « Annuler cette dictée » défait tout */
-  await lancer();
-}
-
 function brancher(z: HTMLElement) {
   prochain.brancher(z, () => { afficher(); });
   manquantes.brancher(z, () => { afficher(); });
-  const venreg = z.querySelector<HTMLElement>("#venreg");
-  if (venreg) venreg.onclick = async () => {
-    noms = await nomsDuJour(); direct = "";
-    try { enCours = await voix.enregistrer({ noms, surTexte: montrerDirect }); } catch (e) { toast(e instanceof ErreurIA ? e.message : "Le micro n'a pas pu démarrer."); return; }
-    chrono = setInterval(() => { const c = document.querySelector("#vchrono"); if (c && enCours) c.textContent = voix.chrono(enCours, duree); }, 1000);
-    afficher();
-  };
-  const varreter = z.querySelector<HTMLElement>("#varreter");
-  if (varreter) varreter.onclick = async () => {
-    const e = enCours; if (!e) return;
-    clearInterval(chrono); enCours = null;
-    audioEnAttente = await e.arreter();
-    await db.ecrireParametre(VOIX_GARDEE, audioEnAttente).catch(() => {});   // gardé tant qu'il n'est pas transcrit
-    envoyerVoix(e);
-  };
-  const vannuler = z.querySelector<HTMLElement>("#vannuler");
-  if (vannuler) vannuler.onclick = () => { clearInterval(chrono); enCours?.annuler(); enCours = null; direct = ""; afficher(); };
-  const vre = z.querySelector<HTMLElement>("#vreessayer");
-  if (vre) vre.onclick = () => { relanceVoix.annuler(); envoyerVoix(); };
-  const voub = z.querySelector<HTMLElement>("#voublier");
-  if (voub) voub.onclick = async () => { if (await confirmer("Effacer cet enregistrement ? Il n'a pas été transcrit.", "L'effacer")) { relanceVoix.annuler(); audioEnAttente = null; await db.ecrireParametre(VOIX_GARDEE, undefined).catch(() => {}); afficher(); } };
+  enr.brancher(z);
 
   z.querySelector<HTMLElement>("#dfermer")!.onclick = () => { quitter(); fermer(); };
   const ta = z.querySelector<HTMLTextAreaElement>("#dtexte");
@@ -288,7 +230,7 @@ async function lancer(essai = 1) {
   await garderBrouillon(true);
   phase = "envoi"; afficher();
   const envoye = texte, jour = date;
-  const relacher = voix.eveil();   // une longue dictée peut prendre plusieurs minutes : l'écran reste allumé
+  const relacher = eveil();   // une longue dictée peut prendre plusieurs minutes : l'écran reste allumé
   await db.garderDictee(jour, envoye).catch(() => {});   // gardée telle que dictée, même si le rangement échoue (audit E3)
   try {
     const avant = new Map((await db.tout()).dossiers.map(d => [d.id, d.rdvs] as const));
@@ -332,7 +274,8 @@ async function annulerDictee() {
     for (const [id, rdvs] of dernier.avant) {
       if (!touches.has(id)) continue;
       const d = dossiers.find(x => x.id === id), apres = dernier.apres?.get(id);
-      if (d && apres && JSON.stringify(d.rdvs) === JSON.stringify(apres) && JSON.stringify(d.rdvs) !== JSON.stringify(rdvs)) await db.setRdvs(id, rdvs);
+      if (d && apres && JSON.stringify(d.rdvs) === JSON.stringify(apres) && JSON.stringify(d.rdvs) !== JSON.stringify(rdvs))
+        await db.modifierRdvs(id, actuels => JSON.stringify(actuels) === JSON.stringify(apres) ? rdvs : actuels);   // revérifié au moment d'écrire
     }
     if (dernier.texte) { texte = dernier.texte; date = dernier.date; await garderBrouillon(true); }
     dernier = null; doutes = []; await garderDoutes();

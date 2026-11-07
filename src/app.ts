@@ -4,7 +4,8 @@ import * as db from "./db";
 import {
   ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
   prochainRdv, propreOk, questionHomonyme, questionRdv, seancesManquantes, rdvsAVenir, texteDe, trierBilans, trierSeances,
-  type Bilan, type Demi, type Dossier, type Seance
+  type Bilan, type Demi, type Dossier, type Seance,
+  empreinteTexte
 } from "./regles";
 import * as agenda from "./agenda";
 import * as dictee from "./dictee";
@@ -312,10 +313,12 @@ function wireHomonyme(D: Dossier, autre: Dossier) {
 /* « Modifier » remplace le prochain rendez-vous, « Effacer » le retire ; les suivants sont gardés */
 async function saveRdv(D: Dossier, date: string, demi: Demi | null, type?: "seance" | "bilan") {
   try {
-    const passes = D.rdvs.filter(r => r && r.d < aujourdhui());   // gardés : historique, futures absences
-    const suite = passes.concat(rdvsAVenir(D.rdvs, aujourdhui()).slice(1));
     rdvOpen = false;
-    await db.setRdvs(D.id, date ? avecRdv(suite, date, "", type, demi) : suite);
+    await db.modifierRdvs(D.id, rdvs => {   // les rendez-vous du moment, pas ceux lus à l'ouverture de la fiche (audit A3)
+      const passes = rdvs.filter(r => r && r.d < aujourdhui());   // gardés : historique, futures absences
+      const suite = passes.concat(rdvsAVenir(rdvs, aujourdhui()).slice(1));
+      return date ? avecRdv(suite, date, "", type, demi) : suite;
+    });
     toast(date ? "Rendez-vous enregistré." : "Rendez-vous effacé.");
   } catch {
     rdvOpen = true; toast("L'enregistrement a échoué. Réessayez.");
@@ -406,7 +409,7 @@ function wireSeances(D: Dossier) {
         } else {
           /* correction à la main d'un texte déjà mis au propre : sa version fait foi, la dictée d'origine est conservée */
           const patch: Partial<Seance> = garde
-            ? { date, contenu, propre: contenu, propre_source: contenu, brut: avant.brut || avant.contenu, ia_ok: false }
+            ? { date, contenu, propre: contenu, propre_source: empreinteTexte(contenu), brut: avant.brut || avant.contenu, ia_ok: false }
             : { date, contenu, ia_ok: false };
           await enregistrerSansBouger(() => db.majSeance(avant.id, patch));
           moteur.analyser({ ...avant, ...patch }, false, garde);

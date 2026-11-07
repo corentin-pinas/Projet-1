@@ -64,8 +64,9 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `journee.ts` | « Ma journée » | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
 | `transmissions.ts`, `transmissions-pdf.ts` | transmissions pour un remplaçant et leur PDF (sans IA) | db, regles, ui |
-| `dictee.ts` | dictée groupée, rangée patient par patient | db, ia, moteur, prochain-rdv, regles, relance, seances-manquantes, transcription, ui |
-| `voix-seance.ts` | « Enregistrer ma séance » sur la fiche | db, ia, relance, transcription, ui |
+| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, prochain-rdv, regles, relance, seances-manquantes, transcription, ui |
+| `voix-seance.ts` | « Enregistrer ma séance » sur la fiche | db, enregistreur, ui |
+| `enregistreur.ts` | l'enregistreur de voix commun (micro, chrono, texte en direct, voix gardée, transcription, relances, boutons) | ia, relance, transcription, ui |
 | `relance.ts` | relances automatiques après un échec (5 minutes, 3 essais au plus, selon la cause), compte à rebours | ia |
 | `alerte-code.ts` | bandeau « mauvais codes d'accès » (3 en 24 heures sur le serveur) | db, ui |
 | `copies.ts`, `fichier-copie.ts` | copies de sécurité internes et fichier chiffré hors de Chrome | db, regles, ui, verifications |
@@ -89,7 +90,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `server.mjs` | Railway | livre `dist/`, relaie l'IA (`/api/ia/*`, code d'accès exigé) ; aucune donnée gardée |
 | `serveur/claude.mjs` | Railway | lance Claude Code verrouillé (sans outils, sans mémoire), une demande à la fois |
 | `serveur/transcription.mjs` | Railway | transcription de secours (inactive tant que `WHISPER_URL` n'est pas réglé) |
-| `public/pc/muninn-pc.mjs` | PC | base commune (`donnees.json`, `fichiers/`, `copies/` sur 60 jours), un seul fichier sans dépendance, joignable seulement par Tailscale avec le code du PC |
+| `public/pc/muninn-pc.mjs` | PC | base commune (`donnees.json`, `fichiers/`, `copies/` sur 30 jours ; un élément supprimé et ses PDF effacés définitivement 30 jours après), un seul fichier sans dépendance, joignable seulement par Tailscale avec le code du PC |
 | `public/pc/voix.py` | PC | Whisper (faster-whisper), n'écoute que le PC lui-même |
 | `public/pc/installer.ps1` | PC | installation et mise à jour en une ligne, sans toucher aux données |
 

@@ -5,8 +5,8 @@
 //
 // Dossier des données (MUNINN_DOSSIER, sinon C:\ProgramData\Muninn sous Windows, ~/.muninn ailleurs) :
 //   donnees.json   tous les éléments partagés, chacun avec son numéro de modification (rev) ;
-//   fichiers/      les PDF et photos des bilans (jamais effacés) ;
-//   copies/        une copie de donnees.json par jour (avant le premier changement), gardée 60 jours ;
+//   fichiers/      les PDF et photos des bilans (effacés 30 jours après la suppression du bilan, quand plus rien n'y renvoie) ;
+//   copies/        une copie de donnees.json par jour (avant le premier changement), gardée 30 jours ;
 //   code.txt       le code à taper sur chaque appareil ;
 //   rev-max.txt    le plus grand numéro de modification jamais enregistré (repère pour voir si la base est revenue en arrière) ;
 //   journal.log    ce qui s'est passé d'inhabituel (fichier abîmé, base reprise d'une copie), jamais le contenu des dossiers ;
@@ -18,12 +18,15 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const VERSION = 5;
+const VERSION = 6;
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
 const hote = process.env.MUNINN_HOTE || "127.0.0.1";
-const COPIES_GARDEES = 60;
+/* Durée de garde (choix de Corentin du 7 novembre 2026) : 30 copies quotidiennes ; un élément supprimé reste
+   récupérable 30 jours (ancienne version, PDF), puis il est effacé définitivement (audit F9-f). */
+const GARDE_JOURS = Number(process.env.MUNINN_GARDE_JOURS) || 30;
+const COPIES_GARDEES = GARDE_JOURS;
 const PAR_PAGE = 500;
 
 const fDonnees = join(dossier, "donnees.json"), dFichiers = join(dossier, "fichiers"), dCopies = join(dossier, "copies"), fCode = join(dossier, "code.txt");
@@ -32,7 +35,8 @@ const COPIE = /^\d{4}-\d{2}-\d{2}\.json$/;
 
 /* ---------- les données ---------- */
 
-/* elements : clé -> { rev, valeur } ou { rev, supprime: true, ancien } (l'ancienne valeur reste, pour pouvoir la retrouver).
+/* elements : clé -> { rev, valeur } ou { rev, supprime: true, quand, ancien } (l'ancienne valeur reste 30 jours après
+   « quand », pour pouvoir la retrouver ; ensuite seule la marque « supprimé » reste, pour les appareils).
    id : l'identité de la base, tirée au hasard. Elle change quand la base repart d'un état plus ancien (copie remise,
    origine « reprise ») ou quand un appareil la remet à niveau (origine « remise ») : les appareils voient ainsi que
    leurs numéros ne correspondent plus, au lieu d'afficher « À jour » à tort (audit E1). */
@@ -121,6 +125,51 @@ async function copieDuJour(texte) {
   await ecrireSur(f, texte);
   const anciennes = (await readdir(dCopies)).filter(n => COPIE.test(n)).sort().reverse().slice(COPIES_GARDEES);
   for (const n of anciennes) await rm(join(dCopies, n), { force: true });
+}
+
+/* marque « supprimé » : l'ancienne version reste à côté, datée, pour être retrouvée pendant GARDE_JOURS jours */
+const supprime = actuel => actuel?.supprime
+  ? { rev: base.rev, supprime: true, quand: actuel.quand ?? new Date().toISOString(), ...(actuel.ancien !== undefined ? { ancien: actuel.ancien } : {}) }
+  : { rev: base.rev, supprime: true, quand: new Date().toISOString(), ancien: actuel?.valeur ?? null };
+
+const idsFichiers = v => Array.isArray(v?.fichiers) ? v.fichiers.map(f => f?.id).filter(x => typeof x === "string") : [];
+
+/* Effacement définitif, au démarrage puis toutes les 6 heures : l'ancienne version des éléments supprimés depuis plus de
+   GARDE_JOURS jours, les copies spéciales (avant une remise à niveau) plus vieilles, et les PDF ou photos auxquels plus
+   rien ne renvoie (ni un bilan, ni une ancienne version gardée, ni une copie). Un fichier arrivé depuis moins de 2 jours
+   n'est jamais effacé : son bilan peut être encore en route. Le journal note le nombre, jamais les noms. */
+async function purger() {
+  const limite = Date.now() - GARDE_JOURS * 864e5, aujourdhui = new Date().toISOString();
+  let anciens = 0, change = false;
+  for (const e of Object.values(base.elements)) {
+    if (!e.supprime) continue;
+    if (!e.quand) { e.quand = aujourdhui; change = true; continue; }   // suppression d'avant cette version : 30 jours à partir d'aujourd'hui
+    if (e.ancien !== undefined && Date.parse(e.quand) < limite) { delete e.ancien; anciens++; change = true; }
+  }
+  if (change) await enregistrer();
+  let copies = 0;
+  for (const n of await readdir(dCopies)) {
+    if (!n.startsWith("avant-remise-")) continue;
+    try { if ((await stat(join(dCopies, n))).mtimeMs < limite) { await rm(join(dCopies, n), { force: true }); copies++; } } catch { /* déjà parti */ }
+  }
+  const gardes = new Set();
+  const garder = b => { for (const e of Object.values(b?.elements ?? {})) { for (const id of idsFichiers(e.valeur)) gardes.add(id); for (const id of idsFichiers(e.ancien)) gardes.add(id); } };
+  garder(base);
+  for (const n of await readdir(dCopies)) {
+    if (!n.endsWith(".json")) continue;
+    const b = await lire(join(dCopies, n));
+    if (!b) return;   // une copie illisible : prudence, on n'efface aucun fichier cette fois
+    garder(b);
+  }
+  let fichiers = 0;
+  for (const n of await readdir(dFichiers)) {
+    if (n.endsWith(".type") || n.endsWith(".part") || gardes.has(n)) continue;
+    try {
+      if ((await stat(join(dFichiers, n))).mtimeMs > Date.now() - 2 * 864e5) continue;
+      await rm(join(dFichiers, n), { force: true }); await rm(join(dFichiers, n + ".type"), { force: true }); fichiers++;
+    } catch { /* déjà parti */ }
+  }
+  if (anciens || copies || fichiers) await noter(`Effacement définitif (supprimés depuis plus de ${GARDE_JOURS} jours) : ${anciens} ancienne(s) version(s), ${fichiers} fichier(s), ${copies} copie(s) spéciale(s).`);
 }
 
 async function lireCode() {
@@ -214,7 +263,7 @@ async function api(req, res, url) {
         const actuel = base.elements[c.cle];
         if ((actuel?.rev ?? 0) !== (Number(c.rev) || 0)) { conflits.push(c.cle); continue; }
         base.rev++;
-        base.elements[c.cle] = c.supprime ? { rev: base.rev, supprime: true, ancien: actuel?.supprime ? actuel.ancien : actuel?.valeur ?? null } : { rev: base.rev, valeur: c.valeur };
+        base.elements[c.cle] = c.supprime ? supprime(actuel) : { rev: base.rev, valeur: c.valeur };
         acceptes.push({ cle: c.cle, rev: base.rev });
       }
       if (acceptes.length) await enregistrer();
@@ -237,7 +286,7 @@ async function api(req, res, url) {
         const actuel = base.elements[e.cle];
         base.rev++;
         base.elements[e.cle] = e.valeur === null || e.valeur === undefined
-          ? { rev: base.rev, supprime: true, ancien: actuel?.supprime ? actuel.ancien : actuel?.valeur ?? null }
+          ? supprime(actuel)
           : { rev: base.rev, valeur: e.valeur };
         revs.push({ cle: e.cle, rev: base.rev });
       }
@@ -315,6 +364,9 @@ async function apiVoix(req, res, url) {
 }
 
 await charger();
+const purgerSur = () => enFile(() => purger().catch(e => noter("Effacement définitif interrompu : " + (e?.message || e))));
+await purgerSur();
+setInterval(purgerSur, 6 * 3600_000).unref();
 code = await lireCode();
 
 const serveur = createServer(async (req, res) => {

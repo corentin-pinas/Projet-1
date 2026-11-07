@@ -25,9 +25,7 @@ export function brancher(racine: HTMLElement, apres?: () => void) {
       const date = q.querySelector<HTMLInputElement>(".qdate")!.value;
       if (!date) { toast("Indiquez la date du prochain rendez-vous."); return; }
       try {
-        const D = (await db.tout()).dossiers.find(d => d.id === id);
-        if (!D) return;
-        await db.setRdvs(id, avecRdv(D.rdvs, date, "", undefined, b.dataset.qdemi as Demi));
+        await db.modifierRdvs(id, rdvs => avecRdv(rdvs, date, "", undefined, b.dataset.qdemi as Demi));
         toast("Rendez-vous enregistré.");
         apres?.();
       } catch { toast("L'enregistrement a échoué. Réessayez."); }

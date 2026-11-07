@@ -3,7 +3,7 @@
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
-import { avecRdv, avenirFrom, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
+import { avecRdv, avenirFrom, empreinteTexte, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -254,9 +254,10 @@ export async function corrigerEnAttente() {
    Renvoie le message du rendez-vous posé, ou null. */
 async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<string | null> {
   const patch: Partial<Seance> = { ia_ok: true };
-  if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = brut; }
-  if (a.propre) { patch.propre = a.propre; patch.propre_source = se.contenu; }
-  if (a.bref) { patch.bref = a.bref; patch.bref_source = se.contenu; }
+  // l'empreinte du texte d'origine, pas sa copie : la séance pèse une fois son texte, pas trois (audit A5)
+  if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = empreinteTexte(brut); }
+  if (a.propre) { patch.propre = a.propre; patch.propre_source = empreinteTexte(se.contenu); }
+  if (a.bref) { patch.bref = a.bref; patch.bref_source = empreinteTexte(se.contenu); }
   await db.majSeance(se.id, patch);
   /* on ne pose le rendez-vous que s'il est à venir et que cette séance est bien la dernière du patient */
   const { seances, dossiers } = await db.tout();
@@ -266,7 +267,7 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
   // matin ou après-midi pas dit : même demi-journée que la séance (choix de Corentin, 5 novembre 2026) ;
   // les rendez-vous passés sont gardés (historique, futures absences)
   const demi = a.rdvDemi || demiSeance(dossier.rdvs, se.date);
-  await db.setRdvs(dossier.id, avecRdv(dossier.rdvs, a.rdvDate, a.rdvHeure, undefined, demi));
+  await db.modifierRdvs(dossier.id, rdvs => avecRdv(rdvs, a.rdvDate, a.rdvHeure, undefined, demi));
   return "Rendez-vous repéré pour " + dossier.label + " : " + jourLabel(a.rdvDate, new Date()).toLowerCase() + (demi ? " " + DEMI_FR[demi] : "") + ".";
 }
 
