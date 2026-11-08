@@ -496,3 +496,10 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .sansrdv .lsr{border-top:1px solid var(--line);padding:10px 0 4px}
 .sansrdv .lsr:first-of-type{border-top:0}
 .sansrdv .row{margin-top:8px}
+
+/* « État de l'appli » dans les Réglages ; la roue orange quand un point est à voir (1.5.3) */
+.etatdansreg{width:100%;margin:4px 0 14px;min-height:52px;border:1px solid var(--line);font-size:1rem}
+.basbar .regbtn{position:relative}
+.basbar .regbtn.alerte{color:var(--warn);border-color:var(--warn);background:var(--warn-bg)}
+.basbar .regbtn.alerte::after{content:"";position:absolute;top:6px;right:6px;width:11px;height:11px;border-radius:50%;background:var(--warn)}
+.prenomseul{margin:6px 0;padding:8px 12px;border-radius:10px;background:var(--warn-bg);color:var(--ink);border-left:4px solid var(--warn)}

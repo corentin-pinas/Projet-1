@@ -31,8 +31,7 @@
     <div class="panel list" id="list" hidden><div class="note">Chargement…</div></div>
     <button class="syncmini" id="syncmini" hidden><span class="pastille-mini" aria-hidden="true"></span><span id="syncminitxt"></span></button>
     <div class="basbar">
-      <button class="etat" id="etatbtn"><span class="pastille-mini" id="etatpastille" aria-hidden="true"></span><span id="etattxt">État de l'appli</span></button>
-      <button class="etat regbtn outil" id="regbtn" aria-label="Réglages" title="Réglages"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button class="etat regbtn outil" id="regbtn" aria-label="Réglages et état de l'appli" title="Réglages et état de l'appli"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
   </div>
   <main class="panel main" id="main"></main>
@@ -136,10 +135,12 @@
 </dialog>
 <dialog class="etatdlg" id="regdlg" aria-labelledby="regtitre">
   <div class="head"><h2 id="regtitre">Réglages</h2><button id="regfermer">Fermer</button></div>
+  <!-- « État de l'appli » rangé ici (choix de Corentin du 8 novembre 2026) ; la roue devient orange s'il y a un point à voir -->
+  <button class="etat etatdansreg" id="etatbtn"><span class="pastille-mini" id="etatpastille" aria-hidden="true"></span><span id="etattxt">État de l'appli</span></button>
   <div id="regchoix"></div>
   <div class="actions"><button id="regdefaut">Revenir aux réglages d'origine</button></div>
   <fieldset class="regligne" id="regexport"><legend>Dossier d'un patient en PDF (pour un contrôle)</legend>
-    <div class="row"><select id="regpatient" aria-label="Patient à exporter"></select><button id="regpdf">Créer le PDF</button></div>
+    <div class="row"><select id="regpatient" aria-label="Patient à exporter" data-libre></select><button id="regpdf">Créer le PDF</button></div>
     <p class="note">Bilans, toutes les séances datées, rendez-vous et absences, patients archivés compris. Le PDF est enregistré dans « Téléchargements ».</p>
   </fieldset>
 </dialog>

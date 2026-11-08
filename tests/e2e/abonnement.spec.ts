@@ -20,7 +20,7 @@ async function fairePdf(page: Page): Promise<Buffer> {
 }
 
 async function connecterAbonnement(page: Page) {
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill(CODE);
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
   await expect(page.locator("#abostatut")).toContainText("pas encore connecté");
@@ -51,7 +51,7 @@ test("le serveur refuse une demande mal formée", async ({ request }) => {
 
 test("un mauvais code d'accès saisi sur la tablette est refusé et oublié", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill("pas-le-bon-code");
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
   await expect(page.getByRole("status")).toContainText("Code d'accès refusé");
@@ -86,14 +86,14 @@ test("connexion de l'abonnement depuis la tablette, puis résumé et mise au pro
     expect(env).not.toContain("CODE_ACCES");
   }
 
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await expect(page.locator("#iaetat")).toContainText("par votre abonnement Claude");
   await expect(page.locator("#iaetat")).toContainText("pas facturé");
 });
 
 test("si l'abonnement est déconnecté, le bilan explique quoi faire", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill(CODE);
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
   await expect(page.locator("#abostatut")).toContainText("pas encore connecté");
@@ -104,7 +104,7 @@ test("si l'abonnement est déconnecté, le bilan explique quoi faire", async ({ 
 
 test("un code de connexion refusé est expliqué dans la fenêtre", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill(CODE);
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
   await page.getByRole("button", { name: "Connecter mon abonnement Claude" }).click();
@@ -116,14 +116,14 @@ test("un code de connexion refusé est expliqué dans la fenêtre", async ({ pag
 
 test("les bilans en échec sont relancés une fois l'abonnement connecté", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill(CODE);
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
   await expect(page.locator("#abostatut")).toContainText("pas encore connecté");
   await page.getByRole("button", { name: "Fermer" }).click();
   await page.locator("#file").setInputFiles([{ name: "Bilan - Paul ROUX.pdf", mimeType: "application/pdf", buffer: await fairePdf(page) }]);
   await expect(page.locator("#list .item")).toContainText("Résumé à refaire", { timeout: 15_000 });
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByRole("button", { name: "Connecter mon abonnement Claude" }).click();
   await page.locator("#abocodeco").fill("BON-CODE");
   await page.getByRole("button", { name: "Valider" }).click();
@@ -133,7 +133,7 @@ test("les bilans en échec sont relancés une fois l'abonnement connecté", asyn
 
 test("la clé API reste verrouillée tant qu'elle n'est pas autorisée", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await expect(page.locator("#apibloc")).toBeHidden();
   await expect(page.locator("#iacle")).toBeHidden();

@@ -53,7 +53,7 @@ test("dictée groupée : un seul texte, rangé patient par patient, question seu
   await expect(page.locator(".rdv")).toContainText("aujourd'hui");
 
   // l'IA en mode clé API (simulée)
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();
@@ -75,6 +75,9 @@ test("dictée groupée : un seul texte, rangé patient par patient, question seu
 
   await page.getByRole("button", { name: "Ranger la dictée" }).click();
   await expect(page.locator(".recap")).toContainText("2 séances rangées : Marc D., Élisabeth G.");
+  // Élisabeth G. n'avait pas rendez-vous ce jour-là : rangée d'après son nom seul, le récapitulatif le signale ; pas Marc D.
+  await expect(page.locator(".recap .prenomseul")).toHaveCount(1);
+  await expect(page.locator(".recap .prenomseul")).toContainText("Élisabeth G. : rangé d'après le nom seul");
   await expect(page.locator(".recap")).not.toContainText("G..");
   await expect(page.locator(".recap")).toContainText("Rendez-vous repéré pour Élisabeth G. : demain matin");
   const demande = envois.find(e => e.messages[0].content.some(b => b.text?.includes("dictée groupée")))!;
@@ -115,7 +118,7 @@ test("deux patients au même prénom vus le même jour : l'appli demande lequel"
     await page.getByLabel(demi).check();
     await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   }
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();
@@ -139,7 +142,7 @@ test("patient pas encore dans l'appli : créé depuis la dictée (bilan à venir
   await page.goto("/");
   await page.locator("#file").setInputFiles([{ name: "Bilan - Marc DUPONT.png", mimeType: "image/png", buffer: png }]);
   await expect(item(page, "Marc D.")).toHaveCount(1);
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();
@@ -184,7 +187,7 @@ test("dictée enregistrée : la voix part vers Whisper (simulé), puis la dicté
   await page.locator("#dfermer").click();
 
   // Whisper par le serveur (code d'accès) ; l'IA par la clé API (simulée)
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#abocode").fill("code-acces-essai-123");
   await page.getByRole("button", { name: "Enregistrer le code" }).click();
   await page.getByText("Secours : clé API").click();

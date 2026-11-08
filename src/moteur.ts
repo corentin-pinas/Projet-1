@@ -327,7 +327,8 @@ async function analyserSeul(se: Seance, manuel: boolean, sansPropre: boolean, es
 
 /* Un passage que l'appli n'a pas pu ranger seule : Corentin choisit le dossier parmi les candidats. */
 export type Doute = { id: string; date: string; seance: SeanceDictee; candidats: string[] };
-export type Range = { seanceId: string; dossierId: string };
+/* prenomSeul : rangé d'après le nom seul, sans rendez-vous ce jour-là (audit F11) : le récapitulatif le signale */
+export type Range = { seanceId: string; dossierId: string; prenomSeul?: boolean };
 
 /* Une seule demande à l'IA pour toute la dictée, puis rangement : automatique si un seul dossier convient
    (règle de rattacher), sinon le passage devient un doute. Lève une ErreurIA si rien n'a pu être fait. */
@@ -344,7 +345,7 @@ export async function rangerDictee(date: string, texte: string): Promise<{ range
     const { dossier, candidats } = rattacher(m.nom, dossiers, date);
     if (!dossier) { doutes.push({ id: crypto.randomUUID(), date, seance: m, candidats: candidats.map(d => d.id) }); continue; }
     const r = await rangerSeance(dossier.id, date, m);
-    ranges.push(r.range); if (r.rdv) rdvs.push(r.rdv);
+    ranges.push({ ...r.range, prenomSeul: !dossier.rdvs.some(x => x && x.d === date) }); if (r.rdv) rdvs.push(r.rdv);
   }
   return { ranges, doutes, rdvs };
 }

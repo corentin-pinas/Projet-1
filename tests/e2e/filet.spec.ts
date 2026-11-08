@@ -25,7 +25,7 @@ async function semer(page: Page, magasins: Record<string, unknown[]>) {
   await page.reload();
 }
 async function cleAPI(page: Page) {
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();
@@ -47,7 +47,7 @@ test("M1 : une voix en cours d'enregistrement n'est jamais jetée en changeant d
   const page = await nouvellePage(browser);
   await page.locator("#q").fill("Paul Garde");
   await page.getByRole("button", { name: /Créer le patient/ }).click();
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#syncadresse").fill(PC);
   await page.locator("#synccode").fill(CODE);
   await page.getByRole("button", { name: "Relier au PC" }).click();

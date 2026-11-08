@@ -22,7 +22,7 @@ test("un bilan supprimé par erreur revient grâce à la copie du jour, et le re
   await page.getByRole("dialog").getByRole("button", { name: "Supprimer" }).click();
   await expect(page.locator("#list")).toContainText("Aucun patient pour l'instant");
 
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await expect(page.locator("#copiesetat")).toContainText("1 copie gardée");
   await expect(page.locator("#copies li")).toContainText(/mardi 13 octobre/i);
   await expect(page.locator("#copies li")).toContainText("1 patient, 0 séance");
@@ -40,7 +40,7 @@ test("un bilan supprimé par erreur revient grâce à la copie du jour, et le re
   await page.locator("#vclose").click();
 
   // annuler le retour en arrière
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByRole("button", { name: "Annuler le retour en arrière" }).click();
   await page.locator("dialog.confirm").getByRole("button", { name: "Annuler le retour" }).click();
   await expect(page.locator("#copies li.avant")).toHaveCount(0);
@@ -60,7 +60,7 @@ test("copie hors de Chrome : fichier protégé par mot de passe, restauré sur u
   await page.getByRole("button", { name: "Enregistrer la séance" }).click();
   await expect(page.locator(".seance")).toHaveCount(1);
 
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await expect(page.locator('.verif[data-id="copie-externe"]')).not.toHaveClass(/ok/);
   await expect(page.locator('.verif[data-id="copie-externe"]')).toContainText("Pas encore faite");
 
@@ -92,7 +92,7 @@ test("copie hors de Chrome : fichier protégé par mot de passe, restauré sur u
   await neuve.addInitScript(() => localStorage.setItem("liste-patients", "ouverte"));
   await neuve.goto("/");
   await expect(neuve.locator("#list")).toContainText("Aucun patient pour l'instant");
-  await neuve.locator("#etatbtn").click();
+  await neuve.locator("#regbtn").click(); await neuve.locator("#etatbtn").click();
   // le fichier est passé en mémoire : par son chemin, l'outil de test ne le transmet pas à un second contexte
   await neuve.locator("#extfichier").setInputFiles({ name: "mes-patients.sauvegarde", mimeType: "application/octet-stream", buffer: readFileSync(chemin) });
   await expect(neuve.locator("#restform")).toBeVisible();

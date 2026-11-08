@@ -27,7 +27,7 @@ async function preparer(page: Page, panne: { n: number; statut: number; corps?: 
   await page.goto("/");
   await page.locator("#q").fill("Marc Dupont");
   await page.getByRole("button", { name: /Créer le patient/ }).click();
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();
@@ -85,7 +85,7 @@ test("voix sur la fiche : le PC ne répond pas, l'enregistrement est gardé et l
   await page.clock.install();
   await page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte"));
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#syncadresse").fill("http://127.0.0.1:4747");
   await page.locator("#synccode").fill("essa-ipcm-unin");
   await page.getByRole("button", { name: "Relier au PC" }).click();
@@ -119,7 +119,7 @@ test("deux fenêtres de Muninn ouvertes sur le même appareil : un bilan n'est r
   const a = await ctx.newPage();
   await a.addInitScript(() => localStorage.setItem("liste-patients", "ouverte"));
   await a.goto("/");
-  await a.locator("#etatbtn").click();
+  await a.locator("#regbtn").click(); await a.locator("#etatbtn").click();
   await a.getByText("Secours : clé API").click();
   await a.getByLabel("Autoriser l'usage d'une clé API").check();
   await a.getByLabel("Utiliser la clé API").check();

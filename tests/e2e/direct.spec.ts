@@ -14,7 +14,7 @@ async function appareil(browser: Browser): Promise<Page> {
     (globalThis as any).__MUNINN_DIRECT__ = { min: 700, max: 1000, pause: 100, voix: 1 };
   });
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#syncadresse").fill(PC);
   await page.locator("#synccode").fill(CODE);
   await page.getByRole("button", { name: "Relier au PC" }).click();

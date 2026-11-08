@@ -22,9 +22,10 @@ export type Reglages = {
   taille: "normal" | "grand" | "tres-grand";
   police: string;    // clé de POLICES
   saisons: boolean;
+  pleinEcran: boolean;   // barre du haut de la tablette masquée (1.5.3)
 };
 
-export const DEFAUT: Reglages = { fond: "auto", couleur: "muninn", contraste: false, taille: "normal", police: "atkinson", saisons: true };
+export const DEFAUT: Reglages = { fond: "auto", couleur: "muninn", contraste: false, taille: "normal", police: "atkinson", saisons: true, pleinEcran: false };
 const CLE = "reglages-affichage";
 
 export function lire(): Reglages {
@@ -61,7 +62,19 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", barres);
 export function enregistrer(r: Reglages) {
   try { localStorage.setItem(CLE, JSON.stringify(r)); } catch { /* sans stockage : réglage valable jusqu'à la fermeture */ }
   appliquer(r);
+  pleinEcran(r.pleinEcran);
 }
+
+/* Barre du haut de la tablette (heure, batterie) : Muninn lui donne sa couleur de fond, mais certaines tablettes Samsung
+   la dessinent elles-mêmes, en clair (constaté le 8 novembre 2026). Réglage « Masquée » : plein écran, demandé au premier
+   toucher de chaque ouverture (Chrome l'exige) ; un glissement depuis le haut fait réapparaître la barre un instant. */
+function pleinEcran(oui: boolean) {
+  try {
+    if (oui && document.fullscreenEnabled && !document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    else if (!oui && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch { /* navigateur sans plein écran */ }
+}
+if (typeof document !== "undefined") document.addEventListener("pointerdown", () => { if (lire().pleinEcran) pleinEcran(true); }, true);
 
 /* ---------- écran Réglages ---------- */
 
@@ -72,7 +85,8 @@ const CHOIX: Choix<keyof Reglages>[] = [
   { cle: "taille", titre: "Taille du texte", options: [["normal", "Normale"], ["grand", "Grande"], ["tres-grand", "Très grande"]] },
   { cle: "police", titre: "Écriture", options: Object.entries(POLICES).map(([k, p]) => [k, p.nom]) },
   { cle: "contraste", titre: "Contraste", options: [[false, "Normal"], [true, "Fort"]] },
-  { cle: "saisons", titre: "Décorations de saison", options: [[true, "Oui"], [false, "Non"]] }
+  { cle: "saisons", titre: "Décorations de saison", options: [[true, "Oui"], [false, "Non"]] },
+  { cle: "pleinEcran", titre: "Barre du haut de la tablette (heure, batterie)", options: [[false, "Visible"], [true, "Masquée"]] }
 ] as Choix<keyof Reglages>[];
 
 export function brancher() {

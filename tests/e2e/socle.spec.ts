@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const ouvrirEtat = async (page: import("@playwright/test").Page) => {
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await expect(page.getByRole("dialog", { name: "État de l'appli" })).toBeVisible();
 };
 

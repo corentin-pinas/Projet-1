@@ -93,7 +93,7 @@ test("3 mauvais codes en 24 heures : un bandeau le dit dans l'appli ; « C'est m
     const page = await (await browser.newContext()).newPage();
     await page.goto(s.url + "/");
     await expect(page.locator("#alertecode")).toBeHidden();   // pas de code réglé : rien à vérifier
-    await page.locator("#etatbtn").click();
+    await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
     await page.locator("#abocode").fill("code-acces-a-part-123");
     await page.getByRole("button", { name: "Enregistrer le code" }).click();
     await page.locator("#etatclose").click();

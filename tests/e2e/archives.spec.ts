@@ -109,7 +109,7 @@ test("« dernière séance » dite dans la note : l'IA le repère, la fin est no
       content: [{ type: "text", text: JSON.stringify({ propre: "Fait en séance : mobilisation passive.\nAutres notes : dernière séance.", resume: null, bref: "Mobilisation passive.", rdv_date: null, rdv_heure: null, rdv_demi: null, fin_traitement: true }) }] } });
   });
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();

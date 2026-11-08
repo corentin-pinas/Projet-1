@@ -37,7 +37,7 @@ async function simulerIA(page: Page, reponses: { bilan?: unknown; seance?: unkno
 
 /* mode de secours : la clé API doit d'abord être autorisée, puis choisie */
 async function enregistrerCle(page: Page) {
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();
@@ -65,7 +65,7 @@ test("sans clé, le bilan attend et l'appli explique quoi faire", async ({ page 
 
 test("une clé mal copiée est refusée avant tout envoi", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.locator("#iacle").fill("ma-cle");
@@ -91,7 +91,7 @@ test("le bilan déposé se résume tout seul", async ({ page }) => {
   expect(blocs[0]).toMatchObject({ type: "image", source: { media_type: "image/jpeg" } });
   expect(blocs.find(b => b.type === "text" && b.text?.includes("Texte tapé de la trame"))?.text).toContain("Bilan test");
   // la consommation est comptée
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await expect(page.locator("#iaetat")).toContainText("1 bilan et 0 séance traités");
   await expect(page.locator("#iaetat")).toContainText("Facturé sur la clé API");
 });

@@ -12,7 +12,7 @@ async function appareil(browser: Browser): Promise<Page> {
 }
 
 async function relier(page: Page, code = CODE) {
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#syncadresse").fill(PC);
   await page.locator("#synccode").fill(code);
   await page.getByRole("button", { name: "Relier au PC" }).click();
@@ -92,7 +92,7 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   await expect(item(pc, "Odile P.")).toHaveCount(0);
 
   // délier : l'appareil garde ses données mais n'échange plus
-  await pc.locator("#etatbtn").click();
+  await pc.locator("#regbtn").click(); await pc.locator("#etatbtn").click();
   await pc.getByRole("button", { name: "Délier cet appareil" }).click();
   await pc.locator("dialog.confirm").getByRole("button", { name: "Délier" }).click();
   await expect(pc.locator("#syncetat")).toContainText("pas relié");
@@ -212,7 +212,7 @@ test("dictée à la voix : l'écran reste allumé pendant l'enregistrement, la t
 
 test("le PC injoignable : l'appareil le dit et garde tout", async ({ browser }) => {
   const page = await appareil(browser);
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.locator("#syncadresse").fill("http://127.0.0.1:4799");
   await page.locator("#synccode").fill(CODE);
   await page.getByRole("button", { name: "Relier au PC" }).click();

@@ -42,7 +42,7 @@ test("dictée groupée : l'IA oublie Victor, Muninn le signale, le retrouve dans
     { id: "m", label: "Marc D.", rdvs: [{ d: iso(0), h: "", p: "pm" }], homonyme: false, cree: "" },
     { id: "v", label: "Victor M.", rdvs: [{ d: iso(0), h: "", p: "pm" }], homonyme: false, cree: "" }
   ]);
-  await page.locator("#etatbtn").click();
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
   await page.getByText("Secours : clé API").click();
   await page.getByLabel("Autoriser l'usage d'une clé API").check();
   await page.getByLabel("Utiliser la clé API").check();

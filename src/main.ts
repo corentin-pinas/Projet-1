@@ -10,6 +10,7 @@ import { afficherCopies, brancherCopies, joursDepuis, PARAM_COPIE_EXTERNE, surve
 import { configIA } from "./moteur";
 import * as alerteCode from "./alerte-code";
 import * as exportDossier from "./export-dossier";
+import * as fenetres from "./fenetres";
 import { brancherPartage } from "./partage";
 import * as synchro from "./synchro";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
@@ -71,6 +72,8 @@ async function afficherEtat() {
   if ($<HTMLDialogElement>("#etatdlg").open) await Promise.all([afficherIA(), afficherCopies()]);
   const reste = v.filter(x => !x.ok).length;
   $("#etatbtn").classList.toggle("alerte", reste > 0);
+  $("#regbtn").classList.toggle("alerte", reste > 0);   // la roue dit qu'un point est à voir
+  $("#regbtn").setAttribute("aria-label", reste ? `Réglages et état de l'appli : ${reste} point${reste > 1 ? "s" : ""} à voir` : "Réglages et état de l'appli");
   $("#etattxt").textContent = reste ? `État de l'appli : ${reste} point${reste > 1 ? "s" : ""} à voir` : "État de l'appli";
   return v;
 }
@@ -78,6 +81,7 @@ async function afficherEtat() {
 brancherCopies(afficherEtat);
 reglages.brancher();
 exportDossier.brancher();
+fenetres.brancher();
 installerMascotte(document.querySelector<HTMLElement>("#mascotte")!);
 /* la décoration de saison change d'elle-même si l'appli reste ouverte d'un jour à l'autre */
 document.addEventListener("visibilitychange", () => { if (!document.hidden) reglages.appliquer(reglages.lire()); });
@@ -91,7 +95,7 @@ async function demanderProtection() {
 }
 
 $("#version").textContent = __VERSION__;
-$("#etatbtn").addEventListener("click", () => { $<HTMLDialogElement>("#etatdlg").showModal(); afficherEtat(); });
+$("#etatbtn").addEventListener("click", () => { $<HTMLDialogElement>("#regdlg").close(); $<HTMLDialogElement>("#etatdlg").showModal(); afficherEtat(); });
 $("#etatclose").addEventListener("click", () => $<HTMLDialogElement>("#etatdlg").close());
 $("#persist").addEventListener("click", async () => {
   const ok = await demanderProtection();

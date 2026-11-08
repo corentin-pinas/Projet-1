@@ -101,6 +101,8 @@ async function afficher() {
   const recap = dernier && dernier.range.length ? `<div class="recap" role="status">
       <p><b>${dernier.range.length} séance${dernier.range.length > 1 ? "s rangées" : " rangée"}</b> : ${esc([...new Set(dernier.range.map(r => parId.get(r.dossierId)?.label ?? "?"))].join(", ").replace(/([^.])$/, "$1."))}</p>
       ${dernier.rdvs.map(m => `<p class="note">${esc(m)}</p>`).join("")}
+      ${dernier.range.filter(r => r.prenomSeul).map(r => parId.get(r.dossierId)).filter((x): x is Dossier => !!x).map(D =>
+        `<p class="prenomseul">⚠ <b>${esc(D.label)}</b> : rangé d'après le nom seul (pas de rendez-vous noté ce jour-là). Vérifiez que c'est bien ce patient.</p>`).join("")}
       ${[...new Set(dernier.range.map(r => r.dossierId))].map(id => parId.get(id)).filter((x): x is Dossier => !!x).map(D => {
         const q = questionRdv(D, seances, aujourdhui());
         return q ? prochain.question(D, q, D.label) : "";

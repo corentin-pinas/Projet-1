@@ -59,7 +59,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 
 | Module | Rôle | Dépend de |
 |---|---|---|
-| `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, ui, verifications |
+| `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, fenetres, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, ui, verifications |
 | `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, pdf, prochain-rdv, regles, seances-manquantes, ui, voix-seance |
 | `journee.ts` | « Ma journée », avec l'alerte « sans rendez-vous » (30 jours ; archivage proposé à 3 mois) | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
@@ -83,6 +83,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `db.ts` | la base IndexedDB `mes-patients` (version 4) et sa cloche | regles |
 | `regles.ts` | règles du cabinet, pures et testées : noms, classement, « À venir », homonymes, demi-journées, archivage, alerte « sans rendez-vous » | — |
 | `ui.ts`, `pdf.ts`, `verifications.ts` | messages et confirmations, lecteur PDF, vérifications de l'appareil | — |
+| `fenetres.ts` | fermer une fenêtre en touchant à côté (en demandant si une saisie est en cours) | ui |
 
 ### Hors de l'appli
 
