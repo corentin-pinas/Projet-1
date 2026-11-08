@@ -31,8 +31,10 @@ Write-Host "Node.js : $(& $NodeExe --version)"
 
 Etape "2/6 Muninn"
 New-Item -ItemType Directory -Force -Path $Dossier | Out-Null
-# seuls le système, les administrateurs et vous pouvez lire ce dossier
-icacls $Dossier /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "$($env:USERDOMAIN)\$($env:USERNAME):(OI)(CI)F" | Out-Null
+# seuls le système, les administrateurs, vous et le compte de service de Muninn (« Service local », droits limités
+# à ce dossier) peuvent lire ce dossier ; tout ce qu'il contient reprend ces droits
+icacls $Dossier /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "$($env:USERDOMAIN)\$($env:USERNAME):(OI)(CI)F" "*S-1-5-19:(OI)(CI)M" | Out-Null
+icacls (Join-Path $Dossier "*") /reset /T /C /Q | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/muninn-pc.mjs" -OutFile (Join-Path $Dossier "muninn-pc.mjs")
 Write-Host "Muninn rangé dans $Dossier"
 
@@ -42,17 +44,31 @@ Stop-ScheduledTask -TaskName $tache -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName $tache -Confirm:$false -ErrorAction SilentlyContinue
 $action = New-ScheduledTaskAction -Execute $NodeExe -Argument "`"$(Join-Path $Dossier 'muninn-pc.mjs')`"" -WorkingDirectory $Dossier
 $declencheur = New-ScheduledTaskTrigger -AtStartup
-$compte = New-ScheduledTaskPrincipal -UserId "S-1-5-18" -LogonType ServiceAccount -RunLevel Highest
+# compte « Service local » : droits limités (dossier de Muninn seulement), une faille ne donnerait pas la main sur le PC.
+# S'il ne démarre pas avec lui, retour au compte système (comme avant) pour que Muninn marche quand même.
+$limite = New-ScheduledTaskPrincipal -UserId "S-1-5-19" -LogonType ServiceAccount -RunLevel Limited
+$systeme = New-ScheduledTaskPrincipal -UserId "S-1-5-18" -LogonType ServiceAccount -RunLevel Highest
 $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
-Register-ScheduledTask -TaskName $tache -Action $action -Trigger $declencheur -Principal $compte -Settings $reglages | Out-Null
-Start-ScheduledTask -TaskName $tache
-$pret = $false
-for ($i = 0; $i -lt 30 -and -not $pret; $i++) {
-  Start-Sleep -Seconds 1
-  try { Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 2 | Out-Null; $pret = $true } catch {}
+function Lancer-Tache($nom, $act, $principal, $url) {
+  Stop-ScheduledTask -TaskName $nom -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName $nom -Confirm:$false -ErrorAction SilentlyContinue
+  Register-ScheduledTask -TaskName $nom -Action $act -Trigger $declencheur -Principal $principal -Settings $reglages | Out-Null
+  Start-ScheduledTask -TaskName $nom
+  for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 1
+    try { Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2 | Out-Null; return $true } catch {}
+  }
+  return $false
+}
+$compteMuninn = "Service local (droits limités)"
+$pret = Lancer-Tache $tache $action $limite "http://127.0.0.1:$Port/"
+if (-not $pret) {
+  Write-Host "Muninn ne démarre pas avec des droits limités : retour au compte système, comme avant." -ForegroundColor Yellow
+  $compteMuninn = "système (comme avant)"
+  $pret = Lancer-Tache $tache $action $systeme "http://127.0.0.1:$Port/"
 }
 if (-not $pret) { Stop-Erreur "Muninn ne répond pas sur le PC." }
-Write-Host "Muninn est en marche et redémarrera avec Windows."
+Write-Host "Muninn est en marche (compte $compteMuninn) et redémarrera avec Windows."
 
 Etape "4/6 Tailscale"
 $ts = "C:\Program Files\Tailscale\tailscale.exe"
@@ -77,8 +93,18 @@ else {
   if (-not (Test-Path (Join-Path $env_ "Scripts\python.exe"))) { & $py -m venv $env_ }
   $pyVoix = Join-Path $env_ "Scripts\python.exe"
   Write-Host "Installation de Whisper (quelques minutes)..."
-  # av (lecture du son) figé : à partir de la version 19, faster-whisper 1.2.1 ne sait plus ouvrir un enregistrement
-  & $pyVoix -m pip install --quiet --disable-pip-version-check --upgrade "faster-whisper==1.2.1" "av==18.1.0"
+  # av (lecture du son) figé : à partir de la version 19, faster-whisper 1.2.1 ne sait plus ouvrir un enregistrement.
+  # Toutes les autres bibliothèques sont figées aux versions de la dernière installation qui a marché (voix-versions.txt) :
+  # une réinstallation ne tire pas une nouvelle version qui casserait la voix (même panne qu'av 19).
+  $versions = Join-Path $Dossier "voix-versions.txt"
+  $paquets = @("faster-whisper==1.2.1", "av==18.1.0")
+  if (Test-Path $versions) {
+    & $pyVoix -m pip install --quiet --disable-pip-version-check --upgrade -c $versions @paquets
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "Versions gardées incompatibles avec cette mise à jour : installation des versions du moment." -ForegroundColor Yellow
+      & $pyVoix -m pip install --quiet --disable-pip-version-check --upgrade @paquets
+    }
+  } else { & $pyVoix -m pip install --quiet --disable-pip-version-check --upgrade @paquets }
   # carte graphique NVIDIA : Whisper va bien plus vite avec elle ; sinon le processeur suffit
   $nvidia = @(Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match "NVIDIA" }).Count -gt 0
   if ($nvidia) { & $pyVoix -m pip install --quiet --disable-pip-version-check "nvidia-cublas-cu12" "nvidia-cudnn-cu12==9.*" }
@@ -88,17 +114,32 @@ else {
   [IO.File]::WriteAllText((Join-Path $Dossier "voix.json"), (@{ modele = $modele; gpu = $nvidia } | ConvertTo-Json))
   Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/voix.py" -OutFile (Join-Path $Dossier "voix.py")
   $tacheVoix = "Muninn voix"
-  Stop-ScheduledTask -TaskName $tacheVoix -ErrorAction SilentlyContinue
-  Unregister-ScheduledTask -TaskName $tacheVoix -Confirm:$false -ErrorAction SilentlyContinue
   $actionVoix = New-ScheduledTaskAction -Execute $pyVoix -Argument "`"$(Join-Path $Dossier 'voix.py')`"" -WorkingDirectory $Dossier
-  Register-ScheduledTask -TaskName $tacheVoix -Action $actionVoix -Trigger $declencheur -Principal $compte -Settings $reglages | Out-Null
-  Start-ScheduledTask -TaskName $tacheVoix
-  for ($i = 0; $i -lt 30 -and -not $voixOk; $i++) {
-    Start-Sleep -Seconds 1
-    try { Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:4748/etat" -TimeoutSec 2 | Out-Null; $voixOk = $true } catch {}
+  icacls (Join-Path $Dossier "*") /reset /T /C /Q | Out-Null
+  $compteVoix = "Service local (droits limités)"
+  $voixOk = Lancer-Tache $tacheVoix $actionVoix $limite "http://127.0.0.1:4748/etat"
+  if ($voixOk) {
+    # Whisper répond, mais doit aussi pouvoir charger son modèle avec ces droits : jusqu'à 2 minutes d'attente
+    # (une erreur sans modèle prêt = droits insuffisants ; ni l'un ni l'autre = premier téléchargement en cours)
+    $e = $null
+    for ($i = 0; $i -lt 120; $i++) {
+      try { $e = Invoke-RestMethod -Uri "http://127.0.0.1:4748/etat" -TimeoutSec 2 } catch {}
+      if ($e -and $e.pret) { break }
+      Start-Sleep -Seconds 1
+    }
+    if ($e -and -not $e.pret -and $e.erreur) { $voixOk = $false }
+  }
+  if (-not $voixOk) {
+    Write-Host "Whisper ne démarre pas avec des droits limités : retour au compte système, comme avant." -ForegroundColor Yellow
+    $compteVoix = "système (comme avant)"
+    $voixOk = Lancer-Tache $tacheVoix $actionVoix $systeme "http://127.0.0.1:4748/etat"
+  }
+  if ($voixOk) {
+    # la voix marche : ses versions sont gardées pour la prochaine installation
+    (& $pyVoix -m pip freeze --disable-pip-version-check) | Set-Content -Encoding ascii -Path $versions
   }
   $materiel = if ($nvidia) { "carte graphique NVIDIA" } else { "processeur ($coeurs cœurs, $memoire Go)" }
-  if ($voixOk) { Write-Host "Whisper en marche : modèle $modele sur le $materiel. Premier démarrage : téléchargement du modèle, prêt dans 5 à 15 minutes." -ForegroundColor Green }
+  if ($voixOk) { Write-Host "Whisper en marche (compte $compteVoix) : modèle $modele sur le $materiel. Premier démarrage : téléchargement du modèle, prêt dans 5 à 15 minutes." -ForegroundColor Green }
   else { Write-Host "Whisper ne répond pas encore. La dictée à la voix sera indisponible ; le reste de Muninn marche." -ForegroundColor Yellow }
 }
 

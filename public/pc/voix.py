@@ -33,6 +33,18 @@ VOCABULAIRE = ("Séance de kinésithérapie, dictée par le kiné. Épaule, coif
                "renforcement, étirements, massage, cervicales, rachis, coude, épicondylite. Pour la prochaine séance.")
 
 JOURNAL = os.path.join(DOSSIER, "voix.log")
+# le son reçu est écrit le temps de la transcription dans le dossier protégé de Muninn (pas dans le dossier temporaire
+# de Windows, lisible plus largement) ; ce qui y resterait après une panne est effacé au démarrage
+TEMP = os.path.join(DOSSIER, "temp")
+
+
+def vider_temp():
+    os.makedirs(TEMP, exist_ok=True)
+    for f in glob.glob(os.path.join(TEMP, "*")):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
 
 
 def noter(texte):
@@ -166,7 +178,7 @@ class Demandes(BaseHTTPRequestHandler):
         son = self.rfile.read(taille)
         type_ = self.headers.get("Content-Type", "")
         suffixe = ".ogg" if "ogg" in type_ else ".m4a" if ("mp4" in type_ or "aac" in type_ or "m4a" in type_) else ".wav" if "wav" in type_ else ".webm"
-        fichier = tempfile.NamedTemporaryFile(suffix=suffixe, delete=False)
+        fichier = tempfile.NamedTemporaryFile(suffix=suffixe, delete=False, dir=TEMP)
         try:
             fichier.write(son)
             fichier.close()
@@ -198,6 +210,7 @@ def charger_jusqua_reussir():
 
 
 if __name__ == "__main__":
+    vider_temp()
     threading.Thread(target=charger_jusqua_reussir, daemon=True).start()
     noter(f"Voix de Muninn sur http://127.0.0.1:{PORT}")
     ThreadingHTTPServer(("127.0.0.1", PORT), Demandes).serve_forever()
