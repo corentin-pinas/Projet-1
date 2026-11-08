@@ -14,10 +14,9 @@ import * as fenetres from "./fenetres";
 import { brancherPartage } from "./partage";
 import * as synchro from "./synchro";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
-import { toast, esc } from "./ui";
+import { $, toast, esc } from "./ui";
 import { verifications, type EtatAppareil } from "./verifications";
 
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 
 let horsConnexionPret = !!navigator.serviceWorker?.controller;
 let protectionRefusee = false;

@@ -59,6 +59,12 @@ test("M1 : une voix en cours d'enregistrement n'est jamais jetée en changeant d
   await expect(page.locator("#svoix .voix")).toContainText("Enregistrement");
   await page.waitForTimeout(1200);
   await page.locator("#majournee").click();                       // fausse manœuvre : retour à « Ma journée »
+  // question avant de couper (choix de Corentin du 8 nov.) : « Continuer » ne touche à rien
+  await expect(page.locator("dialog.confirm")).toContainText("enregistrement de votre voix est en cours");
+  await page.locator("dialog.confirm").getByRole("button", { name: "Continuer" }).click();
+  await expect(page.locator("#svoix .voix")).toContainText("Enregistrement");
+  await page.locator("#majournee").click();
+  await page.locator("dialog.confirm").getByRole("button", { name: "Arrêter" }).click();
   await expect(page.locator(".toast")).toContainText("Enregistrement arrêté et gardé");
   await page.waitForTimeout(300);
   await page.reload();                                              // l'appli se ferme et se rouvre

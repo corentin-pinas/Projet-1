@@ -4,7 +4,8 @@
 import * as db from "./db";
 import {
   decalerJours, demiFr, frDate, HORAIRES_DEFAUT, isoDay, joursSansRdv, semaineProchaine, transmissions,
-  type Horaires, type Transmission
+  type Horaires, type Transmission,
+  jourCourt,
 } from "./regles";
 import { esc, toast } from "./ui";
 
@@ -13,7 +14,6 @@ let vue: HTMLElement | null = null;
 let du = "", au = "";
 let exclus = new Set<string>();   // patients décochés
 
-const jourCourt = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); };
 
 export async function ouvrir() {
   [du, au] = semaineProchaine(isoDay(new Date()));

@@ -107,3 +107,22 @@ test("3 mauvais codes en 24 heures : un bandeau le dit dans l'appli ; « C'est m
     await page.context().close();
   } finally { s.p.kill("SIGTERM"); }
 });
+
+test("politique de sécurité du contenu (audit F9-e) : seul le code du serveur s'exécute, l'appli marche avec", async ({ page, request }) => {
+  const r = await request.get("/");
+  const csp = r.headers()["content-security-policy"] ?? "";
+  expect(csp).toContain("script-src 'self'");
+  expect(csp).toContain("object-src 'none'");
+  const refus: string[] = [];
+  page.on("console", m => { if (/Content Security Policy/i.test(m.text())) refus.push(m.text()); });
+  await page.goto("/");
+  await expect(page.locator("#main")).toContainText("Ajoutez vos premiers bilans");
+  expect(refus).toHaveLength(0);                                       // l'appli elle-même n'est jamais bloquée
+  // un script glissé dans la page est bloqué
+  const execute = await page.evaluate(() => new Promise<boolean>(ok => {
+    (window as unknown as { __injecte?: boolean }).__injecte = false;
+    const s = document.createElement("script"); s.textContent = "window.__injecte = true"; document.body.append(s);
+    setTimeout(() => ok(!!(window as unknown as { __injecte?: boolean }).__injecte), 100);
+  }));
+  expect(execute).toBe(false);
+});

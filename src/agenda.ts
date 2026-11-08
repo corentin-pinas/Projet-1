@@ -4,7 +4,8 @@
 import * as db from "./db";
 import {
   avecRdv, decalerJours, DEMI_FR, demiDe, demiFr, HORAIRES_DEFAUT, isoDay, numeroJour, patientFrom, plageDemi, placesPlage,
-  placesPrises, rdvsDuJour, semaine, type Demi, type Dossier, type Horaires, type Plage
+  placesPrises, rdvsDuJour, semaine, type Demi, type Dossier, type Horaires, type Plage,
+  jourLong,
 } from "./regles";
 import * as transmissions from "./transmissions";
 import { confirmer, esc, toast } from "./ui";
@@ -19,7 +20,6 @@ let arret: (() => void) | null = null;
 
 const JOURS = ["", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const jourCourt = (iso: string) => { const [, m, d] = iso.split("-").map(Number); return `${JOURS[numeroJour(iso)].slice(0, 3)}. ${d}/${String(m).padStart(2, "0")}`; };
-const jourLong = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
 const maintenant = () => { const n = new Date(); return { jour: isoDay(n), min: n.getHours() * 60 + n.getMinutes() }; };
 
 export async function ouvrir(surPatient: (id: string) => void) {

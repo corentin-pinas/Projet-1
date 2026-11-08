@@ -14,16 +14,20 @@ export function toast(texte: string) {
 }
 
 /* Fenêtre de confirmation à gros boutons, plus lisible sur tablette que celle du navigateur. */
-export function confirmer(texte: string, bouton: string): Promise<boolean> {
+export function confirmer(texte: string, bouton: string, annuler = "Annuler"): Promise<boolean> {
   return new Promise(resolve => {
     const d = document.createElement("dialog");
     d.className = "confirm";
-    d.innerHTML = `<p></p><div class="row"><button class="danger" value="oui"></button><button value="non" autofocus>Annuler</button></div>`;
+    d.innerHTML = `<p></p><div class="row"><button class="danger" value="oui"></button><button value="non" autofocus></button></div>`;
     d.querySelector("p")!.textContent = texte;
     d.querySelector<HTMLButtonElement>(".danger")!.textContent = bouton;
+    d.querySelector<HTMLButtonElement>("[value=non]")!.textContent = annuler;
     d.querySelectorAll("button").forEach(b => b.onclick = () => d.close(b.value));
     d.addEventListener("close", () => { resolve(d.returnValue === "oui"); d.remove(); });
     document.body.append(d);
     d.showModal();
   });
 }
+
+/* raccourci pour trouver un élément de la page */
+export const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;

@@ -2,9 +2,8 @@
    Sous les boutons de gauche, une petite ligne rappelle l'état du partage ; la toucher ouvre « État de l'appli ». */
 import * as synchro from "./synchro";
 import { etatPC } from "./transcription";
-import { confirmer, toast } from "./ui";
+import { $, confirmer, toast } from "./ui";
 
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 
 const depuis = (iso: string) => {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);

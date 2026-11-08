@@ -392,7 +392,6 @@ export const PAS = 20;
 export const dureeRdv = (r: Rdv) => r.t === "bilan" ? 40 : PAS;
 
 export const minutes = (h: string) => { const [a, b] = h.split(":").map(Number); return a * 60 + (b || 0); };
-export const hhmm = (m: number) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 
 /* Horaires habituels : pour chaque jour (1 = lundi … 6 = samedi), les plages de travail, pause de midi exclue. */
 export type Plage = [string, string];
@@ -540,3 +539,12 @@ export function indiceVoix(noms: string[], avant = ""): { noms: string[]; avant:
   const a = suiteDe(avant);
   return n.length || a ? { noms: n, avant: a } : null;
 }
+
+/* ---------- petits utilitaires d'affichage (audit A4 : ils étaient écrits plusieurs fois) ---------- */
+
+/* « jeudi 29 octobre » */
+export const jourLong = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
+/* « jeu. 29 oct. » */
+export const jourCourt = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); };
+/* « 1 patient », « 3 patients » */
+export const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;

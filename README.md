@@ -73,7 +73,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `partage.ts` | écran du partage avec le PC | synchro, transcription, ui |
 | `reglages.ts`, `palettes.ts`, `saisons.ts`, `mascotte.ts` | affichage, couleurs, décorations, corbeau | — |
 | `export-dossier.ts`, `dossier-pdf.ts` | Réglages : dossier complet d'un patient en PDF, pour un contrôle (archivés compris) | db, regles, ui ; transmissions-pdf |
-| `reglages-ia.ts` | réglages de l'IA (abonnement, clé de secours) | db, ia, moteur, ui |
+| `reglages-ia.ts` | réglages de l'IA (abonnement, clé de secours) | db, ia, moteur, regles, ui |
 | `seances-manquantes.ts` | jour de rendez-vous passé sans séance (fiche et récapitulatif de la dictée) : retrouver le patient dans la dictée gardée, ou noter l'absence | db, ia, moteur, regles, ui |
 | `prochain-rdv.ts` | question « Prochain rendez-vous ? » (date + matin / après-midi, ou fin de traitement), sur la fiche et après la dictée groupée | db, regles, ui |
 | `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées ; un travail par fenêtre (`navigator.locks`) | db, ia, pdf, regles, relance |

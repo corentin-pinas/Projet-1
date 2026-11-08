@@ -31,7 +31,15 @@ const securite = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   "X-Frame-Options": "DENY",
-  "Permissions-Policy": "camera=(), geolocation=(), microphone=(self)"   // micro : dictée enregistrée (transcription par Whisper)
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=(self)",   // micro : dictée enregistrée (transcription par Whisper)
+  /* Politique de sécurité du contenu (audit F9-e, défense en plus de esc()) : seul le code livré par ce serveur s'exécute.
+     Styles en ligne permis (palettes injectées, style="…") ; échanges : ce serveur, le PC (https, ou localhost pour les essais)
+     et l'IA par clé API ; fichiers des bilans et voix en blob:, lecteur PDF en worker. */
+  "Content-Security-Policy": [
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:",
+    "font-src 'self' data:", "connect-src 'self' https: http://localhost:* http://127.0.0.1:*", "media-src 'self' blob:",
+    "worker-src 'self' blob:", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"
+  ].join("; ")
 };
 
 /* Les fichiers de assets/ portent une empreinte dans leur nom : on peut les garder longtemps.

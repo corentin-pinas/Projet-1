@@ -1,9 +1,9 @@
 /* Copies de sécurité, dans « État de l'appli » : une par jour, gardées 7 jours, dans la tablette.
    Elles permettent de revenir en arrière après une fausse manœuvre ; elles ne protègent pas contre la perte de la tablette. */
 import * as db from "./db";
-import { confirmer, esc, toast } from "./ui";
+import { $, confirmer, esc, toast } from "./ui";
 import { chiffrer, dechiffrer, ErreurCopie } from "./fichier-copie";
-import { isoDay } from "./regles";
+import { isoDay, jourLong } from "./regles";
 import { formatOctets } from "./verifications";
 
 export const PARAM_COPIE_EXTERNE = "copie_externe";   // date (ISO) de la dernière copie hors de Chrome
@@ -18,10 +18,7 @@ export function joursDepuis(iso: string | undefined, maintenant = new Date()): n
   return Math.round((jour(maintenant) - jour(new Date(iso))) / 864e5);
 }
 
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 
-const jourLong = (iso: string) =>
-  new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 const heure = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "numeric", minute: "2-digit" }).replace(":", " h ");
 const contenu = (c: db.Copie) => {
   const p = c.donnees.dossiers.length, s = c.donnees.seances.length;
@@ -147,7 +144,12 @@ export function brancherCopies(rafraichir: () => void = () => {}) {
     const texte = annuler
       ? `Annuler le retour en arrière ? L'appli revient à l'état d'avant (${contenu(c)}).`
       : `Revenir à la copie du ${jourLong(c.id)} (début de journée) ? Ce qui a été ajouté ou modifié depuis disparaît : bilans, séances, rendez-vous. L'état actuel est gardé : vous pourrez annuler ce retour juste après, ici même.`;
-    if (!await confirmer(texte, annuler ? "Annuler le retour" : "Revenir à cette copie")) return;
+    /* appareil relié au PC : le retour en arrière part chez tous les appareils (audit C1, texte choisi par Corentin le 8 nov.) */
+    const relie = !!(await db.lireParametre<string>("sync_adresse").catch(() => undefined));
+    const partout = relie ? (annuler
+      ? " Cet appareil est relié au PC : vos autres appareils suivront aussi."
+      : ` Attention, cet appareil est relié au PC : tous vos appareils (tablette, téléphone, PC) reviendront à l'état du ${jourLong(c.id)}. Ce qui a été fait depuis sera effacé partout.`) : "";
+    if (!await confirmer(texte + partout, annuler ? "Annuler le retour" : "Revenir à cette copie")) return;
     try {
       await db.revenirA(c.id);
       toast(annuler ? "Retour en arrière annulé." : `Données remises au ${jourLong(c.id)}.`);

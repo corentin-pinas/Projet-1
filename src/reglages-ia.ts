@@ -4,11 +4,10 @@
 import * as db from "./db";
 import { coutDollars, testerCle } from "./ia";
 import { configIA } from "./moteur";
-import { toast } from "./ui";
+import { $, toast } from "./ui";
+import { pluriel } from "./regles";
 
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const dollars = (n: number) => n.toLocaleString("fr-FR", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
-const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
 type EtatServeur = { installe: boolean; connecte: boolean; version: string | null; methode: string | null };
 

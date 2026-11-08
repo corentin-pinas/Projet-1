@@ -14,9 +14,8 @@ import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
 import * as manquantes from "./seances-manquantes";
 import * as voixSeance from "./voix-seance";
-import { confirmer, esc, toast } from "./ui";
+import { $, confirmer, esc, toast } from "./ui";
 
-const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 
 let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
 let selD: string | null = null;          // patient (dossier) affiché
@@ -138,7 +137,8 @@ function renderList() {
 
 /* ---------- dictée groupée ---------- */
 
-function ouvrirDictee() {
+async function ouvrirDictee() {
+  if (!(await laisserMicro())) return;
   voixSeance.quitter(); dicteeVue = true; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
   $("#dicteebtn").setAttribute("aria-pressed", "true");
   dictee.ouvrir($("#main"), () => { dicteeVue = false; $("#dicteebtn").setAttribute("aria-pressed", "false"); renderList(); renderMain(); haut(); });
@@ -520,8 +520,16 @@ function fermerFiche() {
   renderList(); renderMain(); haut();
 }
 
+/* Un enregistrement en cours n'est pas coupé sans question (audit M1, choix de Corentin du 8 nov.) ;
+   s'il est arrêté, il est gardé pour être transcrit plus tard, comme avant. */
+async function laisserMicro(): Promise<boolean> {
+  if (!voixSeance.enregistre()) return true;
+  return confirmer("Un enregistrement de votre voix est en cours. L'arrêter ? Il sera gardé : vous pourrez le transcrire en rouvrant « Dicter la séance » de ce patient.", "Arrêter", "Continuer");
+}
+
 /* une séance en cours de frappe n'est pas perdue sans question */
 async function peutQuitterFiche(): Promise<boolean> {
+  if (!(await laisserMicro())) return false;
   const ta = document.querySelector<HTMLTextAreaElement>("#stext");
   if (!formOpen || !ta || ta.value.trim() === ta.defaultValue.trim()) return true;
   return confirmer("La séance en cours de saisie n'est pas enregistrée. Quitter sans l'enregistrer ?", "Quitter sans enregistrer");
@@ -548,7 +556,8 @@ function marquerFiche() {
 }
 
 /* ouvre la fiche d'un patient (liste, Ma journée, agenda…) */
-export function ouvrirPatient(id: string) {
+export async function ouvrirPatient(id: string) {
+  if (id !== selD && !(await laisserMicro())) return;
   quitterDictee(); marquerFiche();
   selD = id; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
   renderList(); renderMain(); haut();

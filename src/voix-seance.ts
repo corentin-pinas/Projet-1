@@ -35,6 +35,8 @@ const enr = new Enregistreur({
 
 /* un enregistrement ou une transcription en cours : la séance ne doit pas être enregistrée ni fermée sans le dire */
 export const occupe = () => enr.occupe();
+/* le micro tourne en ce moment (pas seulement une transcription en cours) */
+export const enregistre = () => !!enr.enCours;
 
 export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () => void, dossierId = "", nomPatient = "") {
   zone = z; cible = ta; apres = enregistrer; nom = nomPatient;

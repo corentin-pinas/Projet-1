@@ -4,15 +4,13 @@
    Aucune demande à l'IA ici : tout vient de ce qui est déjà enregistré. */
 import * as db from "./db";
 import type { Donnees } from "./db";
-import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, prochaineJournee, sansRendezVous, type Carte, type SansRdv } from "./regles";
+import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansRendezVous, type Carte, type SansRdv } from "./regles";
 import { esc, toast } from "./ui";
 
 /* ce qui est affiché : une demi-journée d'aujourd'hui, ou toute la journée de demain ; null = choisi par l'appli */
 type Vue = "am" | "pm" | "demain";
 let choix: Vue | null = null;
 
-const jourLong = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
-const pluriel = (n: number, mot: string) => n + " " + mot + (n > 1 ? "s" : "");
 
 function carte(c: Carte): string {
   const r = c.bilan?.resume, bilan = c.rdv.t === "bilan";

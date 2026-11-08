@@ -3,7 +3,7 @@
    rendez-vous de la période, ce qui est prévu pour la suite, le bilan (coup d'œil, chiffres, rubriques), les deux dernières séances.
    Fidèle à ce qui est enregistré : aucun résumé n'est inventé. */
 import { jsPDF } from "jspdf";
-import { demiDe, demiFr, frDate, rdvKey, texteDe, type Rdv, type Transmission } from "./regles";
+import { demiDe, demiFr, frDate, jourCourt, jourLong, rdvKey, texteDe, type Rdv, type Transmission } from "./regles";
 
 /* police intégrée du PDF (Helvetica) : alphabet latin et ponctuation française ; le reste est remplacé */
 const AUTRES = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
@@ -12,8 +12,6 @@ export function propre(t: string): string {
   return [...String(t ?? "")].map(c => REMPLACE[c] ?? (c.charCodeAt(0) < 256 || AUTRES.includes(c) ? c : "")).join("");
 }
 
-const jourLong = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
-const jourCourt = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); };
 const maj = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const rdvTexte = (r: Rdv) => jourCourt(r.d) + (demiFr(r) ? " " + demiFr(r) : "") + (r.t === "bilan" ? " (bilan)" : "");
 
