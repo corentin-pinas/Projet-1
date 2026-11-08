@@ -11,6 +11,7 @@ export type EtatAppareil = {
   cleIA: boolean;              // l'IA est réglée (abonnement ou clé API autorisée)
   aDesDonnees: boolean;        // au moins un patient dans l'appli
   joursCopieExterne: number | null; // jours depuis la dernière copie hors de Chrome (null : jamais)
+  joursPC?: number | null;     // relié au PC : jours depuis le dernier échange réussi (null ou absent : pas relié)
 };
 
 export type Verification = {
@@ -81,7 +82,13 @@ export function verifications(e: EtatAppareil): Verification[] {
         ? "Les bilans se résument tout seuls et les séances sont mises au propre."
         : "Réglez l'IA ci-dessous : code d'accès au serveur, puis connexion de votre abonnement Claude."
     },
-    {
+    /* relié au PC et à jour : c'est le PC qui garde les copies (choix de Corentin du 8 novembre 2026), plus de rappel */
+    e.joursPC != null && e.joursPC <= JOURS_ENTRE_COPIES ? {
+      id: "copie-externe",
+      titre: "Copies gardées par le PC",
+      ok: true,
+      detail: `Le PC garde une copie par jour pendant 30 jours (dernier échange ${ilYA(e.joursPC)}). « Copier hors de Chrome » reste possible, plus bas, pour une copie à emporter.`
+    } : {
       id: "copie-externe",
       titre: "Copie hors de Chrome",
       ok: !e.aDesDonnees || (e.joursCopieExterne !== null && e.joursCopieExterne <= JOURS_ENTRE_COPIES),

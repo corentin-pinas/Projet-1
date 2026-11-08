@@ -138,6 +138,10 @@
   <div class="head"><h2 id="regtitre">Réglages</h2><button id="regfermer">Fermer</button></div>
   <div id="regchoix"></div>
   <div class="actions"><button id="regdefaut">Revenir aux réglages d'origine</button></div>
+  <fieldset class="regligne" id="regexport"><legend>Dossier d'un patient en PDF (pour un contrôle)</legend>
+    <div class="row"><select id="regpatient" aria-label="Patient à exporter"></select><button id="regpdf">Créer le PDF</button></div>
+    <p class="note">Bilans, toutes les séances datées, rendez-vous et absences, patients archivés compris. Le PDF est enregistré dans « Téléchargements ».</p>
+  </fieldset>
 </dialog>
 <script type="module" src="/src/main.ts"></script>
 </body>

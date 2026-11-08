@@ -22,13 +22,13 @@ test("après une séance sans rendez-vous : la question, puis « Après-midi » 
   await expect(page.locator(".rdv")).toContainText("après-midi");
   await expect(q).toHaveCount(0);
 
-  // le rendez-vous effacé, la question revient ; « Fin de traitement » la fait taire, « Annuler la fin » la ramène
+  // le rendez-vous effacé, la question revient ; « Fin de traitement » la fait taire, « Rouvrir le dossier » la ramène
   await page.locator("#rbtn").click();
   await page.locator("#rclear").click();
   await expect(page.locator(".question-rdv")).toBeVisible();
   await page.locator(".question-rdv").getByRole("button", { name: "Fin de traitement" }).click();
-  await expect(page.locator(".rdv")).toContainText("Fin de traitement notée");
+  await expect(page.locator(".rdv")).toContainText("Dossier archivé");
   await expect(page.locator(".question-rdv")).toHaveCount(0);
-  await page.getByRole("button", { name: "Annuler la fin" }).click();
+  await page.getByRole("button", { name: "Rouvrir le dossier" }).click();
   await expect(page.locator(".question-rdv")).toBeVisible();
 });

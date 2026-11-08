@@ -22,7 +22,8 @@ export type Dossier = {
   rdvs: Rdv[];
   homonyme: boolean;                                  // la question « même personne ? » reste à poser
   cree: string;
-  fin?: string;                                       // fin de traitement, notée à la séance de ce jour (AAAA-MM-JJ)
+  fin?: string;                                       // fin de traitement, notée à la séance de ce jour (AAAA-MM-JJ) : le dossier est archivé
+  calme?: string;                                     // « C'est normal » répondu à l'alerte « sans rendez-vous » ce jour-là (AAAA-MM-JJ)
   absences?: string[];                                // jours de rendez-vous où le patient n'est pas venu (AAAA-MM-JJ)
 };
 
@@ -286,20 +287,53 @@ export function jourLabel(iso: string, maintenant: Date): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/* ---------- archivage (choix de Corentin du 8 novembre 2026) ---------- */
+
+/* Un patient dont la fin de traitement est notée (bouton « Fin de traitement », ou dite dans la dictée) est archivé :
+   caché de la liste, de « Ma journée », de l'agenda et du rangement des dictées, jamais effacé. Un rendez-vous posé
+   après la fin le fait revenir de lui-même ; une séance ou un bilan ajouté après la fin efface la fin (src/db.ts). */
+export const estArchive = (d: Dossier) => !!d.fin && !d.rdvs.some(r => r && r.d > d.fin!);
+
+/* Alerte « sans rendez-vous » : un patient en soins (pas archivé) sans rendez-vous à venir et sans rien depuis 30 jours
+   (séance, rendez-vous passé, bilan ou création du dossier). « C'est normal » la fait taire 30 jours. À partir de 3 mois,
+   Muninn propose d'archiver. Du plus ancien au plus récent. */
+export const JOURS_SANS_RDV = 30, JOURS_ARCHIVER = 90;
+export type SansRdv = { dossier: Dossier; depuis: string; jours: number; archiver: boolean };
+const joursEntre = (a: string, b: string) => Math.round((dateDe(b).getTime() - dateDe(a).getTime()) / 864e5);
+export function sansRendezVous(dossiers: Dossier[], bilans: Bilan[], seances: Seance[], aujourdhui: string): SansRdv[] {
+  const sortie: SansRdv[] = [];
+  for (const d of dossiers) {
+    if (estArchive(d) || d.rdvs.some(r => r && r.d >= aujourdhui)) continue;
+    const dates = [String(d.cree).slice(0, 10),
+      ...seances.filter(s => s.dossierId === d.id).map(s => s.date),
+      ...d.rdvs.filter(r => r && r.d < aujourdhui).map(r => r.d),
+      ...bilans.filter(b => b.dossierId === d.id).map(b => String(b.ajoute).slice(0, 10))].filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x) && x <= aujourdhui);
+    if (!dates.length) continue;
+    const depuis = dates.sort().at(-1)!, jours = joursEntre(depuis, aujourdhui);
+    if (jours < JOURS_SANS_RDV) continue;
+    if (d.calme && joursEntre(d.calme, aujourdhui) < JOURS_SANS_RDV) continue;
+    sortie.push({ dossier: d, depuis, jours, archiver: jours >= JOURS_ARCHIVER });
+  }
+  return sortie.sort((a, b) => a.depuis.localeCompare(b.depuis));
+}
+
 /* ---------- liste des patients ---------- */
 
-export type Ligne = { dossier: Dossier; bilans: Bilan[]; age: number | null; rdv: ReturnType<typeof prochainRdv> };
+export type Ligne = { dossier: Dossier; bilans: Bilan[]; age: number | null; rdv: ReturnType<typeof prochainRdv>; archive: boolean };
 
-/* classement : par prochain rendez-vous (jour puis heure), puis « sans rendez-vous » ; à égalité, ordre alphabétique puis âge */
+/* classement : par prochain rendez-vous (jour puis heure), puis « sans rendez-vous » ; à égalité, ordre alphabétique puis âge.
+   Les patients archivés n'apparaissent que dans une recherche, après les patients en soins. */
 export function lignesListe(dossiers: Dossier[], bilans: Bilan[], recherche: string, aujourdhui: string): Ligne[] {
   const q = recherche.trim().toLowerCase();
   return dossiers
     .map(d => {
       const b = trierBilans(bilans.filter(x => x.dossierId === d.id));
-      return { dossier: d, bilans: b, age: ageDossier(b), rdv: prochainRdv(d.rdvs, aujourdhui) };
+      return { dossier: d, bilans: b, age: ageDossier(b), rdv: prochainRdv(d.rdvs, aujourdhui), archive: estArchive(d) };
     })
-    .filter(l => !q || (l.dossier.label + " " + l.bilans.map(b => b.fichier).join(" ")).toLowerCase().includes(q))
+    .filter(l => q ? (l.dossier.label + " " + l.bilans.map(b => b.fichier).join(" ")).toLowerCase().includes(q) : !l.archive)
     .sort((x, y) => {
+      if (x.archive !== y.archive) return x.archive ? 1 : -1;
+      if (x.archive) return String(y.dossier.fin).localeCompare(String(x.dossier.fin)) || x.dossier.label.localeCompare(y.dossier.label, "fr");
       const a = x.rdv ? x.rdv.k : "~", c = y.rdv ? y.rdv.k : "~";
       return (a < c ? -1 : a > c ? 1 : 0) || x.dossier.label.localeCompare(y.dossier.label, "fr") || (x.age || 0) - (y.age || 0);
     });
@@ -338,12 +372,16 @@ export function rattacher(dicte: string | null, dossiers: Dossier[], date: strin
   const heure = (d: Dossier) => d.rdvs.find(r => r.d === date)?.h || "99:99";
   /* ordre affiché : rendez-vous du jour par heure, puis ordre alphabétique */
   const ordre = (a: Dossier, b: Dossier) => heure(a).localeCompare(heure(b)) || a.label.localeCompare(b.label, "fr");
-  const possibles = dicte ? dossiers.filter(d => nomCorrespond(dicte, d.label)).sort(ordre) : [];
+  /* les patients archivés ne sont jamais choisis tout seuls : s'ils sont les seuls à correspondre, Corentin choisit
+     (le ranger chez l'ancien patient le fait revenir, ou créer un nouveau patient) */
+  const actifs = dossiers.filter(d => !estArchive(d));
+  const possibles = dicte ? actifs.filter(d => nomCorrespond(dicte, d.label)).sort(ordre) : [];
   const duJour = possibles.filter(vuCeJour);
   if (duJour.length === 1) return { dossier: duJour[0], candidats: duJour };
   if (!duJour.length && possibles.length === 1) return { dossier: possibles[0], candidats: possibles };
-  const candidats = duJour.length > 1 ? duJour : possibles.length ? possibles
-    : [...dossiers].sort(ordre);
+  const archives = dicte && !possibles.length ? dossiers.filter(d => estArchive(d) && nomCorrespond(dicte, d.label)).sort(ordre) : [];
+  const candidats = duJour.length > 1 ? duJour : possibles.length ? possibles : archives.length ? archives
+    : [...actifs].sort(ordre);
   return { dossier: null, candidats };
 }
 

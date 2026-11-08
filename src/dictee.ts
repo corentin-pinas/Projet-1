@@ -9,7 +9,7 @@ import { phrase, Relanceur } from "./relance";
 import * as manquantes from "./seances-manquantes";
 import { Enregistreur } from "./enregistreur";
 import { eveil } from "./transcription";
-import { ageDossier, demiDe, demiFr, isoDay, rdvsDuJour, nomAffiche, nomCorrespond, patientFrom, questionRdv, sansSeanceCeJour, type Dossier, type Rdv } from "./regles";
+import { ageDossier, demiDe, demiFr, estArchive, frDate, isoDay, rdvsDuJour, nomAffiche, nomCorrespond, patientFrom, questionRdv, sansSeanceCeJour, type Dossier, type Rdv } from "./regles";
 import { confirmer, esc, toast } from "./ui";
 
 const BROUILLON = "dictee_brouillon";   // { texte, date }
@@ -116,7 +116,7 @@ async function afficher() {
     ${doutes.map(d => {
       const cands = d.candidats.map(id => parId.get(id)).filter((x): x is Dossier => !!x);
       const rdvJour = (x: Dossier) => x.rdvs.find(r => r.d === d.date);
-      const bouton = (x: Dossier) => `<button class="cand" data-doute="${esc(d.id)}" data-dossier="${esc(x.id)}">${esc(nom(x))}${rdvJour(x) ? `<small>${demiFr(rdvJour(x)!) ? "rendez-vous ce jour-là, " + demiFr(rdvJour(x)!) : "rendez-vous ce jour-là"}</small>` : ""}</button>`;
+      const bouton = (x: Dossier) => `<button class="cand" data-doute="${esc(d.id)}" data-dossier="${esc(x.id)}">${esc(nom(x))}${rdvJour(x) ? `<small>${demiFr(rdvJour(x)!) ? "rendez-vous ce jour-là, " + demiFr(rdvJour(x)!) : "rendez-vous ce jour-là"}</small>` : estArchive(x) ? `<small>dossier archivé (fin le ${esc(frDate(x.fin!))}) : il sera rouvert</small>` : ""}</button>`;
       const choix = cands.length <= 8
         ? `<div class="row">${cands.map(bouton).join("")}</div>`
         : `<div class="row">${cands.filter(rdvJour).map(bouton).join("")}</div>

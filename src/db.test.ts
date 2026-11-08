@@ -333,3 +333,15 @@ describe("fondations (1.5.2)", () => {
     expect((await db.tout()).dossiers[0].rdvs.map(r => r.d)).toEqual(["2026-11-10", "2026-11-12"]);
   });
 });
+
+describe("archivage (1.5.2)", () => {
+  it("une séance notée après la fin de traitement rouvre le dossier ; créer un patient au nom d'un archivé le signale", async () => {
+    const p = await db.creerPatient("Lucie M.");
+    await db.finTraitement(p.id, "2026-03-12");
+    await expect(db.creerPatient("Lucie M.")).rejects.toBeInstanceOf(db.ErreurArchive);
+    await db.ajouterSeance(p.id, "2026-03-12", "dernière séance");
+    expect((await db.tout()).dossiers[0].fin).toBe("2026-03-12");   // le jour même : toujours la fin
+    await db.ajouterSeance(p.id, "2026-11-08", "elle revient pour l'autre épaule");
+    expect((await db.tout()).dossiers[0].fin).toBeUndefined();
+  });
+});

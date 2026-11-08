@@ -8,7 +8,8 @@ import { egal, fusion3 } from "./fusion";
 import type { Bilan } from "./regles";
 
 export const PARAM_ADRESSE = "sync_adresse", PARAM_CODE = "sync_code";
-const PARAM_REV = "sync_rev", PARAM_OK = "sync_ok", PARAM_QUITTE = "sync_adresse_quittee", PARAM_ID = "sync_base_pc";
+export const PARAM_OK = "sync_ok";
+const PARAM_REV = "sync_rev", PARAM_QUITTE = "sync_adresse_quittee", PARAM_ID = "sync_base_pc";
 const PAQUET = 200;
 
 export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null; pcRevenu?: boolean };

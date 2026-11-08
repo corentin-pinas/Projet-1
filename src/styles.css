@@ -485,3 +485,14 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .autrejour .lien{background:none;border:0;padding:4px 0;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:.95rem}
 .autrejour .choixjour{display:inline-flex;gap:8px;margin-left:8px;align-items:center}
 .autrejour .choixjour[hidden]{display:none}
+
+/* patients archivés (1.5.2) : seulement dans une recherche, après les patients en soins, en plus discret */
+.grp.archives{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px;color:var(--soft)}
+.item.archive{opacity:.75}
+.item.archive b{font-weight:600}
+/* alerte « sans rendez-vous » dans Ma journée */
+.sansrdv{border:2px solid var(--warn);background:var(--warn-bg);color:var(--ink);border-radius:12px;padding:12px 14px;margin:0 0 16px}
+.sansrdv h3{margin:0 0 6px;font-size:1.05rem;color:var(--warn)}
+.sansrdv .lsr{border-top:1px solid var(--line);padding:10px 0 4px}
+.sansrdv .lsr:first-of-type{border-top:0}
+.sansrdv .row{margin-top:8px}

@@ -115,9 +115,15 @@ function renderList() {
     return;
   }
   let grp: string | null = null;
-  $("#list").innerHTML = lignes.map(({ dossier: d, bilans, age, rdv }) => {
+  $("#list").innerHTML = lignes.map(({ dossier: d, bilans, age, rdv, archive }) => {
     const b = bilans[0], r = b?.resume;
     const sub = r ? [r.region, r.date_bilan].filter(Boolean).join(", ") : "";
+    /* patients archivés : seulement dans une recherche, après les patients en soins, en petit */
+    if (archive) {
+      const head = grp !== "#archives" ? `<div class="grp archives">Archivés</div>` : "";
+      grp = "#archives";
+      return head + `<button class="item archive" data-id="${esc(d.id)}" aria-current="${d.id === selD}"><b>${esc(nomAffiche(d, age, donnees.dossiers))}</b><span>fin le ${esc(frDate(d.fin!))}${sub ? " · " + esc(sub) : ""}</span></button>`;
+    }
     const g = rdv ? rdv.date : "";
     let head = "";
     if (g !== grp) { grp = g; head = `<div class="grp${g === t ? " now" : ""}">${g ? esc(jourLabel(g, new Date())) : "Sans rendez-vous prévu"}</div>`; }
@@ -177,7 +183,7 @@ export function renderMain() {
       <div class="choix-type" role="radiogroup" aria-label="Demi-journée"><label class="choix"><input type="radio" name="rdemi" value="am"${rv?.demi === "pm" ? "" : " checked"}> Matin</label><label class="choix"><input type="radio" name="rdemi" value="pm"${rv?.demi === "pm" ? " checked" : ""}> Après-midi</label></div>
       <div class="choix-type" role="radiogroup" aria-label="Type de rendez-vous"><label class="choix"><input type="radio" name="rtype" value="seance"${rv?.bilan ? "" : " checked"}> Séance (20 min)</label><label class="choix"><input type="radio" name="rtype" value="bilan"${rv?.bilan ? " checked" : ""}> Bilan (40 min)</label></div>
       <div class="row"><button class="primary" id="rsave">Enregistrer</button>${rv ? `<button id="rclear">Effacer le rendez-vous</button>` : ""}<button id="rcancel">Annuler</button></div></div>`
-    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.demi ? " " + DEMI_FR[rv.demi] : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : D.fin ? `<span class="meta">Fin de traitement notée à la séance du ${esc(frDate(D.fin))}</span>` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span>${!rv && D.fin ? `<button id="finannuler">Annuler la fin</button>` : ""}<button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
+    : `<div class="rdv"><span>${rv ? `Prochain rendez-vous : <b>${esc(jourLabel(rv.date, new Date()).toLowerCase() + (rv.demi ? " " + DEMI_FR[rv.demi] : ""))}</b>${rv.bilan ? " (bilan)" : ""}${rv.autres ? ` <span class="meta">(+ ${rv.autres} autre${rv.autres > 1 ? "s" : ""} ensuite)</span>` : ""}` : D.fin ? `<span class="meta">Dossier archivé : fin de traitement le ${esc(frDate(D.fin))}</span>` : `<span class="meta">Aucun rendez-vous prévu</span>`}</span>${!rv && D.fin ? `<button id="finannuler">Rouvrir le dossier</button>` : ""}<button id="rbtn">${rv ? "Modifier" : "Ajouter un rendez-vous"}</button></div>`;
 
   /* « Prochain rendez-vous ? » une fois la séance analysée (l'IA a pu placer le rendez-vous elle-même) */
   const qrdv = rdvOpen ? null : questionRdv(D, donnees.seances, aujourdhui());
@@ -227,7 +233,7 @@ export function renderMain() {
   manquantes.brancher($("#main"), () => renderMain());
   wireRdv(D);
   prochain.brancher($("#main"));
-  const finA = $("#finannuler"); if (finA) finA.onclick = async () => { try { await db.finTraitement(D.id, undefined); toast("Fin de traitement annulée."); } catch { toast("L'enregistrement a échoué. Réessayez."); } };
+  const finA = $("#finannuler"); if (finA) finA.onclick = async () => { try { await db.finTraitement(D.id, undefined); toast("Dossier rouvert : le patient revient dans la liste."); } catch { toast("L'enregistrement a échoué. Réessayez."); } };
   wireNom(D);
   const mj = $("#majournee"); if (mj) mj.onclick = retourJournee;
   if (autre) wireHomonyme(D, autre);
@@ -522,6 +528,15 @@ async function creerPatient(nom: string) {
     ouvrirPatient(d.id);
     toast("Patient créé. Notez ses séances dès maintenant ; le bilan pourra être ajouté plus tard.");
   } catch (e) {
+    /* un patient archivé porte ce nom : sans doute le même, qui revient */
+    if (e instanceof db.ErreurArchive) {
+      const A = e.dossier;
+      if (await confirmer(`${A.label} a un dossier archivé (fin de traitement le ${frDate(A.fin!)}). Rouvrir ce dossier, avec tout son historique ? Si c'est une autre personne, annulez et ajoutez la 2e lettre du nom de famille (« Paul Ga. »).`, "Rouvrir le dossier")) {
+        try { await db.finTraitement(A.id, undefined); $<HTMLInputElement>("#q").value = ""; montrerListe(); ouvrirPatient(A.id); toast("Dossier rouvert."); }
+        catch { toast("L'enregistrement a échoué. Réessayez."); }
+      }
+      return;
+    }
     toast(/existe déjà/.test(String((e as Error)?.message)) ? "Un patient porte déjà ce nom. Ajoutez la 2e lettre du nom de famille (« Paul Ga. »)." : "La création a échoué. Réessayez.");
   }
 }

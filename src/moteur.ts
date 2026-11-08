@@ -3,7 +3,7 @@
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
-import { avecRdv, avenirFrom, empreinteTexte, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
+import { avecRdv, avenirFrom, empreinteTexte, estArchive, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -263,6 +263,11 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
   const { seances, dossiers } = await db.tout();
   const derniere = !seances.some(x => x.dossierId === se.dossierId && x.id !== se.id && x.date > se.date);
   const dossier = dossiers.find(d => d.id === se.dossierId);
+  /* « dernière séance », « fin de traitement » dit dans la dictée : fin notée, le dossier est archivé (choix du 8 novembre 2026) */
+  if (a.fin && derniere && dossier) {
+    await db.finTraitement(dossier.id, se.date);
+    return "Fin de traitement notée pour " + dossier.label + " : dossier archivé (« Rouvrir le dossier » sur sa fiche en cas d'erreur).";
+  }
   if (!(a.rdvDate && a.rdvDate >= isoDay(new Date()) && derniere && dossier)) return null;
   // matin ou après-midi pas dit : même demi-journée que la séance (choix de Corentin, 5 novembre 2026) ;
   // les rendez-vous passés sont gardés (historique, futures absences)
@@ -331,7 +336,7 @@ export async function rangerDictee(date: string, texte: string): Promise<{ range
   if (!ia) throw new ErreurIA(PAS_REGLE);
   if (!navigator.onLine) throw new ErreurIA("Pas de connexion à internet.", "reseau");
   const { dossiers } = await db.tout();
-  const patients = dossiers.map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));
+  const patients = dossiers.filter(d => !estArchive(d)).map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));   // les archivés ne sont pas proposés à l'IA
   const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel);
   await db.ajouterConso("seances", usage);
   const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [];

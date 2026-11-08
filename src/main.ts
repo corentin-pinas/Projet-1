@@ -9,6 +9,7 @@ import * as db from "./db";
 import { afficherCopies, brancherCopies, joursDepuis, PARAM_COPIE_EXTERNE, surveillerCopies } from "./copies";
 import { configIA } from "./moteur";
 import * as alerteCode from "./alerte-code";
+import * as exportDossier from "./export-dossier";
 import { brancherPartage } from "./partage";
 import * as synchro from "./synchro";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
@@ -52,7 +53,9 @@ async function lireEtat(): Promise<EtatAppareil> {
     aDesDonnees = (await db.tout()).dossiers.length > 0;
     joursCopieExterne = joursDepuis(await db.lireParametre<string>(PARAM_COPIE_EXTERNE));
   } catch { /* base indisponible */ }
-  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave, cleIA, aDesDonnees, joursCopieExterne };
+  let joursPC: number | null = null;
+  try { if (await db.lireParametre<string>(synchro.PARAM_ADRESSE)) joursPC = joursDepuis(await db.lireParametre<string>(synchro.PARAM_OK)); } catch { /* base indisponible */ }
+  return { installee, horsConnexionPret, stockageProtege, espaceLibre, protectionRefusee, brave, cleIA, aDesDonnees, joursCopieExterne, joursPC };
 }
 
 /* Le bouton « État de l'appli » en bas de la liste devient orange dès qu'un point demande attention. */
@@ -74,6 +77,7 @@ async function afficherEtat() {
 
 brancherCopies(afficherEtat);
 reglages.brancher();
+exportDossier.brancher();
 installerMascotte(document.querySelector<HTMLElement>("#mascotte")!);
 /* la décoration de saison change d'elle-même si l'appli reste ouverte d'un jour à l'autre */
 document.addEventListener("visibilitychange", () => { if (!document.hidden) reglages.appliquer(reglages.lire()); });

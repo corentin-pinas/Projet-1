@@ -59,9 +59,9 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 
 | Module | Rôle | Dépend de |
 |---|---|---|
-| `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, ui, verifications |
+| `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, ui, verifications |
 | `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, pdf, prochain-rdv, regles, seances-manquantes, ui, voix-seance |
-| `journee.ts` | « Ma journée » | db, regles, ui |
+| `journee.ts` | « Ma journée », avec l'alerte « sans rendez-vous » (30 jours ; archivage proposé à 3 mois) | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
 | `transmissions.ts`, `transmissions-pdf.ts` | transmissions pour un remplaçant et leur PDF (sans IA) | db, regles, ui |
 | `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, prochain-rdv, regles, relance, seances-manquantes, transcription, ui |
@@ -72,6 +72,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `copies.ts`, `fichier-copie.ts` | copies de sécurité internes et fichier chiffré hors de Chrome | db, regles, ui, verifications |
 | `partage.ts` | écran du partage avec le PC | synchro, transcription, ui |
 | `reglages.ts`, `palettes.ts`, `saisons.ts`, `mascotte.ts` | affichage, couleurs, décorations, corbeau | — |
+| `export-dossier.ts`, `dossier-pdf.ts` | Réglages : dossier complet d'un patient en PDF, pour un contrôle (archivés compris) | db, regles, ui ; transmissions-pdf |
 | `reglages-ia.ts` | réglages de l'IA (abonnement, clé de secours) | db, ia, moteur, ui |
 | `seances-manquantes.ts` | jour de rendez-vous passé sans séance (fiche et récapitulatif de la dictée) : retrouver le patient dans la dictée gardée, ou noter l'absence | db, ia, moteur, regles, ui |
 | `prochain-rdv.ts` | question « Prochain rendez-vous ? » (date + matin / après-midi, ou fin de traitement), sur la fiche et après la dictée groupée | db, regles, ui |
@@ -80,7 +81,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `synchro.ts`, `fusion.ts` | échanges avec le PC ; fusion de deux changements faits sur deux appareils | db, fusion, regles |
 | `transcription.ts` | voix : Whisper du PC d'abord (en direct, par morceaux coupés aux pauses), Railway en secours | db, ia, regles, synchro |
 | `db.ts` | la base IndexedDB `mes-patients` (version 4) et sa cloche | regles |
-| `regles.ts` | règles du cabinet, pures et testées : noms, classement, « À venir », homonymes, demi-journées | — |
+| `regles.ts` | règles du cabinet, pures et testées : noms, classement, « À venir », homonymes, demi-journées, archivage, alerte « sans rendez-vous » | — |
 | `ui.ts`, `pdf.ts`, `verifications.ts` | messages et confirmations, lecteur PDF, vérifications de l'appareil | — |
 
 ### Hors de l'appli

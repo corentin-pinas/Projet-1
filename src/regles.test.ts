@@ -346,3 +346,45 @@ describe("empreinte du texte d'origine (A5)", () => {
     expect(empreinteTexte("x".repeat(5000)).length).toBeLessThan(30);
   });
 });
+
+describe("archivage (1.5.2)", () => {
+  it("un patient avec une fin de traitement est archivé ; un rendez-vous posé après la fin le fait revenir", async () => {
+    const { estArchive } = await import("./regles");
+    expect(estArchive(dossier({ fin: "2026-11-01" }))).toBe(true);
+    expect(estArchive(dossier({ fin: "2026-11-01", rdvs: [{ d: "2026-10-20", h: "" }] }))).toBe(true);
+    expect(estArchive(dossier({ fin: "2026-11-01", rdvs: [{ d: "2026-11-15", h: "" }] }))).toBe(false);
+    expect(estArchive(dossier({}))).toBe(false);
+  });
+  it("la liste cache les archivés ; une recherche les montre après les patients en soins", () => {
+    const enSoins = dossier({ id: "a", label: "Marc D." }), archive = dossier({ id: "b", label: "Marc Du.", fin: "2026-03-12" });
+    expect(lignesListe([archive, enSoins], [], "", "2026-11-08").map(l => l.dossier.id)).toEqual(["a"]);
+    const l = lignesListe([archive, enSoins], [], "marc d", "2026-11-08");
+    expect(l.map(x => [x.dossier.id, x.archive])).toEqual([["a", false], ["b", true]]);
+  });
+  it("dictée : un patient archivé n'est jamais choisi tout seul ; s'il est le seul de ce nom, c'est une question", () => {
+    const archive = dossier({ id: "b", label: "Lucie M.", fin: "2026-03-12" }), autre = dossier({ id: "c", label: "Paul T." });
+    expect(rattacher("Lucie", [archive, autre], "2026-11-08")).toEqual({ dossier: null, candidats: [archive] });
+    const enSoins = dossier({ id: "a", label: "Lucie M." });
+    expect(rattacher("Lucie", [archive, enSoins], "2026-11-08").dossier?.id).toBe("a");
+  });
+});
+
+describe("alerte « sans rendez-vous » (1.5.2)", () => {
+  it("30 jours sans rien et sans rendez-vous à venir : alerte ; 3 mois : proposition d'archiver ; archivés et patients avec rendez-vous à venir : jamais", async () => {
+    const { sansRendezVous } = await import("./regles");
+    const auj = "2026-11-08";
+    const recent = dossier({ id: "r", cree: "2026-10-20T10:00:00Z" });
+    const oublie = dossier({ id: "o", cree: "2026-09-01T10:00:00Z", rdvs: [{ d: "2026-10-01", h: "" }] });
+    const ancien = dossier({ id: "x", cree: "2026-06-01T10:00:00Z" });
+    const avenir = dossier({ id: "v", cree: "2026-06-01T10:00:00Z", rdvs: [{ d: "2026-11-20", h: "" }] });
+    const archive = dossier({ id: "z", cree: "2026-06-01T10:00:00Z", fin: "2026-06-10" });
+    const l = sansRendezVous([recent, oublie, ancien, avenir, archive], [], [seance({ dossierId: "o", date: "2026-10-01" })], auj);
+    expect(l.map(x => [x.dossier.id, x.depuis, x.archiver])).toEqual([["x", "2026-06-01", true], ["o", "2026-10-01", false]]);
+  });
+  it("« C'est normal » fait taire l'alerte 30 jours", async () => {
+    const { sansRendezVous } = await import("./regles");
+    const d = dossier({ id: "o", cree: "2026-09-01T10:00:00Z", calme: "2026-11-01" });
+    expect(sansRendezVous([d], [], [], "2026-11-08")).toEqual([]);
+    expect(sansRendezVous([d], [], [], "2026-12-05")).toHaveLength(1);
+  });
+});

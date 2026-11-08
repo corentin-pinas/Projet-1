@@ -335,8 +335,8 @@ export const parleRdv = (t: string) => /rendez[- ]?vous|\brdv\b|prochain|revoi|s
 export const SCHEMA_SEANCE = {
   type: "object",
   additionalProperties: false,
-  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi"],
-  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul }
+  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "fin_traitement"],
+  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, fin_traitement: { type: "boolean" } }
 };
 
 export function promptSeance(date: string, contenu: string, sansPropre: boolean): string {
@@ -351,12 +351,15 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     '- "rdv_date" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. ' + REGLE_JOUR + ' null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
-    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}\n\n' +
+    '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
+    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","fin_traitement":false}\n\n' +
     "Note complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
 }
 
 /* « mardi prochain » (choix de Corentin, 5 novembre 2026) */
 const REGLE_JOUR = "Un jour de la semaine (« mardi », « mardi prochain ») désigne le premier jour de ce nom APRÈS J (dit un lundi, « mardi prochain » est le lendemain) ; « mardi en huit » ou « mardi de la semaine prochaine » : le mardi de la semaine qui suit celle de J.";
+/* fin de traitement dite dans la dictée (choix de Corentin du 8 novembre 2026) : le dossier sera archivé */
+const CONSIGNE_FIN = "true seulement si la note dit clairement que le traitement s'arrête : « dernière séance », « fin de traitement », « fin de prise en charge », « fin des soins », « on arrête les séances ». false sinon, et aussi s'il est seulement question d'une pause, d'un arrêt à discuter ou d'un report.";
 const CONSIGNE_DEMI = "« matin » ou « après-midi » si la note le dit pour cette prochaine séance (ou si l'heure annoncée le dit : avant 13 h, matin), sinon null.";
 /* demi-journée lue dans la réponse, sinon déduite de l'heure */
 const okDemi = (v: unknown, heure: string): Demi | "" => {
@@ -369,7 +372,7 @@ const okHeure = (v: unknown) => {
   return m && +m[1] < 24 && +m[2] < 60 ? m[1].padStart(2, "0") + ":" + m[2] : "";
 };
 
-export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string; rdvDemi: Demi | "" };
+export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string; rdvDemi: Demi | ""; fin?: boolean };
 
 /* Lecture de la réponse avec les garde-fous de la version d'essai :
    une mise au propre beaucoup plus courte que la dictée a sans doute perdu des informations, on ne la retient pas. */
@@ -384,7 +387,8 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
     bref: typeof o.bref === "string" ? o.bref.trim().slice(0, 300) : "",
     rdvDate,
     rdvHeure: rdvDate ? okHeure(o.rdv_heure) : "",
-    rdvDemi: rdvDate ? okDemi(o.rdv_demi, okHeure(o.rdv_heure)) : ""
+    rdvDemi: rdvDate ? okDemi(o.rdv_demi, okHeure(o.rdv_heure)) : "",
+    fin: o.fin_traitement === true && !rdvDate   // un prochain rendez-vous dit en même temps : ce n'est pas la fin
   };
 }
 
@@ -402,8 +406,8 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
 
 const SEANCE_DICTEE = {
   type: "object", additionalProperties: false,
-  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi"],
-  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul }
+  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "fin_traitement"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, fin_traitement: { type: "boolean" } }
 };
 export const SCHEMA_DICTEE = {
   type: "object", additionalProperties: false, required: ["seances"],
@@ -428,7 +432,8 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "rdv_date" : si l\'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. ' + REGLE_JOUR + ' null si ce n\'est pas dit ou si c\'est ambigu. Ne devine pas.\n' +
     '- "rdv_heure" : l\'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n' +
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
-    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin"}]}\n\n' +
+    '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","fin_traitement":false}]}\n\n' +
     "Dictée :\n" + texte.slice(0, MAX_DICTEE);
 }
 

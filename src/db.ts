@@ -2,7 +2,7 @@
    Remplace les briques db et assets de claude.ai utilisées par la version d'essai. */
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { egal, fusion3, stable } from "./fusion";
-import { avecRdv, isoDay, patientFrom, type Bilan, type DicteeGardee, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
+import { avecRdv, estArchive, isoDay, patientFrom, type Bilan, type DicteeGardee, type Dossier, type FichierBilan, type Rdv, type Seance } from "./regles";
 
 interface Schema extends DBSchema {
   dossiers: { key: string; value: Dossier };
@@ -93,10 +93,12 @@ export async function ajouterBilan(fichiers: File[], dossierId?: string): Promis
   const dossier: Dossier = cible ?? { id: nouvelId(), label, rdvs: [], homonyme: existants.some(d => d.label === label), cree: new Date().toISOString() };
   const refs: FichierBilan[] = fichiers.map(f => ({ id: nouvelId(), nom: f.name, type: f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : "") }));
   const bilan: Bilan = { id: nouvelId(), dossierId: dossier.id, fichier: nom, fichiers: refs, ajoute: new Date().toISOString(), resume: null, valides: [], corrections: [], origine: await appareil() };
+  /* un nouveau bilan pour un patient archivé : il revient, son dossier n'est plus archivé */
+  const rouvert = cible?.fin ? (({ fin: _, ...reste }) => reste)(cible) : null;
   const tx = db.transaction(["dossiers", "bilans", "fichiers"], "readwrite");
   await Promise.all([
     ...fichiers.map((f, i) => tx.objectStore("fichiers").put({ id: refs[i].id, blob: f })),
-    ...(cible ? [] : [tx.objectStore("dossiers").put(dossier)]),
+    ...(cible ? (rouvert ? [tx.objectStore("dossiers").put(rouvert)] : []) : [tx.objectStore("dossiers").put(dossier)]),
     tx.objectStore("bilans").put(bilan),
     tx.done
   ]);
@@ -104,13 +106,18 @@ export async function ajouterBilan(fichiers: File[], dossierId?: string): Promis
   return bilan;
 }
 
+/* un patient archivé porte déjà ce nom : l'écran propose de rouvrir son dossier plutôt que d'en créer un second */
+export class ErreurArchive extends Error { constructor(public dossier: Dossier) { super("Ce nom existe déjà (dossier archivé)"); } }
+
 /* Patient créé sans bilan (déjà en soins, bilan à venir) : prénom et initiale seulement. */
 export async function creerPatient(label: string, rdvs: Rdv[] = []): Promise<Dossier> {
   await copieDuJour();
   const db = await ouvrir();
   const existants = await db.getAll("dossiers");
   const d: Dossier = { id: nouvelId(), label, rdvs, homonyme: false, cree: new Date().toISOString() };
-  if (existants.some(x => x.label === label)) throw new Error("Ce nom existe déjà");
+  const meme = existants.find(x => x.label === label);
+  if (meme && estArchive(meme)) throw new ErreurArchive(meme);   // l'écran propose de rouvrir son dossier
+  if (meme) throw new Error("Ce nom existe déjà");
   await db.put("dossiers", d);
   prevenir();
   return d;
@@ -187,7 +194,8 @@ export async function fusionner(depuisId: string, versId: string) {
   for (const b of await tx.objectStore("bilans").index("dossierId").getAll(depuisId)) await tx.objectStore("bilans").put({ ...b, dossierId: versId });
   for (const s of await tx.objectStore("seances").index("dossierId").getAll(depuisId)) await tx.objectStore("seances").put({ ...s, dossierId: versId });
   const rdvs = depuis.rdvs.reduce((l, r) => l.some(x => x.d === r.d) ? l : avecRdv(l, r.d, r.h, r.t, r.p), vers.rdvs);
-  await tx.objectStore("dossiers").put({ ...vers, rdvs });
+  const { fin: _fin, ...versActif } = vers;   // « même personne » après un nouveau bilan : le patient revient, plus archivé
+  await tx.objectStore("dossiers").put({ ...versActif, rdvs });
   await tx.objectStore("dossiers").delete(depuisId);
   await tx.done;
   prevenir();
@@ -252,7 +260,12 @@ export async function renommer(dossierId: string, label: string) {
 export async function ajouterSeance(dossierId: string, date: string, contenu: string): Promise<Seance> {
   await copieDuJour();
   const s: Seance = { id: nouvelId(), dossierId, date, contenu, cree: new Date().toISOString(), origine: await appareil() };
-  await (await ouvrir()).put("seances", s);
+  const tx = (await ouvrir()).transaction(["seances", "dossiers"], "readwrite");
+  await tx.objectStore("seances").put(s);
+  /* une séance après la fin de traitement : le patient revient, son dossier n'est plus archivé */
+  const d = await tx.objectStore("dossiers").get(dossierId);
+  if (d?.fin && date > d.fin) { const { fin: _, ...reste } = d; await tx.objectStore("dossiers").put(reste); }
+  await tx.done;
   prevenir();
   return s;
 }

@@ -62,3 +62,12 @@ describe("IA", () => {
     expect(v(null, false).ok).toBe(true);    // appli vide : rien à copier
   });
 });
+
+describe("copies quand l'appareil est relié au PC", () => {
+  it("relié et à jour : plus de rappel, le PC garde les copies ; plus d'échange depuis longtemps : le rappel revient", () => {
+    const v = (joursPC: number | null, j: number | null) => verifications({ ...tout, joursPC, joursCopieExterne: j }).find(x => x.id === "copie-externe")!;
+    expect(v(0, null)).toMatchObject({ ok: true, titre: "Copies gardées par le PC" });
+    expect(v(10, null).ok).toBe(false);
+    expect(v(null, null).ok).toBe(false);
+  });
+});
