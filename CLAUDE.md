@@ -1,6 +1,6 @@
 # CLAUDE.md — Appli de suivi patients (kinésithérapie)
 
-> **Point de reprise le plus récent : `REPRISE.md`** (état au 8 novembre 2026, version 1.5.4 en production, 1.5.5 prête, nettoyage de l'audit en cours, décisions, prochaines étapes).
+> **Point de reprise le plus récent : `REPRISE.md`** (état au 8 novembre 2026, version 1.5.5 en production, nettoyage de l'audit en cours, décisions, prochaines étapes).
 
 Contexte repris du travail fait dans claude.ai (projet « Gestion Patient assistée »), le 2 octobre 2026.
 Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essai : `reference/bilans-seances-essai.html`.
@@ -157,6 +157,8 @@ Points ouverts :
 - **Suivi de l'évolution et alertes** (1er novembre 2026, grande idée pour plus tard) : repérer les patients qui évoluent favorablement (on continue le protocole) et ceux qui stagnent ou se dégradent, avec une alerte pour Corentin (« rotation externe travaillée, pas de progrès ; amplitude travaillée, pas de progrès ») qui l'invite à changer d'angle, à demander une prescription ou de nouveaux examens. Pas de chiffres à saisir : l'évolution se lit dans les séances dictées (« douleur inchangée », « les amplitudes stagnent », « rotation externe travaillée sans progrès »), l'IA en fait la synthèse.
 - **Absences** (2 novembre 2026, pour plus tard) : pouvoir dire « Madame X absente ce jour » quand un rendez-vous prévu n'a pas eu lieu, et suivre l'absentéisme de chaque patient.
 - **Notes vocales d'un remplaçant** (4 novembre 2026, idée à confirmer : Corentin ne sait pas si ses remplaçants le feront) : le remplaçant envoie des notes vocales (WhatsApp, SMS…) sur ce qu'il a fait avec chaque patient ; Corentin les importe dans Muninn (bouton « Importer des notes vocales » dans la dictée groupée, plusieurs fichiers à la fois ; sur la tablette Android, aussi « Partager → Muninn » si l'appli installée le permet ; sur l'iPhone, enregistrer dans Fichiers puis importer). Même chemin que la dictée : Whisper du PC (formats ogg/opus, m4a, mp3, wav), rangement par patient, séances marquées « faite par le remplaçant ». Le remplaçant doit dire prénom + initiale.
+- **PC qui se met à jour tout seul** (8 novembre 2026, tâche à venir) : vérification quotidienne d'une nouvelle version, installée sans relancer la ligne d'installation.
+- **Un collègue sur Muninn** (8 novembre 2026, idée) : sa propre clé API (pas l'abonnement Pro), son PC, ses patients chez lui, même adresse ; nouvelles versions essayées d'abord un jour par Corentin avant de partir chez le collègue (choix de Corentin).
 - **Transmissions** (7 octobre 2026) : un bouton qui, pour une période choisie (une semaine, quinze jours…), résume tous les patients ayant rendez-vous dans la période, pour un remplaçant : pathologie, état à l'arrivée, traitement en cours. Sortie : un **PDF** que Corentin envoie par message (le remplaçant l'imprime s'il veut).
 - **Agenda** (7 octobre 2026) : une vue d'ensemble de l'emploi du temps dans l'appli (Maiia et Doctolib ne sont pas reliés), pour repérer les trous anormaux et ajouter un patient dans un créneau. Sert à fiabiliser les transmissions sur 15 jours ; de petits écarts ensuite sont acceptables.
 
