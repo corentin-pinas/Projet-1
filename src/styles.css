@@ -507,3 +507,7 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .outils{grid-template-columns:repeat(4,1fr)}
 #regbtn{position:relative;justify-content:center}
 #regbtn.alerte{color:var(--warn);border-color:var(--warn);background:var(--warn-bg)}
+
+/* téléphone : fiche et dictée groupée en plein écran, sans l'accueil au-dessus (1.5.6) */
+@media (max-width:820px){body.fiche-ouverte .side{display:none}}
+.jsaut{color:var(--soft);font-size:.95rem;margin-top:2px}

@@ -48,7 +48,9 @@ function blocSansRdv(l: SansRdv[]): string {
 }
 
 /* Par défaut : la demi-journée en cours (avant 13 h, le matin) ; le matin sans patient, on montre directement l'après-midi. */
+/* Aujourd'hui sans aucun rendez-vous (dimanche, congé) : la prochaine journée qui a des patients (choix de Corentin, 8 nov.). */
 export function vueParDefaut(maintenant: Date, cartes: Carte[]): Vue {
+  if (!cartes.length) return "demain";
   if (maintenant.getHours() >= 13) return "pm";
   return !cartes.some(c => demiDe(c.rdv) === "am") && cartes.some(c => demiDe(c.rdv) === "pm") ? "pm" : "am";
 }
@@ -57,18 +59,22 @@ export function vueParDefaut(maintenant: Date, cartes: Carte[]): Vue {
 export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) => void) {
   const now = new Date(), auj = isoDay(now), demain = decalerJours(auj, 1);
   if (!d.dossiers.length) { el.innerHTML = `<div class="empty">Ajoutez vos premiers bilans avec le bouton « Ajouter des bilans ».</div>`; return; }
-  const cartesAuj = journee(d.dossiers, d.bilans, d.seances, auj), cartesDemain = journee(d.dossiers, d.bilans, d.seances, demain);
+  /* « demain » = la prochaine journée qui a des patients (demain, ou lundi un samedi), sinon demain */
+  const suite = prochaineJournee(d.dossiers, demain) ?? demain;
+  const cartesAuj = journee(d.dossiers, d.bilans, d.seances, auj), cartesDemain = journee(d.dossiers, d.bilans, d.seances, suite);
+  const nomSuite = suite === demain ? "Demain" : jourLong(suite).split(" ")[0].replace(/^./, x => x.toUpperCase());
   const vue = choix ?? vueParDefaut(now, cartesAuj);
+  const saut = !choix && vue === "demain" && !cartesAuj.length && cartesDemain.length > 0;
   /* les rendez-vous sans demi-journée (anciens, sans heure) restent visibles avec le matin */
   const dans = (m: "am" | "pm") => cartesAuj.filter(c => (demiDe(c.rdv) ?? "am") === m);
   const cartes = vue === "demain" ? cartesDemain : dans(vue);
-  const jour = vue === "demain" ? demain : auj;
+  const jour = vue === "demain" ? suite : auj;
   const notees = cartes.filter(c => c.faite).length, bilans = cartes.filter(c => c.rdv.t === "bilan").length;
   const quand = vue === "am" ? "matin" : vue === "pm" ? "après-midi" : "";
 
   const sans = sansRendezVous(d.dossiers, d.bilans, d.seances, auj);
-  let html = blocSansRdv(sans) + `<div class="head"><div><h2>Ma journée</h2><div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
-    <div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", "Demain", cartesDemain.length]] as const)
+  let html = blocSansRdv(sans) + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">Pas de rendez-vous aujourd'hui : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
+    <div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
       .map(([v, t, n]) => `<button data-vue="${v}" aria-pressed="${vue === v}">${t} <small>${n}</small></button>`).join("")}</div></div>`;
   if (cartes.length) {
     if (vue === "demain") {
@@ -78,7 +84,7 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   } else {
     const autre = vue === "am" && dans("pm").length ? "pm" : vue !== "demain" && cartesDemain.length ? "demain" : null;
     const proch = prochaineJournee(d.dossiers, decalerJours(jour, 1));
-    html += `<div class="empty jvide">Aucun rendez-vous noté ${vue === "am" ? "ce matin" : vue === "pm" ? "cet après-midi" : "demain"}.${!autre && proch ? `<br>Prochains rendez-vous : ${esc(jourLabel(proch, now).toLowerCase())}.` : ""}${autre ? `<div class="row"><button class="primary" data-vue="${autre}">${autre === "pm" ? "Voir l'après-midi" : "Voir demain"}</button></div>` : ""}</div>`;
+    html += `<div class="empty jvide">Aucun rendez-vous noté ${vue === "am" ? "ce matin" : vue === "pm" ? "cet après-midi" : suite === demain ? "demain" : esc(jourLong(suite))}.${!autre && proch ? `<br>Prochains rendez-vous : ${esc(jourLabel(proch, now).toLowerCase())}.` : ""}${autre ? `<div class="row"><button class="primary" data-vue="${autre}">${autre === "pm" ? "Voir l'après-midi" : "Voir " + esc(suite === demain ? "demain" : nomSuite.toLowerCase())}</button></div>` : ""}</div>`;
   }
   html += `<p class="note jnote">Touchez une fiche pour ouvrir le dossier du patient. Tous les patients : bouton « Liste des patients ».</p>`;
   el.innerHTML = html;

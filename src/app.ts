@@ -133,12 +133,7 @@ function renderList() {
     return head + `<button class="item${g === t ? " now" : ""}" data-id="${esc(d.id)}" aria-current="${cur}">
       <b>${rdv?.demi ? `<i class="hr">${DEMI_FR[rdv.demi]}</i>` : ""}${esc(nomAffiche(d, age, donnees.dossiers))}${ask ? `<i class="ask" title="Même personne qu'un autre dossier ?" aria-label="Question : même personne qu'un autre dossier ?">?</i>` : ""}</b>${n ? `<span>${n} séance${n > 1 ? "s" : ""}</span><br>` : ""}${bilans.length > 1 ? `<span>${bilans.length} bilans</span><br>` : ""}${!bilans.length ? `<span class="pending">Bilan à venir</span>` : bilans.some(x => !x.resume) ? etatResume(bilans.filter(x => !x.resume)) : `<span>${esc(sub || "Bilan")}</span>`}</button>`;
   }).join("");
-  $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => {
-    quitterDictee();
-    selD = el.dataset.id || null; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
-    renderList(); renderMain();
-    if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
-  });
+  $("#list").querySelectorAll<HTMLElement>(".item").forEach(el => el.onclick = () => { if (el.dataset.id) ouvrirPatient(el.dataset.id); });
 }
 
 /* ---------- dictée groupée ---------- */
@@ -146,8 +141,8 @@ function renderList() {
 function ouvrirDictee() {
   voixSeance.quitter(); dicteeVue = true; formOpen = false; editing = null; rdvOpen = false; homoOpen = false;
   $("#dicteebtn").setAttribute("aria-pressed", "true");
-  dictee.ouvrir($("#main"), () => { dicteeVue = false; $("#dicteebtn").setAttribute("aria-pressed", "false"); renderList(); renderMain(); });
-  if (matchMedia("(max-width:820px)").matches) $("#main").scrollIntoView({ behavior: "smooth" });
+  dictee.ouvrir($("#main"), () => { dicteeVue = false; $("#dicteebtn").setAttribute("aria-pressed", "false"); renderList(); renderMain(); haut(); });
+  pleinEcran(); haut();
 }
 
 function quitterDictee() {
@@ -157,10 +152,19 @@ function quitterDictee() {
 
 /* ---------- fiche ---------- */
 
+/* Téléphone (choix de Corentin du 8 nov.) : une fiche ou la dictée groupée prennent tout l'écran, sans l'accueil au-dessus ;
+   le retour ramène en haut de l'accueil. Tablette et PC : liste et fiche restent côte à côte. */
+function pleinEcran() { document.body.classList.toggle("fiche-ouverte", !!selD || dicteeVue); }
+function haut() { window.scrollTo(0, 0); $("#main").scrollTop = 0; }
+
 export function renderMain() {
+  pleinEcran();
   if (dicteeVue) return;   // la dictée groupée gère son propre affichage
   const D = donnees.dossiers.find(d => d.id === selD);
-  if (!D) { voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient); return; }
+  if (!D) {
+    if (history.state?.muninn === "fiche") history.replaceState(null, "");   // fiche disparue (patient supprimé ailleurs)
+    voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient); return;
+  }
   const bilans = bilansDe(D), age = ageDe(D);
   const b = bilans.find(x => x.id === selB) ?? bilans[0] as Bilan | undefined, r = b?.resume;
   const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b ? b.fichier : "Bilan à venir"])].filter(Boolean).join(", ");
@@ -472,7 +476,7 @@ async function ajouter(e: Event) {
   }
   btn.disabled = false;
   if (ok) {
-    quitterDictee();
+    quitterDictee(); marquerFiche(); haut();
     formOpen = false; editing = null; rdvOpen = false; homoOpen = false; renderList(); renderMain();
     toast((ok > 1 ? `${ok} bilans ajoutés.` : "Bilan ajouté.") + (aCle && navigator.onLine ? " Le résumé est en cours." : ""));
     moteur.resumerEnAttente();
@@ -509,16 +513,45 @@ async function supprimer(b: Bilan) {
 
 /* ---------- patient sans bilan ---------- */
 
-function retourJournee() {
+/* Retour à « Ma journée » : bouton « ← Ma journée », bouton retour d'Android, geste retour de l'iPhone.
+   Une fiche ouverte = une étape dans l'historique du navigateur, pour que « retour » ferme la fiche au lieu de quitter Muninn. */
+function fermerFiche() {
   selD = null; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
-  renderList(); renderMain(); $("#main").scrollTop = 0;
+  renderList(); renderMain(); haut();
 }
 
-/* ouvre la fiche d'un patient (depuis l'agenda, par exemple) */
+/* une séance en cours de frappe n'est pas perdue sans question */
+async function peutQuitterFiche(): Promise<boolean> {
+  const ta = document.querySelector<HTMLTextAreaElement>("#stext");
+  if (!formOpen || !ta || ta.value.trim() === ta.defaultValue.trim()) return true;
+  return confirmer("La séance en cours de saisie n'est pas enregistrée. Quitter sans l'enregistrer ?", "Quitter sans enregistrer");
+}
+
+async function retourJournee() {
+  if (!(await peutQuitterFiche())) return;
+  if (history.state?.muninn === "fiche") { quitteSansQuestion = true; history.back(); }
+  else fermerFiche();
+}
+
+let quitteSansQuestion = false;
+try { history.scrollRestoration = "manual"; } catch { /* navigateur ancien */ }   // c'est Muninn qui remet en haut
+addEventListener("popstate", async () => {
+  if (!selD) return;
+  const sans = quitteSansQuestion; quitteSansQuestion = false;
+  if (!sans && !(await peutQuitterFiche())) { history.pushState({ muninn: "fiche" }, ""); return; }
+  fermerFiche();
+});
+
+function marquerFiche() {
+  if (history.state?.muninn === "fiche") history.replaceState({ muninn: "fiche" }, "");
+  else history.pushState({ muninn: "fiche" }, "");
+}
+
+/* ouvre la fiche d'un patient (liste, Ma journée, agenda…) */
 export function ouvrirPatient(id: string) {
-  quitterDictee();
+  quitterDictee(); marquerFiche();
   selD = id; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
-  renderList(); renderMain(); $("#main").scrollTop = 0;
+  renderList(); renderMain(); haut();
 }
 
 async function creerPatient(nom: string) {
