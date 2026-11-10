@@ -79,3 +79,17 @@ test("dimanche sans patients : Muninn montre lundi ; samedi, le 3e bouton propos
   await expect(page.locator(".jvide")).toContainText("Aucun rendez-vous noté ce matin.");
   await expect(page.locator(".jvide").getByRole("button", { name: "Voir lundi" })).toBeVisible();
 });
+
+test("le soir à partir de 20 h : Muninn montre la prochaine journée avec patients", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-10T20:15:00"));   // mardi soir
+  await page.goto("/");
+  await patient(page, "Paul Garcia", "2026-11-10");                 // vu aujourd'hui
+  await patient(page, "Lucie Martin", "2026-11-11");                // demain
+  await page.getByRole("button", { name: "Ma journée" }).click();
+  await expect(page.locator(".jsaut")).toHaveText("Journée terminée : voici demain.");
+  await expect(page.locator(".jchoix button")).toHaveText(["Matin 1", "Après-midi 0", "Demain 1"]);
+  await expect(page.locator(".jcarte")).toContainText("Lucie M.");
+  // la journée d'aujourd'hui reste à un toucher
+  await page.getByRole("button", { name: /^Matin/ }).click();
+  await expect(page.locator(".jcarte")).toContainText("Paul G.");
+});

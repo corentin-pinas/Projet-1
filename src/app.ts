@@ -76,7 +76,7 @@ export async function demarrer() {
   addEventListener("online", () => moteur.resumerEnAttente());
   await rafraichirIA();
   /* au retour sur l'appli, la liste se reclasse ; nouveau jour ou passage à l'après-midi : « Ma journée » revient sur la demi-journée en cours */
-  const moment = () => aujourdhui() + (new Date().getHours() >= 13 ? " pm" : " am");
+  const moment = () => { const h = new Date().getHours(); return aujourdhui() + (h >= journee.HEURE_SOIR ? " soir" : h >= 13 ? " pm" : " am"); };
   let momentVu = moment();
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
