@@ -17,6 +17,7 @@
   <button class="primary" id="majbtn">Mettre à jour</button>
 </div>
 <div class="maj alertecode" id="alertecode" hidden role="alert"></div>
+<div class="maj alertecode" id="alertesync" hidden role="alert"><span id="alertesynctxt"></span><button class="primary" id="alertesyncessai">Réessayer</button></div>
 <div class="app">
   <div class="side">
     <h1><span id="mascotte"></span><span class="nomappli">Muninn<small>la mémoire du cabinet</small></span></h1>
@@ -80,6 +81,7 @@
     <p class="note">Patients, bilans et séances sont échangés avec votre PC par Tailscale. Chaque appareil garde tout et marche même sans le PC ; il se met à jour dès qu'il le joint.</p>
     <p class="sansmarge" id="syncetat" aria-live="polite"></p>
     <p class="note" id="syncvoix"></p>
+    <p class="note" id="syncmajpc"></p>
     <div class="sform" id="syncform">
       <input type="url" id="syncadresse" placeholder="Adresse du PC (elle finit par .ts.net)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Adresse du PC">
       <input type="text" id="synccode" placeholder="Code du PC (XXXX-XXXX-XXXX)" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code du PC">

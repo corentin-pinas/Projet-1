@@ -25,8 +25,33 @@ export async function afficherVoix() {
     : "Dictée à la voix : Whisper n'est pas installé sur le PC. Relancez l'installation de Muninn sur le PC (ligne ci-dessous).";
 }
 
+/* Bandeau « pas encore partagés » (1.7.0, choix de Corentin du 11 novembre 2026) : un changement de cet appareil attend
+   depuis plus de 30 minutes et le PC ne répond pas (PC en veille ou éteint, Tailscale coupé sur l'appareil). */
+export const ATTENTE_ALERTE_MIN = 30;
+export function alerteAttente(e: synchro.EtatSync, maintenant = Date.now()): string | null {
+  if (!e.relie || e.enCours || !e.erreur || !e.attente) return null;
+  if (maintenant - new Date(e.attente).getTime() < ATTENTE_ALERTE_MIN * 60_000) return null;
+  return `⚠ Des changements de cet appareil ne sont pas encore partagés avec le PC (${depuis(e.attente).replace(/^il y a/, "depuis")}). Le PC est-il allumé ? Tailscale est-il actif sur cet appareil ?`;
+}
+
+/* mise à jour automatique du PC (1.7.0) : ce que le lanceur du PC a noté */
+export function texteMajPC(pc: synchro.EtatSync["pc"]): string {
+  if (!pc) return "";
+  const m = pc.maj;
+  if (!m) return "Mise à jour automatique du PC : pas encore installée. Relancez une fois la ligne d'installation sur le PC (ci-dessous).";
+  if (m.relancer) return "Le PC a besoin d'une nouvelle installation : relancez la ligne d'installation sur le PC (ci-dessous).";
+  const faite = m.faites?.[0];
+  const recente = faite && Date.now() - new Date(faite.quand).getTime() < 7 * 86_400_000
+    ? ` Dernière mise à jour : ${depuis(faite.quand)} (${faite.nom === "voix" ? "Whisper" : "partage"}).` : "";
+  return (m.erreur ? `Mise à jour du PC : le dernier essai n'a pas abouti (${m.erreur}).` : `Le PC se met à jour tout seul (version ${pc.version}).`) + recente;
+}
+
 export function afficherPartage() {
   const e = synchro.etatSync();
+  const alerte = alerteAttente(e);
+  $("#alertesync").hidden = !alerte;
+  if (alerte) $("#alertesynctxt").textContent = alerte;
+  $("#syncmajpc").textContent = e.relie ? texteMajPC(e.pc) : "";
   const mini = $("#syncmini"), txt = $("#syncminitxt");
   mini.hidden = !e.relie;
   mini.classList.toggle("encours", e.enCours);
@@ -70,6 +95,12 @@ export function brancherPartage() {
     } finally {
       b.disabled = false; b.textContent = "Relier au PC";
     }
+  });
+
+  $("#alertesyncessai").addEventListener("click", async () => {
+    await synchro.synchroniser();
+    const e = synchro.etatSync();
+    toast(e.erreur ? "Le PC ne répond toujours pas : " + e.erreur : "Échange fait : tout est partagé.");
   });
 
   $("#syncmaintenant").addEventListener("click", async () => {

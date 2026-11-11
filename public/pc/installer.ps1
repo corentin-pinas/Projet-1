@@ -3,11 +3,13 @@
 # 3. le fait démarrer avec Windows, même sans ouvrir de session ; 4. le rend joignable par Tailscale (HTTPS, vos appareils seulement) ;
 # 5. installe Whisper (transcription de la voix sur le PC, la voix ne sort pas de chez vous) ;
 # 6. affiche l'adresse et le code à taper sur la tablette et le téléphone.
-# Relancer ce script met Muninn à jour sans toucher aux données.
+# Relancer ce script met Muninn à jour sans toucher aux données. Depuis la 1.7.0, Muninn se met ensuite à jour tout seul
+# (lanceur.mjs) ; il ne faut relancer ce script que quand « État de l'appli » le demande.
 $ErrorActionPreference = "Stop"
 $Adresse = "__ADRESSE__"
 $Dossier = Join-Path $env:ProgramData "Muninn"
 $Port = 4747
+$Installeur = 2   # à augmenter quand une mise à jour demande de relancer cette installation (droits, Python, lanceur)
 
 function Etape($t) { Write-Host ""; Write-Host "== $t" -ForegroundColor Cyan }
 function Stop-Erreur($t) { Write-Host ""; Write-Host $t -ForegroundColor Red; Write-Host "Envoyez une capture de cette fenêtre à Claude."; exit 1 }
@@ -36,21 +38,33 @@ New-Item -ItemType Directory -Force -Path $Dossier | Out-Null
 icacls $Dossier /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "$($env:USERDOMAIN)\$($env:USERNAME):(OI)(CI)F" "*S-1-5-19:(OI)(CI)M" | Out-Null
 icacls (Join-Path $Dossier "*") /reset /T /C /Q | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/muninn-pc.mjs" -OutFile (Join-Path $Dossier "muninn-pc.mjs")
+# le lanceur fait tourner le partage et Whisper, et les met à jour tout seul depuis cette adresse (maj.json)
+Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/lanceur.mjs" -OutFile (Join-Path $Dossier "lanceur.mjs")
+[IO.File]::WriteAllText((Join-Path $Dossier "maj.json"), (@{ adresse = $Adresse; installeur = $Installeur } | ConvertTo-Json))
 Write-Host "Muninn rangé dans $Dossier"
 
 Etape "3/6 Démarrage avec Windows"
 $tache = "Muninn"
 Stop-ScheduledTask -TaskName $tache -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName $tache -Confirm:$false -ErrorAction SilentlyContinue
-$action = New-ScheduledTaskAction -Execute $NodeExe -Argument "`"$(Join-Path $Dossier 'muninn-pc.mjs')`"" -WorkingDirectory $Dossier
+$action = New-ScheduledTaskAction -Execute $NodeExe -Argument "`"$(Join-Path $Dossier 'lanceur.mjs')`"" -WorkingDirectory $Dossier
+# avant la 1.7.0, Whisper avait sa propre tâche : c'est maintenant le lanceur qui le fait tourner
+Stop-ScheduledTask -TaskName "Muninn voix" -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "Muninn voix" -Confirm:$false -ErrorAction SilentlyContinue
 $declencheur = New-ScheduledTaskTrigger -AtStartup
 # compte « Service local » : droits limités (dossier de Muninn seulement), une faille ne donnerait pas la main sur le PC.
 # S'il ne démarre pas avec lui, retour au compte système (comme avant) pour que Muninn marche quand même.
 $limite = New-ScheduledTaskPrincipal -UserId "S-1-5-19" -LogonType ServiceAccount -RunLevel Limited
 $systeme = New-ScheduledTaskPrincipal -UserId "S-1-5-18" -LogonType ServiceAccount -RunLevel Highest
 $reglages = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
+# programmes de Muninn restés en marche (ancienne tâche arrêtée) : ils garderaient les ports 4747 et 4748
+function Arreter-Restes {
+  Get-CimInstance Win32_Process | Where-Object { $_.Name -in @("node.exe", "python.exe") -and $_.CommandLine -like "*$Dossier*" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
 function Lancer-Tache($nom, $act, $principal, $url) {
   Stop-ScheduledTask -TaskName $nom -ErrorAction SilentlyContinue
+  Arreter-Restes
   Unregister-ScheduledTask -TaskName $nom -Confirm:$false -ErrorAction SilentlyContinue
   Register-ScheduledTask -TaskName $nom -Action $act -Trigger $declencheur -Principal $principal -Settings $reglages | Out-Null
   Start-ScheduledTask -TaskName $nom
@@ -61,14 +75,21 @@ function Lancer-Tache($nom, $act, $principal, $url) {
   return $false
 }
 $compteMuninn = "Service local (droits limités)"
+$principalMuninn = $limite
 $pret = Lancer-Tache $tache $action $limite "http://127.0.0.1:$Port/"
 if (-not $pret) {
   Write-Host "Muninn ne démarre pas avec des droits limités : retour au compte système, comme avant." -ForegroundColor Yellow
   $compteMuninn = "système (comme avant)"
+  $principalMuninn = $systeme
   $pret = Lancer-Tache $tache $action $systeme "http://127.0.0.1:$Port/"
 }
 if (-not $pret) { Stop-Erreur "Muninn ne répond pas sur le PC." }
 Write-Host "Muninn est en marche (compte $compteMuninn) et redémarrera avec Windows."
+# PC branché sur secteur : jamais en veille, sinon les appareils ne le joignent plus (choix de Corentin du 11 novembre 2026).
+# L'écran peut s'éteindre ; sur batterie, le réglage de Windows ne change pas.
+powercfg /change standby-timeout-ac 0 | Out-Null
+powercfg /change hibernate-timeout-ac 0 | Out-Null
+Write-Host "Le PC ne se mettra plus en veille quand il est branché (l'écran peut s'éteindre)."
 
 Etape "4/6 Tailscale"
 $ts = "C:\Program Files\Tailscale\tailscale.exe"
@@ -113,11 +134,10 @@ else {
   $modele = if ($nvidia -or ($coeurs -ge 4 -and $memoire -ge 6)) { "large-v3-turbo" } else { "small" }
   [IO.File]::WriteAllText((Join-Path $Dossier "voix.json"), (@{ modele = $modele; gpu = $nvidia } | ConvertTo-Json))
   Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/voix.py" -OutFile (Join-Path $Dossier "voix.py")
-  $tacheVoix = "Muninn voix"
-  $actionVoix = New-ScheduledTaskAction -Execute $pyVoix -Argument "`"$(Join-Path $Dossier 'voix.py')`"" -WorkingDirectory $Dossier
   icacls (Join-Path $Dossier "*") /reset /T /C /Q | Out-Null
-  $compteVoix = "Service local (droits limités)"
-  $voixOk = Lancer-Tache $tacheVoix $actionVoix $limite "http://127.0.0.1:4748/etat"
+  # le lanceur, redémarré, voit maintenant voix.py et le fait tourner avec le partage
+  $compteVoix = $compteMuninn
+  $voixOk = Lancer-Tache $tache $action $principalMuninn "http://127.0.0.1:4748/etat"
   if ($voixOk) {
     # Whisper répond, mais doit aussi pouvoir charger son modèle avec ces droits : jusqu'à 2 minutes d'attente
     # (une erreur sans modèle prêt = droits insuffisants ; ni l'un ni l'autre = premier téléchargement en cours)
@@ -129,10 +149,11 @@ else {
     }
     if ($e -and -not $e.pret -and $e.erreur) { $voixOk = $false }
   }
-  if (-not $voixOk) {
+  if (-not $voixOk -and $principalMuninn -eq $limite) {
     Write-Host "Whisper ne démarre pas avec des droits limités : retour au compte système, comme avant." -ForegroundColor Yellow
     $compteVoix = "système (comme avant)"
-    $voixOk = Lancer-Tache $tacheVoix $actionVoix $systeme "http://127.0.0.1:4748/etat"
+    $compteMuninn = "système (comme avant)"
+    $voixOk = Lancer-Tache $tache $action $systeme "http://127.0.0.1:4748/etat"
   }
   if ($voixOk) {
     # la voix marche : ses versions sont gardées pour la prochaine installation
@@ -151,6 +172,8 @@ $Code = (Get-Content (Join-Path $Dossier "code.txt")).Trim()
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host " Muninn est installé sur ce PC." -ForegroundColor Green
+Write-Host " Il se met désormais à jour tout seul (au démarrage puis toutes les 6 heures)." -ForegroundColor Green
+Write-Host " Ne relancez cette ligne que si « État de l'appli » vous le demande." -ForegroundColor Green
 Write-Host ""
 Write-Host " Adresse du PC : $AdressePC" -ForegroundColor Yellow
 Write-Host " Code du PC    : $Code" -ForegroundColor Yellow

@@ -16,6 +16,7 @@ import traceback
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+VERSION = 2   # relevé par la mise à jour automatique du PC (lanceur.mjs) : l'augmenter à chaque changement
 DOSSIER = os.environ.get("MUNINN_DOSSIER") or os.path.join(os.environ.get("ProgramData", "C:\\ProgramData"), "Muninn")
 try:
     with open(os.path.join(DOSSIER, "voix.json"), encoding="utf-8") as f:
@@ -164,7 +165,7 @@ class Demandes(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/etat":
-            return self.repondre(200, etat)
+            return self.repondre(200, {**etat, "occupe": verrou.locked()})   # occupe : une transcription en cours
         self.repondre(404, {"erreur": "Introuvable."})
 
     def do_POST(self):

@@ -10,7 +10,8 @@
 //   code.txt       le code à taper sur chaque appareil ;
 //   rev-max.txt    le plus grand numéro de modification jamais enregistré (repère pour voir si la base est revenue en arrière) ;
 //   journal.log    ce qui s'est passé d'inhabituel (fichier abîmé, base reprise d'une copie), jamais le contenu des dossiers ;
-//   modeles/       le modèle de Whisper (voix.py, transcription de la voix sur le PC).
+//   modeles/       le modèle de Whisper (voix.py, transcription de la voix sur le PC) ;
+//   maj-etat.json  où en est la mise à jour automatique (écrit par lanceur.mjs depuis la 1.7.0, montré dans l'appli).
 import { createServer } from "node:http";
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
@@ -18,7 +19,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-const VERSION = 6;
+const VERSION = 7;
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -235,8 +236,11 @@ const ID_FICHIER = /^[A-Za-z0-9_-]{1,100}$/;
 
 async function api(req, res, url) {
   const chemin = url.pathname;
-  if (req.method === "GET" && chemin === "/api/sync/etat")
-    return json(req, res, 200, { muninn: true, version: VERSION, id: base.id, origine: base.origine, rev: base.rev, elements: Object.keys(base.elements).length });
+  if (req.method === "GET" && chemin === "/api/sync/etat") {
+    let maj = null;
+    try { maj = JSON.parse(await readFile(join(dossier, "maj-etat.json"), "utf8")); } catch { /* pas encore de lanceur */ }
+    return json(req, res, 200, { muninn: true, version: VERSION, id: base.id, origine: base.origine, rev: base.rev, elements: Object.keys(base.elements).length, maj });
+  }
 
   /* les modifications depuis le numéro donné, dans l'ordre */
   if (req.method === "GET" && chemin === "/api/sync/changements") {

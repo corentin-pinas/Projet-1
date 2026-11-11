@@ -12,7 +12,11 @@ export const PARAM_OK = "sync_ok";
 const PARAM_REV = "sync_rev", PARAM_QUITTE = "sync_adresse_quittee", PARAM_ID = "sync_base_pc";
 const PAQUET = 200;
 
-export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null; pcRevenu?: boolean };
+/* mise à jour automatique du PC (1.7.0) : ce que le lanceur du PC a noté ; null = pas encore de lanceur (ancienne installation) */
+export type MajPC = { verifie?: string; erreur?: string; relancer?: boolean; pc?: number; voix?: number; faites?: { nom: string; de: number; a: number; quand: string }[] } | null;
+export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null; pcRevenu?: boolean;
+  attente?: string | null;                      // plus vieux changement de cet appareil pas encore parti au PC (1.7.0)
+  pc?: { version: number; maj: MajPC } };
 let etat: EtatSync = { relie: false, enCours: false, derniere: null, erreur: null };
 const abonnes = new Set<() => void>();
 export function abonner(fn: () => void) { abonnes.add(fn); return () => abonnes.delete(fn); }
@@ -90,7 +94,8 @@ export async function delier() {
   if (adresse) await db.ecrireParametre(PARAM_QUITTE, adresse);
   await db.ecrireParametre(PARAM_ADRESSE, undefined);
   await db.ecrireParametre(PARAM_CODE, undefined);
-  maj({ relie: false, enCours: false, erreur: null, derniere: null });
+  ecrireAttente(null);
+  maj({ relie: false, enCours: false, erreur: null, derniere: null, attente: null });
 }
 
 /* ---------- l'échange ---------- */
@@ -114,7 +119,14 @@ function unSeul(): Promise<void> {
   return locks?.request ? locks.request("muninn-echange", () => unEchange()) : unEchange();
 }
 
+/* Changements pas encore partis au PC (1.7.0, choix de Corentin du 11 novembre 2026) : l'heure du plus ancien, gardée
+   dans cet appareil, pour le bandeau « pas encore partagés » quand le PC reste injoignable (PC en veille, Tailscale coupé). */
+const CLE_ATTENTE = "partage-attente";
+const lireAttente = (): string | null => { try { return localStorage.getItem(CLE_ATTENTE); } catch { return null; } };
+const ecrireAttente = (v: string | null) => { try { if (v) localStorage.setItem(CLE_ATTENTE, v); else localStorage.removeItem(CLE_ATTENTE); } catch { /* sans stockage */ } };
+
 async function unEchange() {
+  const debut = new Date().toISOString();
   const cfg = await config();
   if (!cfg) { if (etat.relie) maj({ relie: false }); return; }
   maj({ relie: true, enCours: true });
@@ -130,10 +142,13 @@ async function unEchange() {
     await recevoirFichiers(cfg);
     const quand = new Date().toISOString();
     await db.ecrireParametre(PARAM_OK, quand);
-    maj({ enCours: false, derniere: quand, erreur: null, pcRevenu: false });
+    const pc = await json<{ version?: number; maj?: MajPC }>(cfg, "/api/sync/etat").catch(() => null);
+    // les changements faits avant le début de cet échange sont partis
+    if (lireAttente() && lireAttente()! <= debut) ecrireAttente(null);
+    maj({ enCours: false, derniere: quand, erreur: null, pcRevenu: false, attente: lireAttente(), ...(pc ? { pc: { version: pc.version ?? 0, maj: pc.maj ?? null } } : {}) });
   } catch (e) {
     console.error("Partage avec le PC :", e);
-    maj({ enCours: false, erreur: e instanceof ErreurSync ? e.message : "L'échange avec le PC n'a pas abouti.", pcRevenu: e instanceof ErreurPCRevenu });
+    maj({ enCours: false, erreur: e instanceof ErreurSync ? e.message : "L'échange avec le PC n'a pas abouti.", pcRevenu: e instanceof ErreurPCRevenu, attente: lireAttente() });
   }
 }
 
@@ -245,8 +260,12 @@ const bientot = (ms: number) => { clearTimeout(minuterie); minuterie = setTimeou
 
 export async function brancher() {
   const [cfg, derniere] = await Promise.all([config(), db.lireParametre<string>(PARAM_OK)]);
-  maj({ relie: !!cfg, derniere: derniere ?? null });
-  db.abonner(() => { if (!applique) bientot(2_000); });
+  maj({ relie: !!cfg, derniere: derniere ?? null, attente: cfg ? lireAttente() : null });
+  db.abonner(() => {
+    if (applique) return;
+    if (etat.relie && !etat.enCours && !lireAttente()) { ecrireAttente(new Date().toISOString()); maj({ attente: lireAttente() }); }
+    bientot(2_000);
+  });
   setInterval(() => { if (!document.hidden) synchroniser(); }, 60_000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) synchroniser(); });
   addEventListener("online", () => synchroniser());
