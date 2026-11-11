@@ -105,7 +105,7 @@ async function afficher() {
         `<p class="prenomseul">⚠ <b>${esc(D.label)}</b> : rangé d'après le nom seul (pas de rendez-vous noté ce jour-là). Vérifiez que c'est bien ce patient.</p>`).join("")}
       ${[...new Set(dernier.range.map(r => r.dossierId))].map(id => parId.get(id)).filter((x): x is Dossier => !!x).map(D => {
         const q = questionRdv(D, seances, aujourdhui());
-        return q ? prochain.question(D, q, D.label) : "";
+        return (q ? prochain.question(D, q, D.label) : "") + prochain.retraits(D, D.label);
       }).join("")}
       ${sansSeanceCeJour(dossiers, seances, dernier.date).map(D => {
         const r = D.rdvs.find(x => x.d === dernier!.date);

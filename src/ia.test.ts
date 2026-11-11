@@ -47,7 +47,7 @@ describe("analyse d'une séance", () => {
 
   it("renvoie l'analyse et la consommation", async () => {
     const r = await analyserSeance("cle", "2026-10-02", dictee, false, faux({ propre: null, resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdv_date: "2026-10-09", rdv_heure: "08:00" }));
-    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false });
+    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [] });
     expect(r.usage).toEqual({ entree: 1000, sortie: 500 });
   });
 });
@@ -213,5 +213,20 @@ describe("fin de traitement dite dans la dictée", () => {
     expect(lireAnalyse({ propre: n, fin_traitement: true, rdv_date: "2026-11-20" }, n, false).fin).toBe(false);
     expect(promptSeance("2026-11-08", n, false)).toContain("fin_traitement");
     expect(promptDictee("2026-11-08", n, [])).toContain("fin_traitement");
+  });
+});
+
+describe("plusieurs rendez-vous et annulations dictés (11 novembre 2026)", () => {
+  it("lit les autres jours sans doublon et les annulations qui ne sont pas redonnées", () => {
+    const a = lireAnalyse({ rdv_date: "2026-11-10", rdv_autres: [{ date: "2026-11-12", demi: "après-midi" }, { date: "2026-11-10", demi: null }, { date: "pas une date", demi: null }, { date: "2026-11-16", demi: null }],
+      rdv_annules: ["2026-11-13", "2026-11-12", "n'importe quoi"], fin_traitement: true }, "on se voit mardi jeudi après-midi et lundi", false);
+    expect(a.autres).toEqual([{ d: "2026-11-12", demi: "pm" }, { d: "2026-11-16", demi: "" }]);
+    expect(a.annules).toEqual(["2026-11-13"]);
+    expect(a.fin).toBe(false);
+  });
+  it("le schéma et la consigne demandent rdv_autres et rdv_annules", () => {
+    const p = promptSeance("2026-11-09", "on se voit mardi jeudi et lundi prochain", false);
+    expect(p).toContain('"rdv_autres"');
+    expect(p).toContain('"rdv_annules"');
   });
 });

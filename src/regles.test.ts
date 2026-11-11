@@ -388,3 +388,27 @@ describe("alerte « sans rendez-vous » (1.5.2)", () => {
     expect(sansRendezVous([d], [], [], "2026-12-05")).toHaveLength(1);
   });
 });
+
+/* plusieurs rendez-vous dictés d'un coup, rendez-vous dits annulés (choix de Corentin du 11 novembre 2026) */
+import { aRetirer, poserRdvs } from "./regles";
+describe("poserRdvs", () => {
+  it("pose chaque jour dit, avec la demi-journée de la séance quand elle n'est pas dite", () => {
+    const l = poserRdvs([], [{ d: "2026-11-10", h: "", demi: "" }, { d: "2026-11-12", h: "", demi: "pm" }, { d: "2026-11-16", h: "", demi: "" }], "am");
+    expect(l.map(r => [r.d, r.p])).toEqual([["2026-11-10", "am"], ["2026-11-12", "pm"], ["2026-11-16", "am"]]);
+  });
+  it("redonner les mêmes jours ne crée aucun doublon ; un jour déjà posé ne change que si matin ou après-midi est dit", () => {
+    const avant = poserRdvs([], [{ d: "2026-11-12", h: "", demi: "pm" }, { d: "2026-11-16", h: "", demi: "" }], "am");
+    const apres = poserRdvs(avant, [{ d: "2026-11-12", h: "", demi: "" }, { d: "2026-11-16", h: "", demi: "pm" }, { d: "2026-11-17", h: "", demi: "" }], "am");
+    expect(apres.map(r => [r.d, r.p])).toEqual([["2026-11-12", "pm"], ["2026-11-16", "pm"], ["2026-11-17", "am"]]);
+  });
+  it("garde le type « bilan » d'un rendez-vous déjà posé", () => {
+    const l = poserRdvs([{ d: "2026-11-12", h: "", t: "bilan", p: "am" }], [{ d: "2026-11-12", h: "", demi: "pm" }], null);
+    expect(l).toEqual([{ d: "2026-11-12", h: "", t: "bilan", p: "pm" }]);
+  });
+});
+describe("aRetirer", () => {
+  it("ne propose que les rendez-vous dits annulés, encore posés et à venir", () => {
+    const D = { id: "p", label: "Philippe D.", rdvs: [{ d: "2026-11-05", h: "" }, { d: "2026-11-12", h: "" }], homonyme: false, cree: "", retirer: ["2026-11-05", "2026-11-12", "2026-11-12", "2026-11-19"] };
+    expect(aRetirer(D, "2026-11-10")).toEqual(["2026-11-12"]);
+  });
+});

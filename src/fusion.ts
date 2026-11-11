@@ -25,6 +25,7 @@ const IDENTITES: Record<string, (x: unknown) => string> = {
   corrections: x => String((x as Objet)?.quand) + "|" + String((x as Objet)?.point),
   valides: x => String(x),
   absences: x => String(x),                                                      // un jour d'absence
+  retirer: x => String(x),                                                       // un rendez-vous dit annulé, à confirmer
   dictees: x => String((x as Objet)?.id)                                         // une dictée gardée
 };
 

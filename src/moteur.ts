@@ -3,7 +3,7 @@
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
-import { avecRdv, avenirFrom, empreinteTexte, estArchive, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
+import { avenirFrom, demiDe, poserRdvs, empreinteTexte, estArchive, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -268,12 +268,30 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
     await db.finTraitement(dossier.id, se.date);
     return "Fin de traitement notée pour " + dossier.label + " : dossier archivé (« Rouvrir le dossier » sur sa fiche en cas d'erreur).";
   }
-  if (!(a.rdvDate && a.rdvDate >= isoDay(new Date()) && derniere && dossier)) return null;
-  // matin ou après-midi pas dit : même demi-journée que la séance (choix de Corentin, 5 novembre 2026) ;
-  // les rendez-vous passés sont gardés (historique, futures absences)
-  const demi = a.rdvDemi || demiSeance(dossier.rdvs, se.date);
-  await db.modifierRdvs(dossier.id, rdvs => avecRdv(rdvs, a.rdvDate, a.rdvHeure, undefined, demi));
-  return "Rendez-vous repéré pour " + dossier.label + " : " + jourLabel(a.rdvDate, new Date()).toLowerCase() + (demi ? " " + DEMI_FR[demi] : "") + ".";
+  if (!(derniere && dossier)) return null;
+  const auj = isoDay(new Date());
+  /* tous les rendez-vous dits (choix de Corentin du 11 novembre 2026) ; matin ou après-midi pas dit : même demi-journée
+     que la séance (5 novembre 2026) ; les rendez-vous passés sont gardés (historique, futures absences) */
+  const dictes = [...(a.rdvDate ? [{ d: a.rdvDate, h: a.rdvHeure, demi: a.rdvDemi }] : []), ...(a.autres ?? []).map(x => ({ d: x.d, h: "", demi: x.demi }))]
+    .filter(x => x.d >= auj);
+  const demiDefaut = demiSeance(dossier.rdvs, se.date);
+  const messages: string[] = [];
+  if (dictes.length) {
+    await db.modifierRdvs(dossier.id, rdvs => poserRdvs(rdvs, dictes, demiDefaut));
+    // un jour redonné n'est plus à proposer au retrait
+    if (dossier.retirer?.some(d => dictes.some(x => x.d === d)))
+      await db.modifierDossier(dossier.id, d => ({ ...d, retirer: (d.retirer ?? []).filter(j => !dictes.some(x => x.d === j)) }));
+    const apres = (await db.tout()).dossiers.find(d => d.id === dossier.id)?.rdvs ?? [];
+    const jours = dictes.map(x => { const r = apres.find(y => y.d === x.d), dm = r ? demiDe(r) : null; return jourLabel(x.d, new Date()).toLowerCase() + (dm ? " " + DEMI_FR[dm] : ""); });
+    messages.push((jours.length > 1 ? "Rendez-vous repérés pour " : "Rendez-vous repéré pour ") + dossier.label + " : " + jours.join(", ") + ".");
+  }
+  /* rendez-vous dits annulés : jamais retirés tout seuls, Muninn propose de les enlever (fiche et récapitulatif) */
+  const annules = (a.annules ?? []).filter(d => d >= auj && dossier.rdvs.some(r => r.d === d));
+  if (annules.length) {
+    await db.modifierDossier(dossier.id, d => ({ ...d, retirer: [...new Set([...(d.retirer ?? []), ...annules])] }));
+    messages.push("Rendez-vous dit annulé pour " + dossier.label + " : " + annules.map(d => jourLabel(d, new Date()).toLowerCase()).join(", ") + ". À confirmer.");
+  }
+  return messages.length ? messages.join(" ") : null;
 }
 
 /* Après l'enregistrement d'une séance : mise au propre de la dictée, résumé du « À venir » et,

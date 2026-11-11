@@ -193,6 +193,7 @@ export function renderMain() {
   const qrdv = rdvOpen ? null : questionRdv(D, donnees.seances, aujourdhui());
   const derniere = qrdv ? seancesDe(D).find(s => s.date === qrdv) : undefined;
   if (qrdv && derniere && !moteur.occupe(derniere.id) && (derniere.ia_ok || !aCle)) html += prochain.question(D, qrdv);
+  html += prochain.retraits(D);   // rendez-vous dits annulés : à confirmer
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>

@@ -25,6 +25,7 @@ export type Dossier = {
   fin?: string;                                       // fin de traitement, notée à la séance de ce jour (AAAA-MM-JJ) : le dossier est archivé
   calme?: string;                                     // « C'est normal » répondu à l'alerte « sans rendez-vous » ce jour-là (AAAA-MM-JJ)
   absences?: string[];                                // jours de rendez-vous où le patient n'est pas venu (AAAA-MM-JJ)
+  retirer?: string[];                                 // rendez-vous dits annulés dans une dictée, à confirmer (AAAA-MM-JJ)
 };
 
 /* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
@@ -236,6 +237,24 @@ export function rdvsAVenir(rdvs: Rdv[], aujourdhui: string): Rdv[] {
 
 export const avecRdv = (list: Rdv[], d: string, h: string, t?: "bilan" | "seance", p?: Demi | null) =>
   list.filter(r => r.d !== d).concat([copieRdv({ d, h: h || "", ...(t === "bilan" ? { t: "bilan" as const } : {}), ...(p ? { p } : {}) })]).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+
+/* Plusieurs rendez-vous dictés d'un coup (choix de Corentin du 11 novembre 2026) : « on se voit mardi, jeudi et lundi
+   prochain ». Chaque jour est posé ; un jour déjà posé n'est pas doublé (un rendez-vous par jour) et n'est changé que si
+   la dictée précise matin ou après-midi. demiDefaut : matin / après-midi non dit → celle de la séance. Rien n'est retiré. */
+export type RdvDicte = { d: string; h: string; demi: Demi | "" };
+export function poserRdvs(list: Rdv[], dictes: RdvDicte[], demiDefaut: Demi | null): Rdv[] {
+  let l = list;
+  for (const x of dictes) {
+    const deja = l.find(r => r.d === x.d);
+    if (deja && !x.demi) continue;
+    l = avecRdv(l, x.d, x.h || (deja?.h ?? ""), deja?.t, x.demi || demiDefaut);
+  }
+  return l;
+}
+
+/* rendez-vous dits annulés dans une dictée, encore posés et à venir : Muninn propose de les enlever (jamais tout seul) */
+export const aRetirer = (D: Dossier, auj: string) =>
+  [...new Set(D.retirer ?? [])].filter(d => d >= auj && D.rdvs.some(r => r.d === d)).sort();
 
 /* demi-journée de la séance d'un jour : celle du rendez-vous de ce jour-là, si elle est connue */
 export function demiSeance(rdvs: Rdv[], date: string): Demi | null {
