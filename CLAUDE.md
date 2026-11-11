@@ -1,6 +1,6 @@
 # CLAUDE.md — Appli de suivi patients (kinésithérapie)
 
-> **Point de reprise le plus récent : `REPRISE.md`** (état au 8 novembre 2026, version 1.5.8 en production, nettoyage de l'audit terminé (restent E3 partie 2, F8, M9, F9-g), décisions, prochaines étapes).
+> **Point de reprise le plus récent : `REPRISE.md`** (état au 11 novembre 2026, version 1.6.0 en production, nettoyage de l'audit terminé (restent E3 partie 2, F8, M9), décisions, prochaines étapes).
 
 Contexte repris du travail fait dans claude.ai (projet « Gestion Patient assistée »), le 2 octobre 2026.
 Source complète : `reference/contexte-claude-ai.pdf`. Code de la version d'essai : `reference/bilans-seances-essai.html`.
