@@ -5,6 +5,7 @@ import * as db from "./db";
 import { ErreurIA } from "./ia";
 import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
+import * as objectifs from "./objectifs";
 import { phrase, Relanceur } from "./relance";
 import * as manquantes from "./seances-manquantes";
 import { Enregistreur } from "./enregistreur";
@@ -105,7 +106,7 @@ async function afficher() {
         `<p class="prenomseul">⚠ <b>${esc(D.label)}</b> : rangé d'après le nom seul (pas de rendez-vous noté ce jour-là). Vérifiez que c'est bien ce patient.</p>`).join("")}
       ${[...new Set(dernier.range.map(r => r.dossierId))].map(id => parId.get(id)).filter((x): x is Dossier => !!x).map(D => {
         const q = questionRdv(D, seances, aujourdhui());
-        return (q ? prochain.question(D, q, D.label) : "") + prochain.retraits(D, D.label);
+        return (q ? prochain.question(D, q, D.label) : "") + prochain.retraits(D, D.label) + objectifs.proposition(D, D.label);
       }).join("")}
       ${sansSeanceCeJour(dossiers, seances, dernier.date).map(D => {
         const r = D.rdvs.find(x => x.d === dernier!.date);
@@ -159,6 +160,7 @@ const nouveauNom = (dicte: string) => dicte.trim().includes(" ") ? patientFrom(d
 
 function brancher(z: HTMLElement) {
   prochain.brancher(z, () => { afficher(); });
+  objectifs.brancher(z, null, () => { afficher(); });
   manquantes.brancher(z, () => { afficher(); });
   enr.brancher(z);
 

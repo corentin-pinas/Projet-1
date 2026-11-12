@@ -291,6 +291,11 @@ async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<st
     await db.modifierDossier(dossier.id, d => ({ ...d, retirer: [...new Set([...(d.retirer ?? []), ...annules])] }));
     messages.push("Rendez-vous dit annulé pour " + dossier.label + " : " + annules.map(d => jourLabel(d, new Date()).toLowerCase()).join(", ") + ". À confirmer.");
   }
+  /* objectifs dits dans la dictée : proposés sur la fiche et dans le récapitulatif (1.8.0), jamais appliqués tout seuls */
+  if (a.objectifs?.length) {
+    await db.modifierDossier(dossier.id, d => ({ ...d, objectifs_propose: { liste: a.objectifs!, date: se.date } }));
+    messages.push("Objectif dit pour " + dossier.label + " : à confirmer sur sa fiche.");
+  }
   return messages.length ? messages.join(" ") : null;
 }
 

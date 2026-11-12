@@ -60,11 +60,11 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | Module | Rôle | Dépend de |
 |---|---|---|
 | `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, fenetres, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, ui, verifications |
-| `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, pdf, prochain-rdv, regles, seances-manquantes, ui, voix-seance |
+| `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, objectifs, pdf, prochain-rdv, regles, seances-manquantes, ui, voix-seance |
 | `journee.ts` | « Ma journée », avec l'alerte « sans rendez-vous » (30 jours ; archivage proposé à 3 mois) | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
 | `transmissions.ts`, `transmissions-pdf.ts` | transmissions pour un remplaçant et leur PDF (sans IA) | db, regles, ui |
-| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, prochain-rdv, regles, relance, seances-manquantes, transcription, ui |
+| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, objectifs, prochain-rdv, regles, relance, seances-manquantes, transcription, ui |
 | `voix-seance.ts` | « Enregistrer ma séance » sur la fiche | db, enregistreur, ui |
 | `enregistreur.ts` | l'enregistreur de voix commun (micro, chrono, texte en direct, voix gardée, transcription, relances, boutons) | ia, relance, transcription, ui |
 | `relance.ts` | relances automatiques après un échec (5 minutes, 3 essais au plus, selon la cause), compte à rebours | ia |
@@ -76,6 +76,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `reglages-ia.ts` | réglages de l'IA (abonnement, clé de secours) | db, ia, moteur, regles, ui |
 | `seances-manquantes.ts` | jour de rendez-vous passé sans séance (fiche et récapitulatif de la dictée) : retrouver le patient dans la dictée gardée, ou noter l'absence | db, ia, moteur, regles, ui |
 | `prochain-rdv.ts` | question « Prochain rendez-vous ? » (date + matin / après-midi, ou fin de traitement), sur la fiche et après la dictée groupée | db, regles, ui |
+| `objectifs.ts` | objectifs du patient : encadré de la fiche (lus dans le bilan, « Modifier »), objectifs dits dans une dictée proposés (« Remplacer », « Ajouter », « Ignorer ») | db, regles, ui |
 | `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées ; un travail par fenêtre (`navigator.locks`) | db, ia, pdf, regles, relance |
 | `ia.ts` | consignes données à l'IA, garde-fous, appels | regles |
 | `synchro.ts`, `fusion.ts` | échanges avec le PC ; fusion de deux changements faits sur deux appareils | db, fusion, regles |

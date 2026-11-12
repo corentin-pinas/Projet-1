@@ -74,33 +74,35 @@ export function fabriquerPdf({ du, au, mot, patients, joursVides }: OptionsPdf):
     if (r?.region) doc.setFontSize(11).setTextColor(encre).text(propre(r.region), M + LARG - 3, y + 8, { align: "right" });
     y += 16;
     champ("Rendez-vous", t.rdvs.map(rdvTexte).join(" ; "));
-    if (t.avenir) {
-      y += 1;
-      texte("Prévu pour la suite" + ` (noté le ${frDate(t.avenir.s.date)})`, { gras: true, couleur: accent, apres: 0.3 });
-      texte(t.avenir.texte, { apres: 3 });
-    }
+    y += 1;
 
+    /* Allégé le 12 novembre 2026 (choix de Corentin) : l'essentiel du bilan, la dernière séance, les objectifs */
     texte(r ? `Bilan${r.date_bilan ? " du " + r.date_bilan : ""}` : t.bilan ? "Bilan (pas encore résumé)" : "Bilan", { taille: 12, gras: true, couleur: accent });
     if (r) {
       if (r.coup_oeil) texte(r.coup_oeil, { apres: 2 });
       const chiffres = (r.chiffres || []).filter(c => !/^[âa]ge\b/i.test(c.label));   // l'âge est déjà dans le titre
       if (chiffres.length) champ("Chiffres", chiffres.map(c => `${c.label} ${c.valeur}`).join(" · "));
-      for (const s of r.sections || []) if (s.items?.length) champ(s.titre, s.items.join(" ; "));
     } else texte(t.bilan ? "Le résumé du bilan n'a pas encore été fait : voir le bilan complet." : t.rdvs.some(x => x.t === "bilan") ? "Premier bilan prévu pendant la période." : "Pas de bilan dans l'appli.", { couleur: doux });
     y += 2;
 
-    place(30);   // le titre ne reste pas seul en bas de page
-    texte("Séances", { taille: 12, gras: true, couleur: accent });
-    if (!t.seances.length) texte("Aucune séance notée.", { couleur: doux });
+    place(24);   // le titre ne reste pas seul en bas de page
+    const s = t.seances[0];
+    texte(s ? `Dernière séance, le ${frDate(s.date)}` : "Dernière séance", { taille: 12, gras: true, couleur: accent });
+    if (!s) texte("Aucune séance notée.", { couleur: doux });
     else {
-      const premiere = t.seances[t.seances.length - 1];
-      texte(`${t.seances.length} séance${t.seances.length > 1 ? "s" : ""} notée${t.seances.length > 1 ? "s" : ""} depuis le ${frDate(premiere.date)}.`, { couleur: doux, apres: 2 });
-      t.seances.slice(0, 2).forEach((s, i) => {
-        place(14);
-        texte(`${i ? "Séance précédente" : "Dernière séance"}, le ${frDate(s.date)}`, { gras: true, apres: 0.5 });
-        for (const l of texteDe(s).split("\n").filter(x => x.trim())) texte(l, { retrait: 3, apres: 0.5 });
-        y += 2;
-      });
+      texte(`${t.seances.length} séance${t.seances.length > 1 ? "s" : ""} depuis le ${frDate(t.seances[t.seances.length - 1].date)}.`, { couleur: doux, apres: 1 });
+      for (const l of texteDe(s).split("\n").filter(x => x.trim())) texte(l, { retrait: 3, apres: 0.5 });
+    }
+    y += 2;
+
+    place(20);
+    texte("Objectifs", { taille: 12, gras: true, couleur: accent });
+    if (t.objectifs) for (const o of t.objectifs.liste) texte("- " + o, { retrait: 3, apres: 0.5 });
+    else texte("Pas d'objectifs notés pour ce patient.", { couleur: doux });
+    if (t.avenir) {
+      y += 1;
+      texte(`Pour la prochaine séance (noté le ${frDate(t.avenir.s.date)})`, { gras: true, apres: 0.3 });
+      texte(t.avenir.texte, { retrait: 3, apres: 1 });
     }
     y += 4;
   });

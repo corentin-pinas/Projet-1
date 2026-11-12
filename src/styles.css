@@ -511,3 +511,10 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 /* téléphone : fiche et dictée groupée en plein écran, sans l'accueil au-dessus (1.5.6) */
 @media (max-width:820px){body.fiche-ouverte .side{display:none}}
 .jsaut{color:var(--soft);font-size:.95rem;margin-top:2px}
+
+/* objectifs du patient (1.8.0) */
+.objectifs{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;margin-top:12px}
+.objectifs .objtete{display:flex;align-items:center;gap:12px}
+.objectifs ul,.objpropose ul{margin:6px 0 4px;padding-left:22px}
+.objectifs textarea{width:100%;margin:6px 0;min-height:90px}
+.objectifs .note{margin:2px 0 0}

@@ -47,7 +47,7 @@ describe("analyse d'une séance", () => {
 
   it("renvoie l'analyse et la consommation", async () => {
     const r = await analyserSeance("cle", "2026-10-02", dictee, false, faux({ propre: null, resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdv_date: "2026-10-09", rdv_heure: "08:00" }));
-    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [] });
+    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [], objectifs: [] });
     expect(r.usage).toEqual({ entree: 1000, sortie: 500 });
   });
 });
@@ -87,7 +87,7 @@ describe("résumé d'un bilan", () => {
 
   it("nettoie une réponse imparfaite", () => {
     const r = normaliserResume({ region: " Épaule D ", date_bilan: "2026-09-18", age: 52.4, coup_oeil: "Douleur.", chiffres: [{ label: "EVA", valeur: "5/10" }, { label: "", valeur: "x" }], sections: [{ titre: "Examen", items: ["Jobe +", ""] }, { titre: "Vide", items: [] }], a_verifier: "pas une liste" });
-    expect(r).toEqual({ region: "Épaule D", date_bilan: "", age: 52, coup_oeil: "Douleur.", chiffres: [{ label: "EVA", valeur: "5/10" }], sections: [{ titre: "Examen", items: ["Jobe +"] }], a_verifier: [] });
+    expect(r).toEqual({ region: "Épaule D", date_bilan: "", age: 52, coup_oeil: "Douleur.", chiffres: [{ label: "EVA", valeur: "5/10" }], sections: [{ titre: "Examen", items: ["Jobe +"] }], objectifs: [], a_verifier: [] });
   });
 
   it("refuse un résumé vide", async () => {
@@ -228,5 +228,14 @@ describe("plusieurs rendez-vous et annulations dictés (11 novembre 2026)", () =
     const p = promptSeance("2026-11-09", "on se voit mardi jeudi et lundi prochain", false);
     expect(p).toContain('"rdv_autres"');
     expect(p).toContain('"rdv_annules"');
+  });
+});
+
+
+describe("objectifs (12 novembre 2026)", () => {
+  it("le résumé du bilan garde les objectifs du patient ; une dictée rend ceux qu'elle énonce", () => {
+    expect(normaliserResume({ objectifs: [" Se coiffer sans douleur ", "", 3] }).objectifs).toEqual(["Se coiffer sans douleur"]);
+    expect(lireAnalyse({ objectifs: ["Courir 20 minutes", 5, " "] }, "nouvel objectif courir 20 minutes", false).objectifs).toEqual(["Courir 20 minutes"]);
+    expect(promptSeance("2026-11-12", "nouvel objectif courir", false)).toContain('"objectifs"');
   });
 });

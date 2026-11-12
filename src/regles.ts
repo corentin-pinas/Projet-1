@@ -13,8 +13,13 @@ export type Resume = {
   coup_oeil?: string;
   chiffres?: { label: string; valeur: string }[];
   sections?: { titre: string; items: string[] }[];
+  objectifs?: string[];                               // objectifs du patient lus dans le bilan (SMART ou ailleurs), depuis 1.8.0
   a_verifier?: string[];
 };
+
+/* Objectifs du patient (1.8.0, choix de Corentin du 12 novembre 2026) : lus dans le bilan au départ, puis modifiés à la
+   main ou proposés par une dictée (jamais changés sans son accord). La version la plus récente compte, l'historique est gardé. */
+export type Objectifs = { liste: string[]; maj: string; source: "bilan" | "main" | "dictee" };
 
 export type Dossier = {
   id: string;
@@ -26,6 +31,9 @@ export type Dossier = {
   calme?: string;                                     // « C'est normal » répondu à l'alerte « sans rendez-vous » ce jour-là (AAAA-MM-JJ)
   absences?: string[];                                // jours de rendez-vous où le patient n'est pas venu (AAAA-MM-JJ)
   retirer?: string[];                                 // rendez-vous dits annulés dans une dictée, à confirmer (AAAA-MM-JJ)
+  objectifs?: Objectifs;                              // objectifs actuels du patient (sinon : ceux du bilan)
+  objectifs_hist?: Objectifs[];                       // versions précédentes, la plus récente d'abord (10 au plus)
+  objectifs_propose?: { liste: string[]; date: string };   // objectifs dits dans une dictée, à confirmer
 };
 
 /* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
@@ -485,6 +493,7 @@ export type Transmission = {
   rdvs: Rdv[];                                       // rendez-vous de la période, dans l'ordre
   seances: Seance[];                                 // toutes ses séances, de la plus récente à la plus ancienne
   avenir: ReturnType<typeof avenirDe>;               // ce qui est prévu pour la suite (dernière séance)
+  objectifs: Objectifs | null;                       // objectifs actuels du patient (1.8.0)
 };
 
 /* Les patients qui ont au moins un rendez-vous entre du et au (inclus), dans l'ordre de leur premier rendez-vous. */
@@ -493,7 +502,7 @@ export function transmissions(dossiers: Dossier[], bilans: Bilan[], seances: Sea
     .map(d => {
       const b = trierBilans(bilans.filter(x => x.dossierId === d.id)), s = trierSeances(seances.filter(x => x.dossierId === d.id));
       const rdvs = d.rdvs.filter(r => r.d >= du && r.d <= au).sort((x, y) => rdvKey(x) < rdvKey(y) ? -1 : 1);
-      return { dossier: d, age: ageDossier(b), bilan: b[0] ?? null, rdvs, seances: s, avenir: avenirDe(s) };
+      return { dossier: d, age: ageDossier(b), bilan: b[0] ?? null, rdvs, seances: s, avenir: avenirDe(s), objectifs: objectifsDe(d, bilans) };
     })
     .filter(t => t.rdvs.length)
     .sort((x, y) => rdvKey(x.rdvs[0]) < rdvKey(y.rdvs[0]) ? -1 : rdvKey(x.rdvs[0]) > rdvKey(y.rdvs[0]) ? 1 : x.dossier.label.localeCompare(y.dossier.label, "fr"));
@@ -567,3 +576,24 @@ export const jourLong = (iso: string) => { const [y, m, d] = iso.split("-").map(
 export const jourCourt = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); };
 /* « 1 patient », « 3 patients » */
 export const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+
+/* ---------- objectifs du patient (1.8.0) ---------- */
+
+/* les objectifs actuels : ceux du dossier, sinon ceux du bilan le plus récent (champ objectifs, ou rubrique « Objectifs ») */
+export function objectifsDe(D: Dossier, bilans: Bilan[]): Objectifs | null {
+  if (D.objectifs) return D.objectifs.liste.length ? D.objectifs : null;
+  for (const b of trierBilans(bilans.filter(x => x.dossierId === D.id))) {
+    const r = b.resume;
+    if (!r) continue;
+    const liste = r.objectifs?.length ? r.objectifs : (r.sections ?? []).filter(s => /objectif/i.test(s.titre)).flatMap(s => s.items);
+    if (liste.length) return { liste, maj: b.ajoute, source: "bilan" };
+  }
+  return null;
+}
+
+/* nouveaux objectifs : l'ancienne version passe dans l'historique */
+export function avecObjectifs(D: Dossier, liste: string[], source: Objectifs["source"], quand: string, actuels: Objectifs | null): Dossier {
+  const propre = [...new Set(liste.map(x => x.trim()).filter(Boolean))].slice(0, 12);
+  const hist = actuels ? [actuels, ...(D.objectifs_hist ?? [])].slice(0, 10) : D.objectifs_hist;
+  return { ...D, objectifs: { liste: propre, maj: quand, source }, ...(hist ? { objectifs_hist: hist } : {}) };
+}

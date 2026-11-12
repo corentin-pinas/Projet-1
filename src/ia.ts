@@ -131,7 +131,7 @@ const texteOuNul = { anyOf: [{ type: "string" }, { type: "null" }] };
 export const SCHEMA_RESUME = {
   type: "object",
   additionalProperties: false,
-  required: ["region", "date_bilan", "age", "coup_oeil", "chiffres", "sections", "a_verifier"],
+  required: ["region", "date_bilan", "age", "coup_oeil", "chiffres", "sections", "objectifs", "a_verifier"],
   properties: {
     region: { type: "string" },
     date_bilan: texteOuNul,
@@ -148,6 +148,7 @@ export const SCHEMA_RESUME = {
         properties: { titre: { type: "string" }, items: { type: "array", items: { type: "string" } } }
       }
     },
+    objectifs: { type: "array", items: { type: "string" } },
     a_verifier: { type: "array", items: { type: "string" } }
   }
 };
@@ -169,6 +170,7 @@ export function systemeBilan(corrections: Correction[], confirmees: string[] = [
     "- coup_oeil : deux ou trois phrases courtes : motif, ancienneté, ce qui limite, éléments marquants de l'examen.",
     "- chiffres : les mesures clés telles qu'écrites (EVA, amplitudes, force, scores), avec l'âge en premier s'il est connu. Libellés courts.",
     "- sections : le reste du bilan rangé par rubriques (Anamnèse, Examen, Tests, Objectifs… selon le bilan), en items courts.",
+    "- objectifs : les objectifs du patient (objectifs SMART de la trame, ou objectifs écrits ailleurs dans le bilan), un par item, avec ses mots ; [] s'il n'y en a pas. Ne les invente pas.",
     "- a_verifier : chaque lecture incertaine (écriture difficile, abréviation inconnue, valeur ambiguë), formulée pour que le kiné réponde « c'est juste » ou corrige.",
     "",
     "Conventions de ses bilans manuscrits : MVT = mouvement ; « + » entouré = test positif ; « − » entouré = test négatif ; rond barré = non fait ;",
@@ -219,6 +221,7 @@ export function normaliserResume(x: unknown): Resume {
       titre: str((s as Record<string, unknown>)?.titre),
       items: liste((s as Record<string, unknown>)?.items).map(str).filter(Boolean)
     })).filter(s => s.titre && s.items.length),
+    objectifs: liste(o.objectifs).map(str).filter(Boolean).slice(0, 12),
     a_verifier: liste(o.a_verifier).map(str).filter(Boolean)
   };
 }
@@ -246,7 +249,7 @@ export async function resumerBilan(cle: string, pieces: PieceBilan[], correction
 
 /* ---------- report d'une correction dans le résumé ---------- */
 
-const longueurResume = (r: Resume) => JSON.stringify({ ...r, a_verifier: [] }).length;
+const longueurResume = (r: Resume) => JSON.stringify({ ...r, a_verifier: [], objectifs: r.objectifs ?? [] }).length;   // objectifs toujours comptés pareil (1.8.0)
 
 export function promptCorrection(resume: Resume, corrections: Correction[]): string {
   return "Voici le résumé d'un bilan de kinésithérapie, au format JSON, puis des corrections faites par le kinésithérapeute sur des points de lecture incertains.\n" +
@@ -335,14 +338,17 @@ export const parleRdv = (t: string) => /rendez[- ]?vous|\brdv\b|prochain|revoi|s
 /* plusieurs rendez-vous dictés, et rendez-vous dits annulés (choix de Corentin du 11 novembre 2026) */
 const RDV_AUTRES = { type: "array", items: { type: "object", additionalProperties: false, required: ["date", "demi"], properties: { date: { type: "string" }, demi: { type: ["string", "null"] } } } };
 const RDV_ANNULES = { type: "array", items: { type: "string" } };
+/* objectifs du patient dits dans une dictée (1.8.0) : proposés à Corentin, jamais appliqués tout seuls */
+const OBJECTIFS = { type: "array", items: { type: "string" } };
+const CONSIGNE_OBJECTIFS = "les objectifs du patient que la note énonce ou modifie (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Pas ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.";
 const CONSIGNE_AUTRES = "les AUTRES séances à venir annoncées en plus de rdv_date (« lundi, mardi et jeudi prochain » : rdv_date = la première, rdv_autres = les suivantes), chacune {\"date\": AAAA-MM-JJ lue dans le calendrier, \"demi\": « matin », « après-midi » ou null si ce n'est pas dit pour ce jour-là}. [] s'il n'y en a pas. Ne devine pas.";
 const CONSIGNE_ANNULES = "les dates (AAAA-MM-JJ, lues dans le calendrier) des séances que la note dit annulées ou qui n'ont plus lieu (« finalement plus jeudi », « on annule mardi », « pas de séance lundi »). [] sinon. Ne devine pas.";
 
 export const SCHEMA_SEANCE = {
   type: "object",
   additionalProperties: false,
-  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "fin_traitement"],
-  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, fin_traitement: { type: "boolean" } }
+  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "fin_traitement"],
+  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, fin_traitement: { type: "boolean" } }
 };
 
 export function promptSeance(date: string, contenu: string, sansPropre: boolean): string {
@@ -359,8 +365,9 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
     '- "rdv_autres" : ' + CONSIGNE_AUTRES + "\n" +
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
+    '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"fin_traitement":false}\n\n' +
+    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"fin_traitement":false}\n\n' +
     "Note complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
 }
 
@@ -381,7 +388,7 @@ const okHeure = (v: unknown) => {
 };
 
 export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string; rdvDemi: Demi | ""; fin?: boolean;
-  autres?: { d: string; demi: Demi | "" }[]; annules?: string[] };
+  autres?: { d: string; demi: Demi | "" }[]; annules?: string[]; objectifs?: string[] };
 
 /* Lecture de la réponse avec les garde-fous de la version d'essai :
    une mise au propre beaucoup plus courte que la dictée a sans doute perdu des informations, on ne la retient pas. */
@@ -405,7 +412,8 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
     rdvHeure: rdvDate ? okHeure(o.rdv_heure) : "",
     rdvDemi: rdvDate ? okDemi(o.rdv_demi, okHeure(o.rdv_heure)) : "",
     fin: o.fin_traitement === true && !rdvDate && !autres.length,   // un prochain rendez-vous dit en même temps : ce n'est pas la fin
-    autres, annules
+    autres, annules,
+    objectifs: (Array.isArray(o.objectifs) ? o.objectifs : []).filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(Boolean).slice(0, 12)
   };
 }
 
@@ -423,8 +431,8 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
 
 const SEANCE_DICTEE = {
   type: "object", additionalProperties: false,
-  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "fin_traitement"],
-  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, fin_traitement: { type: "boolean" } }
+  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "fin_traitement"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, fin_traitement: { type: "boolean" } }
 };
 export const SCHEMA_DICTEE = {
   type: "object", additionalProperties: false, required: ["seances"],
@@ -451,8 +459,9 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "rdv_demi" : ' + CONSIGNE_DEMI + "\n" +
     '- "rdv_autres" : ' + CONSIGNE_AUTRES + "\n" +
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
+    '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"fin_traitement":false}]}\n\n' +
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"fin_traitement":false}]}\n\n' +
     "Dictée :\n" + texte.slice(0, MAX_DICTEE);
 }
 

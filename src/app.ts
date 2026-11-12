@@ -13,6 +13,7 @@ import * as journee from "./journee";
 import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
 import * as manquantes from "./seances-manquantes";
+import * as objectifs from "./objectifs";
 import * as voixSeance from "./voix-seance";
 import { $, confirmer, esc, toast } from "./ui";
 
@@ -27,7 +28,7 @@ let nomOpen = false;                      // modification du nom du patient en c
 /* une saisie est en cours sur la fiche : pas de redessin automatique, sinon le texte tapé (ou dicté au clavier) s'efface
    au retour d'une autre appli, à la fin d'un travail de l'IA ou à un échange avec le PC (audit M7) */
 const correctionEnCours = () => !!document.querySelector("#main .vitem .vedit");
-const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue || nomOpen || correctionEnCours();
+const busy = () => formOpen || !!editing || rdvOpen || homoOpen || dicteeVue || nomOpen || correctionEnCours() || objectifs.enEdition();
 let aCle = false;                         // une clé d'IA est enregistrée
 /* La liste de tous les patients est cachée derrière un bouton (l'accueil met en avant « Ma journée ») ;
    elle s'affiche aussi dès qu'on cherche un patient. Ouverte ou fermée : gardé dans la tablette. */
@@ -194,6 +195,7 @@ export function renderMain() {
   const derniere = qrdv ? seancesDe(D).find(s => s.date === qrdv) : undefined;
   if (qrdv && derniere && !moteur.occupe(derniere.id) && (derniere.ia_ok || !aCle)) html += prochain.question(D, qrdv);
   html += prochain.retraits(D);   // rendez-vous dits annulés : à confirmer
+  html += objectifs.proposition(D) + objectifs.encadre(D, donnees.bilans);   // objectifs du patient (1.8.0)
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
@@ -238,6 +240,7 @@ export function renderMain() {
   manquantes.brancher($("#main"), () => renderMain());
   wireRdv(D);
   prochain.brancher($("#main"));
+  objectifs.brancher($("#main"), D, renderMain);
   const finA = $("#finannuler"); if (finA) finA.onclick = async () => { try { await db.finTraitement(D.id, undefined); toast("Dossier rouvert : le patient revient dans la liste."); } catch { toast("L'enregistrement a échoué. Réessayez."); } };
   wireNom(D);
   const mj = $("#majournee"); if (mj) mj.onclick = retourJournee;
@@ -517,6 +520,7 @@ async function supprimer(b: Bilan) {
 /* Retour à « Ma journée » : bouton « ← Ma journée », bouton retour d'Android, geste retour de l'iPhone.
    Une fiche ouverte = une étape dans l'historique du navigateur, pour que « retour » ferme la fiche au lieu de quitter Muninn. */
 function fermerFiche() {
+  objectifs.quitter();
   selD = null; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
   renderList(); renderMain(); haut();
 }
@@ -559,7 +563,7 @@ function marquerFiche() {
 /* ouvre la fiche d'un patient (liste, Ma journée, agenda…) */
 export async function ouvrirPatient(id: string) {
   if (id !== selD && !(await laisserMicro())) return;
-  quitterDictee(); marquerFiche();
+  quitterDictee(); marquerFiche(); objectifs.quitter();
   selD = id; selB = null; formOpen = false; editing = null; rdvOpen = false; homoOpen = false; nomOpen = false;
   renderList(); renderMain(); haut();
 }

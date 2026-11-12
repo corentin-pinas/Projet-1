@@ -412,3 +412,26 @@ describe("aRetirer", () => {
     expect(aRetirer(D, "2026-11-10")).toEqual(["2026-11-12"]);
   });
 });
+
+
+/* objectifs du patient (choix de Corentin du 12 novembre 2026) */
+import { avecObjectifs, objectifsDe } from "./regles";
+describe("objectifs du patient", () => {
+  const D = { id: "p", label: "Paul G.", rdvs: [], homonyme: false, cree: "" };
+  const bilan = (ajoute: string, resume: object) => ({ id: "b" + ajoute, dossierId: "p", fichier: "f", fichiers: [], ajoute, valides: [], corrections: [], resume });
+  it("au départ, ceux du bilan le plus récent : champ objectifs, sinon la rubrique « Objectifs »", () => {
+    expect(objectifsDe(D, [])).toBeNull();
+    expect(objectifsDe(D, [bilan("2026-10-01", { sections: [{ titre: "Objectifs SMART", items: ["Se coiffer"] }] })]))
+      .toEqual({ liste: ["Se coiffer"], maj: "2026-10-01", source: "bilan" });
+    expect(objectifsDe(D, [bilan("2026-10-01", { objectifs: ["Ancien"] }), bilan("2026-11-01", { objectifs: ["Courir 20 min"] })])?.liste).toEqual(["Courir 20 min"]);
+  });
+  it("ceux du dossier passent avant le bilan ; vidés à la main, il n'y en a plus", () => {
+    const b = [bilan("2026-10-01", { objectifs: ["Se coiffer"] })];
+    const modifie = avecObjectifs(D, ["Tennis en mars ", "", "Tennis en mars"], "main", "2026-11-12T10:00:00Z", objectifsDe(D, b));
+    expect(objectifsDe(modifie, b)).toEqual({ liste: ["Tennis en mars"], maj: "2026-11-12T10:00:00Z", source: "main" });
+    expect(modifie.objectifs_hist).toEqual([{ liste: ["Se coiffer"], maj: "2026-10-01", source: "bilan" }]);
+    const vide = avecObjectifs(modifie, [], "main", "2026-11-13T10:00:00Z", objectifsDe(modifie, b));
+    expect(objectifsDe(vide, b)).toBeNull();
+    expect(vide.objectifs_hist?.length).toBe(2);
+  });
+});
