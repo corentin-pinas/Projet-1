@@ -3,7 +3,7 @@
    rendez-vous de la période, ce qui est prévu pour la suite, le bilan (coup d'œil, chiffres, rubriques), les deux dernières séances.
    Fidèle à ce qui est enregistré : aucun résumé n'est inventé. */
 import { jsPDF } from "jspdf";
-import { demiDe, demiFr, frDate, jourCourt, jourLong, rdvKey, texteDe, type Rdv, type Transmission } from "./regles";
+import { demiDe, demiFr, frDate, jourCourt, jourLong, rubriquesTransmission, seanceTransmission, rdvKey, texteDe, type Rdv, type Transmission } from "./regles";
 
 /* police intégrée du PDF (Helvetica) : alphabet latin et ponctuation française ; le reste est remplacé */
 const AUTRES = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ";
@@ -82,6 +82,7 @@ export function fabriquerPdf({ du, au, mot, patients, joursVides }: OptionsPdf):
       if (r.coup_oeil) texte(r.coup_oeil, { apres: 2 });
       const chiffres = (r.chiffres || []).filter(c => !/^[âa]ge\b/i.test(c.label));   // l'âge est déjà dans le titre
       if (chiffres.length) champ("Chiffres", chiffres.map(c => `${c.label} ${c.valeur}`).join(" · "));
+      for (const s of rubriquesTransmission(r)) champ(s.titre, s.items.join(" ; "));   // identité, diagnostic, EVA
     } else texte(t.bilan ? "Le résumé du bilan n'a pas encore été fait : voir le bilan complet." : t.rdvs.some(x => x.t === "bilan") ? "Premier bilan prévu pendant la période." : "Pas de bilan dans l'appli.", { couleur: doux });
     y += 2;
 
@@ -91,7 +92,7 @@ export function fabriquerPdf({ du, au, mot, patients, joursVides }: OptionsPdf):
     if (!s) texte("Aucune séance notée.", { couleur: doux });
     else {
       texte(`${t.seances.length} séance${t.seances.length > 1 ? "s" : ""} depuis le ${frDate(t.seances[t.seances.length - 1].date)}.`, { couleur: doux, apres: 1 });
-      for (const l of texteDe(s).split("\n").filter(x => x.trim())) texte(l, { retrait: 3, apres: 0.5 });
+      for (const l of seanceTransmission(s).split("\n").filter(x => x.trim())) texte(l, { retrait: 3, apres: 0.5 });
     }
     y += 2;
 

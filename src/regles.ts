@@ -597,3 +597,15 @@ export function avecObjectifs(D: Dossier, liste: string[], source: Objectifs["so
   const hist = actuels ? [actuels, ...(D.objectifs_hist ?? [])].slice(0, 10) : D.objectifs_hist;
   return { ...D, objectifs: { liste: propre, maj: quand, source }, ...(hist ? { objectifs_hist: hist } : {}) };
 }
+
+/* ---------- transmissions : ce qui est gardé (choix de Corentin du 12 novembre 2026) ---------- */
+
+/* Rubriques du résumé du bilan gardées pour le remplaçant : identité, diagnostic, douleur (EVA). Pas l'histoire clinique,
+   ni les red / yellow flags ; les objectifs sont montrés à part. Le coup d'œil et les chiffres sont toujours gardés. */
+const GARDEES = /identit|patient|profil|diagnost|\bdiag\b|\be\.?v\.?a\b|douleur/i;
+const ECARTEES = /histoire|anamn|flag|drapeau|objectif/i;
+export const rubriquesTransmission = (r: Resume) => (r.sections ?? []).filter(s => GARDEES.test(s.titre) && !ECARTEES.test(s.titre) && s.items.length);
+
+/* la dernière séance, sans ce qui est prévu pour la suite (montré à part, avec les objectifs) */
+export const seanceTransmission = (s: Seance) =>
+  texteDe(s).split("\n").map(l => l.trim()).filter(l => l && !/^(à|a) venir\s*:/i.test(l)).join("\n");

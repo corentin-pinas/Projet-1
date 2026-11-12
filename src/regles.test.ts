@@ -435,3 +435,18 @@ describe("objectifs du patient", () => {
     expect(vide.objectifs_hist?.length).toBe(2);
   });
 });
+
+
+/* transmissions : ce qui est gardé (choix de Corentin du 12 novembre 2026) */
+import { rubriquesTransmission, seanceTransmission } from "./regles";
+describe("ce que gardent les transmissions", () => {
+  it("rubriques du bilan : identité, diagnostic, EVA ; pas l'histoire clinique, les flags, les objectifs", () => {
+    const r = { sections: ["Identité", "Histoire clinique", "Anamnèse", "Diagnostic médical", "Red flags", "Yellow flags", "Drapeaux jaunes", "EVA", "Objectifs SMART", "Examen"]
+      .map(titre => ({ titre, items: ["x"] })) };
+    expect(rubriquesTransmission(r).map(s => s.titre)).toEqual(["Identité", "Diagnostic médical", "EVA"]);
+  });
+  it("dernière séance mise au propre, sans la ligne « À venir »", () => {
+    const s = { id: "1", dossierId: "p", date: "2026-11-10", cree: "", contenu: "x", propre_source: "x", propre: "État du patient : douleur 3/10.\nFait en séance : renfo.\nÀ venir : excentrique." };
+    expect(seanceTransmission(s)).toBe("État du patient : douleur 3/10.\nFait en séance : renfo.");
+  });
+});

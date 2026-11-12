@@ -13,8 +13,10 @@ test("transmissions : période, patients cochés, jours vides signalés, PDF fid
     tx.objectStore("dossiers").put({ id: "b", label: "Lucie M.", rdvs: [{ d: "2026-11-02", h: "08:20", t: "bilan" }], homonyme: false, cree: "" });
     tx.objectStore("dossiers").put({ id: "c", label: "Paul G.", rdvs: [{ d: "2026-11-20", h: "09:00" }], homonyme: false, cree: "" });
     tx.objectStore("bilans").put({ id: "ba", dossierId: "a", fichier: "Bilan Marc D", fichiers: [], ajoute: "2026-10-05T10:00:00Z", valides: [], corrections: [],
-      resume: { region: "Épaule D", date_bilan: "05/10/2026", age: 52, coup_oeil: "Tendinopathie du supra-épineux droit.", chiffres: [{ label: "EVA", valeur: "4/10" }], sections: [{ titre: "Antécédents", items: ["Luxation 2019"] }], objectifs: ["Se coiffer sans douleur"], a_verifier: [] } });
-    tx.objectStore("seances").put({ id: "s1", dossierId: "a", date: "2026-10-27", cree: "2026-10-27T10:00:00Z", contenu: "renfo RE. Pour la prochaine séance excentrique des rotateurs externes" });
+      resume: { region: "Épaule D", date_bilan: "05/10/2026", age: 52, coup_oeil: "Tendinopathie du supra-épineux droit.", chiffres: [{ label: "EVA", valeur: "4/10" }], sections: [{ titre: "Identité", items: ["Homme, travail de bureau"] }, { titre: "Histoire clinique", items: ["Chute en ski 2024"] }, { titre: "Diagnostic médical", items: ["Tendinopathie du sus-épineux"] }, { titre: "Red flags", items: ["Aucun signe de gravité"] }, { titre: "Yellow flags", items: ["Kinésiophobie"] }], objectifs: ["Se coiffer sans douleur"], a_verifier: [] } });
+    const dicte = "renfo RE. Pour la prochaine séance excentrique des rotateurs externes";
+    tx.objectStore("seances").put({ id: "s1", dossierId: "a", date: "2026-10-27", cree: "2026-10-27T10:00:00Z", contenu: dicte, propre_source: dicte,
+      propre: "État du patient : douleur 3/10.\nFait en séance : renforcement des rotateurs externes.\nÀ venir : excentrique des rotateurs externes." });
     tx.commit(); await new Promise(ok => tx.oncomplete = ok);
   });
   await page.reload();
@@ -43,9 +45,10 @@ test("transmissions : période, patients cochés, jours vides signalés, PDF fid
   const pdf = (await readFile((await d.path())!)).toString("latin1");
   expect(pdf.startsWith("%PDF")).toBe(true);
   // allégé (12 novembre 2026) : l'essentiel du bilan, la dernière séance, les objectifs du patient et de la prochaine séance
-  for (const t of ["Transmissions", "Marc D., 52 ans", "Code de la porte : 1234", "Tendinopathie du supra-", "EVA 4/10", "Derni", "renfo RE", "Objectifs", "- Se coiffer sans douleur", "Pour la prochaine s", "Excentrique des rotateurs externes"])
+  for (const t of ["Transmissions", "Marc D., 52 ans", "Code de la porte : 1234", "Tendinopathie du supra-", "EVA 4/10", "Homme, travail de bureau", "Tendinopathie du sus-",
+    "Derni", "douleur 3/10", "Fait en s", "Objectifs", "- Se coiffer sans douleur", "Pour la prochaine s", "Excentrique des rotateurs externes"])
     expect(pdf).toContain(t);
-  expect(pdf).not.toContain("Luxation 2019");                                  // le détail des rubriques du bilan n'y est plus
+  for (const t of ["Chute en ski", "Aucun signe de gravit", "Kin", "renfo RE"]) expect(pdf).not.toContain(t);   // histoire clinique, flags, texte brut
   expect(pdf).not.toContain("Lucie M.");
 
   // le mot est gardé pour la prochaine fois
