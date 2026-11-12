@@ -144,6 +144,8 @@ PWA (Vite + TypeScript, sans framework), données **dans la tablette** (IndexedD
 
 ## 7. Prochaines étapes (dans l'ordre conseillé)
 
+**Tâche à venir ajoutée le 12 nov. (demande de Corentin) : alléger les transmissions.** Le PDF contient trop d'informations (aujourd'hui : rendez-vous, « prévu pour la suite », résumé du bilan complet avec chiffres et toutes les sections, deux dernières séances en entier). Ce qui intéresse vraiment le remplaçant, selon Corentin : les infos du bilan, la dernière séance, et les objectifs (ceux du patient s'ils sont notés, et ceux de la prochaine séance). Question à lui poser au moment de le faire : où sont notés les objectifs du patient sur sa trame de bilan.
+
 **Tâches à venir ajoutées le 8 nov. (demande de Corentin) :**
 - **Le PC se met à jour tout seul** : aujourd'hui Corentin relance la ligne d'installation à la main quand la partie PC change (corvée, oubli possible, surtout pour un collègue). Le PC vérifie chaque jour s'il y a une nouvelle version et l'installe. Chantier moyen, utile pour Corentin dès maintenant.
 - **Si un collègue utilise un jour Muninn** (idée, pas décidé) : IA par **sa propre clé API** sur ses appareils (pas l'abonnement Pro de Corentin, personnel et relié à un seul compte), son propre PC, ses patients restent chez lui ; même adresse, mêmes mises à jour. Corentin a retenu une étape **« Corentin l'essaie d'abord un jour, puis elle part chez le collègue »** (« excellente solution »). Prévoir aussi : petit mot « Nouveautés » à l'ouverture, réglages plutôt que choix imposés pour les goûts personnels, avis CNIL / Ordre (HDS). Jamais de copie de l'appli à une autre adresse.
