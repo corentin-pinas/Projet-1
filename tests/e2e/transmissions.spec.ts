@@ -37,6 +37,10 @@ test("transmissions : période, patients cochés, jours vides signalés, PDF fid
   await v.locator('[data-inclus="b"]').uncheck();
   await expect(v.locator(".tcompte")).toContainText("1 dans le PDF");
   await v.locator("#tmot").fill("Code de la porte : 1234");
+  // 1.8.1 : écran bas et longue liste, le mot reste lisible (il était écrasé en une barre)
+  await page.setViewportSize({ width: 1280, height: 420 });
+  expect((await v.locator("#tmot").boundingBox())!.height).toBeGreaterThan(60);
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   const telechargement = page.waitForEvent("download");
   await v.getByRole("button", { name: "Enregistrer le PDF" }).click();

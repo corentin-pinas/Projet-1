@@ -438,7 +438,8 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .tperiode .bils{margin-top:0}
 .tperiode input{font:inherit;font-weight:400;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);min-height:44px}
 .tlabel{font-weight:700;font-size:.92rem}
-.transmissions textarea{min-height:0;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);resize:vertical}
+.transmissions .tcorps>*{flex-shrink:0}   /* 1.8.1 : avec beaucoup de patients, le mot pour le remplaçant était écrasé en une barre */
+.transmissions textarea{min-height:5.5em;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);resize:vertical}
 .tcompte{margin:4px 0 0;color:var(--soft)}
 .tvides{margin:0}
 .tpatients{display:flex;flex-direction:column;gap:6px}
