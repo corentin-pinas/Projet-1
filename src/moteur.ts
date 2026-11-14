@@ -3,7 +3,9 @@
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
-import { avenirFrom, demiDe, poserRdvs, empreinteTexte, estArchive, DEMI_FR, demiSeance, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
+import * as travailPC from "./travail-pc";
+import { analyseSurDossier, patchAnalyse, type Doute, type Range } from "./rangement";
+import { avenirFrom, empreinteTexte, estArchive, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -161,8 +163,12 @@ async function analyserEnAttente() {
   if (!(await configIA()) || !navigator.onLine) return;
   const moi = await db.appareil(), depuis = isoDay(new Date(Date.now() - 14 * 864e5));
   const { seances } = await db.tout();
+  /* lues dans la base (la liste de travail-pc.ts peut ne pas être encore chargée à l'ouverture) */
+  const travaux = (await db.lireParametre<{ travaux?: travailPC.Travail[] }>("travaux"))?.travaux ?? [];
+  const confiees = new Set([...travaux, ...travailPC.liste()].filter(t => t.seanceId && t.etat !== "erreur").map(t => t.seanceId!));
   for (const s of seances) {
     if (s.ia_ok || s.origine !== moi || s.date < depuis || seancesTentees.has(s.id) || enCours.has(s.id) || relancesSeances.has(s.id)) continue;
+    if (confiees.has(s.id)) continue;   // confiée au PC (1.9.0)
     if (Date.now() - new Date(s.cree).getTime() < 60_000) continue;   // tout juste notée : son analyse est déjà partie
     seancesTentees.add(s.id);
     await analyser(s, false, !!s.brut);
@@ -250,53 +256,20 @@ export async function corrigerEnAttente() {
 
 /* ---------- séances ---------- */
 
-/* Range le résultat de l'IA dans la séance : mise au propre, « À venir », et rendez-vous dicté.
+/* Range le résultat de l'IA dans la séance et dans le dossier (règles communes avec le PC : rangement.ts).
    Renvoie le message du rendez-vous posé, ou null. */
+const jourRelatif = (iso: string) => jourLabel(iso, new Date()).toLowerCase();
 async function appliquer(se: Seance, a: AnalyseSeance, brut: string): Promise<string | null> {
-  const patch: Partial<Seance> = { ia_ok: true };
-  // l'empreinte du texte d'origine, pas sa copie : la séance pèse une fois son texte, pas trois (audit A5)
-  if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = empreinteTexte(brut); }
-  if (a.propre) { patch.propre = a.propre; patch.propre_source = empreinteTexte(se.contenu); }
-  if (a.bref) { patch.bref = a.bref; patch.bref_source = empreinteTexte(se.contenu); }
-  await db.majSeance(se.id, patch);
-  /* on ne pose le rendez-vous que s'il est à venir et que cette séance est bien la dernière du patient */
+  await db.majSeance(se.id, patchAnalyse(se, a, brut));
   const { seances, dossiers } = await db.tout();
-  const derniere = !seances.some(x => x.dossierId === se.dossierId && x.id !== se.id && x.date > se.date);
-  const dossier = dossiers.find(d => d.id === se.dossierId);
-  /* « dernière séance », « fin de traitement » dit dans la dictée : fin notée, le dossier est archivé (choix du 8 novembre 2026) */
-  if (a.fin && derniere && dossier) {
-    await db.finTraitement(dossier.id, se.date);
-    return "Fin de traitement notée pour " + dossier.label + " : dossier archivé (« Rouvrir le dossier » sur sa fiche en cas d'erreur).";
-  }
-  if (!(derniere && dossier)) return null;
-  const auj = isoDay(new Date());
-  /* tous les rendez-vous dits (choix de Corentin du 11 novembre 2026) ; matin ou après-midi pas dit : même demi-journée
-     que la séance (5 novembre 2026) ; les rendez-vous passés sont gardés (historique, futures absences) */
-  const dictes = [...(a.rdvDate ? [{ d: a.rdvDate, h: a.rdvHeure, demi: a.rdvDemi }] : []), ...(a.autres ?? []).map(x => ({ d: x.d, h: "", demi: x.demi }))]
-    .filter(x => x.d >= auj);
-  const demiDefaut = demiSeance(dossier.rdvs, se.date);
-  const messages: string[] = [];
-  if (dictes.length) {
-    await db.modifierRdvs(dossier.id, rdvs => poserRdvs(rdvs, dictes, demiDefaut));
-    // un jour redonné n'est plus à proposer au retrait
-    if (dossier.retirer?.some(d => dictes.some(x => x.d === d)))
-      await db.modifierDossier(dossier.id, d => ({ ...d, retirer: (d.retirer ?? []).filter(j => !dictes.some(x => x.d === j)) }));
-    const apres = (await db.tout()).dossiers.find(d => d.id === dossier.id)?.rdvs ?? [];
-    const jours = dictes.map(x => { const r = apres.find(y => y.d === x.d), dm = r ? demiDe(r) : null; return jourLabel(x.d, new Date()).toLowerCase() + (dm ? " " + DEMI_FR[dm] : ""); });
-    messages.push((jours.length > 1 ? "Rendez-vous repérés pour " : "Rendez-vous repéré pour ") + dossier.label + " : " + jours.join(", ") + ".");
-  }
-  /* rendez-vous dits annulés : jamais retirés tout seuls, Muninn propose de les enlever (fiche et récapitulatif) */
-  const annules = (a.annules ?? []).filter(d => d >= auj && dossier.rdvs.some(r => r.d === d));
-  if (annules.length) {
-    await db.modifierDossier(dossier.id, d => ({ ...d, retirer: [...new Set([...(d.retirer ?? []), ...annules])] }));
-    messages.push("Rendez-vous dit annulé pour " + dossier.label + " : " + annules.map(d => jourLabel(d, new Date()).toLowerCase()).join(", ") + ". À confirmer.");
-  }
-  /* objectifs dits dans la dictée : proposés sur la fiche et dans le récapitulatif (1.8.0), jamais appliqués tout seuls */
-  if (a.objectifs?.length) {
-    await db.modifierDossier(dossier.id, d => ({ ...d, objectifs_propose: { liste: a.objectifs!, date: se.date } }));
-    messages.push("Objectif dit pour " + dossier.label + " : à confirmer sur sa fiche.");
-  }
-  return messages.length ? messages.join(" ") : null;
+  const d = dossiers.find(x => x.id === se.dossierId);
+  if (!d) return null;
+  const essai = analyseSurDossier(d, seances, se, a, isoDay(new Date()), jourRelatif);
+  if (essai.dossier === d) return essai.message;
+  /* recalculé sur la version du dossier du moment, lue et réécrite dans la même transaction (audit A3) */
+  let message: string | null = null;
+  await db.modifierDossier(d.id, actuel => { const r = analyseSurDossier(actuel, seances, se, a, isoDay(new Date()), jourRelatif); message = r.message; return r.dossier; });
+  return message;
 }
 
 /* Après l'enregistrement d'une séance : mise au propre de la dictée, résumé du « À venir » et,
@@ -321,6 +294,7 @@ async function analyserSeul(se: Seance, manuel: boolean, sansPropre: boolean, es
   relancesSeances.get(se.id)?.annuler(); relancesSeances.delete(se.id);
   const brut = avenirFrom(se.contenu);
   if (sansPropre && !brut && !parleRdv(se.contenu)) return;
+  if (!manuel && essai === 1 && await versPC(se, sansPropre)) return;
   const ia = await configIA();
   if (!ia) { if (manuel) messages(PAS_REGLE); return; }
   if (!navigator.onLine) { if (manuel) messages("Pas de connexion : réessayez une fois en ligne."); return; }
@@ -346,12 +320,20 @@ async function analyserSeul(se: Seance, manuel: boolean, sansPropre: boolean, es
   }
 }
 
+/* Le PC fait le travail en tâche de fond (1.9.0) : une séance enregistrée lui est confiée quand il est relié et prêt ;
+   Corentin peut fermer Muninn. PC injoignable : mise au propre ici, comme avant. Un essai à la main reste ici. */
+async function versPC(se: Seance, sansPropre: boolean): Promise<boolean> {
+  const acces = await travailPC.accepte();
+  if (!acces) return false;
+  try {
+    await travailPC.confier(acces, { type: "analyse", date: se.date, seanceId: se.id, empreinte: empreinteTexte(se.contenu), ...(sansPropre ? { sansPropre: true } : {}) });
+    return true;
+  } catch { return false; }
+}
+
 /* ---------- dictée groupée ---------- */
 
-/* Un passage que l'appli n'a pas pu ranger seule : Corentin choisit le dossier parmi les candidats. */
-export type Doute = { id: string; date: string; seance: SeanceDictee; candidats: string[] };
-/* prenomSeul : rangé d'après le nom seul, sans rendez-vous ce jour-là (audit F11) : le récapitulatif le signale */
-export type Range = { seanceId: string; dossierId: string; prenomSeul?: boolean };
+export type { Doute, Range } from "./rangement";
 
 /* Une seule demande à l'IA pour toute la dictée, puis rangement : automatique si un seul dossier convient
    (règle de rattacher), sinon le passage devient un doute. Lève une ErreurIA si rien n'a pu être fait. */

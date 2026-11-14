@@ -76,10 +76,11 @@ const entreeTotale = (u: BetaMessage["usage"]) =>
 
 /* Appel par l'abonnement : la demande part vers le serveur de l'appli, qui la confie à Claude Code connecté à l'abonnement.
    « cle » est ici le code d'accès au serveur. Rien n'est facturé à l'usage : c'est le quota de l'abonnement. */
-export const appelerAbonnement: Appel = async ({ cle, system, contenu, schema, effort, niveau }) => {
+/* adresse : celle du serveur de l'appli ; vide dans l'appli (même adresse), complète sur le PC (1.9.0, travail en tâche de fond) */
+export const appelAbonnementVers = (adresse = ""): Appel => async ({ cle, system, contenu, schema, effort, niveau }) => {
   let r: Response;
   try {
-    r = await fetch("/api/ia/travail", {
+    r = await fetch(adresse.replace(/\/+$/, "") + "/api/ia/travail", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + cle },
       body: JSON.stringify({ system, contenu, schema, effort, modele: MODELES[niveau].abonnement }),
@@ -98,6 +99,7 @@ export const appelerAbonnement: Appel = async ({ cle, system, contenu, schema, e
   }
   return { donnees: corps.donnees, usage: { entree: 0, sortie: 0, coutIndicatif: corps.coutIndicatif ?? undefined } };
 };
+export const appelerAbonnement: Appel = appelAbonnementVers();
 
 export function messageErreur(e: unknown): string {
   if (e instanceof Anthropic.AuthenticationError) return "La clé de l'IA est refusée. Vérifiez-la dans les réglages.";

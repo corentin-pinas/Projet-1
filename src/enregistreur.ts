@@ -14,6 +14,9 @@ export type OptionsEnregistreur = {
   garder: (son: Blob) => Promise<void>;         // l'enregistrement pas encore transcrit, gardé dans la base
   oublier: () => Promise<void>;
   transcrit: (texte: string) => void | Promise<void>;
+  /* 1.9.0 : l'enregistrement confié tel quel au PC, qui le transcrit et le range en tâche de fond. Rend faux si le PC ne
+     prend pas le travail (transcription ici, comme avant) ; une erreur (PC injoignable) : l'enregistrement reste gardé. */
+  envoyer?: (son: Blob) => Promise<boolean>;
   redessiner: () => void;
 };
 
@@ -110,7 +113,15 @@ export class Enregistreur {
     this.travail = true; this.o.redessiner();
     let t: string;
     try {
-      t = (e && await e.texteDirect()) || await voix.transcrire(son, this.noms.length ? this.noms : await this.o.noms().catch(() => []));
+      const direct = e ? await e.texteDirect() : null;
+      if (!direct && this.o.envoyer && await this.o.envoyer(son)) {
+        // confié au PC : il n'est plus gardé ici
+        this.direct = ""; if (this.attente === son) this.attente = null;
+        await this.o.oublier().catch(() => {});
+        this.erreur = ""; this.travail = false; this.o.redessiner();
+        return;
+      }
+      t = direct || await voix.transcrire(son, this.noms.length ? this.noms : await this.o.noms().catch(() => []));
     } catch (err) {
       this.erreur = err instanceof ErreurIA ? err.message : "La transcription a échoué.";
       const p = this.relance.echec(err, essai);

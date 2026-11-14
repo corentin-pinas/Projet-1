@@ -49,6 +49,8 @@ flowchart TB
 |---|---|---|
 | `app.ts`, `agenda.ts` | redessinent l'écran | non |
 | `synchro.ts` | envoie au PC 2 s plus tard | seulement ce qu'il reçoit du PC, en se signalant (`applique`) pour ne pas se relancer lui-même |
+| `travail-pc.ts` | le PC fait le travail en tâche de fond (1.9.0) : confier une dictée, une séance dite à la voix ou une mise au propre au PC ; travaux partagés et leur état | db, ia, synchro, ui ; pc/travail (règle `elaguer`) |
+| `rangement.ts` | règles pures du rangement du résultat de l'IA (séance, dossier, passages d'une dictée), communes à l'appareil et au PC | ia (types), regles |
 | `moteur.ts` | est lancé par une action (séance enregistrée, bilan ajouté), pas par la cloche | oui, le résultat de l'IA : la cloche sonne, l'écran se redessine, le partage l'envoie |
 
 Il n'y a donc **pas de boucle** : rien de ce qui écoute la cloche ne la fait sonner de nouveau sans fin.
@@ -59,13 +61,13 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 
 | Module | Rôle | Dépend de |
 |---|---|---|
-| `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, fenetres, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, ui, verifications |
-| `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, objectifs, pdf, prochain-rdv, regles, seances-manquantes, ui, voix-seance |
+| `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, fenetres, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, travail-pc, ui, verifications |
+| `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, objectifs, pdf, prochain-rdv, regles, seances-manquantes, travail-pc, ui, voix-seance |
 | `journee.ts` | « Ma journée », avec l'alerte « sans rendez-vous » (30 jours ; archivage proposé à 3 mois) | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
 | `transmissions.ts`, `transmissions-pdf.ts` | transmissions pour un remplaçant et leur PDF (sans IA) | db, regles, ui |
-| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, objectifs, prochain-rdv, regles, relance, seances-manquantes, transcription, ui |
-| `voix-seance.ts` | « Enregistrer ma séance » sur la fiche | db, enregistreur, ui |
+| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, objectifs, prochain-rdv, regles, relance, seances-manquantes, transcription, travail-pc, ui |
+| `voix-seance.ts` | « Enregistrer ma séance » sur la fiche (confiée au PC quand il est prêt) | db, enregistreur, travail-pc, ui |
 | `enregistreur.ts` | l'enregistreur de voix commun (micro, chrono, texte en direct, voix gardée, transcription, relances, boutons) | ia, relance, transcription, ui |
 | `relance.ts` | relances automatiques après un échec (5 minutes, 3 essais au plus, selon la cause), compte à rebours | ia |
 | `alerte-code.ts` | bandeau « mauvais codes d'accès » (3 en 24 heures sur le serveur) | db, ui |
@@ -77,7 +79,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `seances-manquantes.ts` | jour de rendez-vous passé sans séance (fiche et récapitulatif de la dictée) : retrouver le patient dans la dictée gardée, ou noter l'absence | db, ia, moteur, regles, ui |
 | `prochain-rdv.ts` | question « Prochain rendez-vous ? » (date + matin / après-midi, ou fin de traitement), sur la fiche et après la dictée groupée | db, regles, ui |
 | `objectifs.ts` | objectifs du patient : encadré de la fiche (lus dans le bilan, « Modifier »), objectifs dits dans une dictée proposés (« Remplacer », « Ajouter », « Ignorer ») | db, regles, ui |
-| `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées ; un travail par fenêtre (`navigator.locks`) | db, ia, pdf, regles, relance |
+| `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées ; un travail par fenêtre (`navigator.locks`) ; confie au PC quand il est prêt | db, ia, pdf, rangement, regles, relance, travail-pc |
 | `ia.ts` | consignes données à l'IA, garde-fous, appels | regles |
 | `synchro.ts`, `fusion.ts` | échanges avec le PC ; fusion de deux changements faits sur deux appareils | db, fusion, regles |
 | `transcription.ts` | voix : Whisper du PC d'abord (en direct, par morceaux coupés aux pauses), Railway en secours | db, ia, regles, synchro |
@@ -94,6 +96,8 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `serveur/claude.mjs` | Railway | lance Claude Code verrouillé (sans outils, sans mémoire), une demande à la fois |
 | `serveur/transcription.mjs` | Railway | transcription de secours (inactive tant que `WHISPER_URL` n'est pas réglé) |
 | `public/pc/muninn-pc.mjs` | PC | base commune (`donnees.json`, `fichiers/`, `copies/` sur 30 jours ; un élément supprimé et ses PDF effacés définitivement 30 jours après), un seul fichier sans dépendance, joignable seulement par Tailscale avec le code du PC |
+| `public/pc/travail.mjs` | PC | travail en tâche de fond (1.9.0), construit depuis `src/pc/travail.ts` (`npm run pc`) : transcrit, demande l'IA au serveur de l'appli, range dans la base, réessaie seul |
+| `public/pc/lanceur.mjs` | PC | seule tâche Windows : fait tourner le partage et Whisper, met à jour `muninn-pc.mjs`, `voix.py` et `travail.mjs` |
 | `public/pc/voix.py` | PC | Whisper (faster-whisper), n'écoute que le PC lui-même |
 | `public/pc/installer.ps1` | PC | installation et mise à jour en une ligne, sans toucher aux données |
 

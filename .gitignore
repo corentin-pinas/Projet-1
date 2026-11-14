@@ -4,4 +4,5 @@ test-results/
 playwright-report/
 .faux-claude/
 .faux-pc/
+.faux-pc2/
 __pycache__/

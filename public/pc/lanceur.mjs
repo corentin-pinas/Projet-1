@@ -7,15 +7,17 @@
 // Les données (donnees.json, fichiers/, copies/, code.txt) ne sont jamais touchées. Ce qui demande des droits
 // d'administrateur (Python, droits du dossier, tâche Windows, ce lanceur lui-même) attend que Corentin relance la ligne
 // d'installation : maj-etat.json le dit (« relancer »), et l'appli l'affiche dans « État de l'appli ».
+// Depuis le lanceur 2 (1.9.0) : aussi travail.mjs, le travail en tâche de fond, chargé par muninn-pc.mjs (pas un
+// programme à part) : après sa mise à jour, le partage est redémarré et doit annoncer la nouvelle version (/sante).
 // Programme Node sans dépendance.
 import { spawn, spawnSync } from "node:child_process";
-import { copyFile, readFile, rename, writeFile } from "node:fs/promises";
+import { copyFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
-export const LANCEUR = 1;
+export const LANCEUR = 2;
 const ici = dirname(fileURLToPath(import.meta.url));
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -34,13 +36,17 @@ const repond = async (url, delai = 3_000) => { try { return (await fetch(url, { 
 
 /* ---------- les deux programmes ---------- */
 
+const versionsSante = async () => { try { return await (await fetch(`http://127.0.0.1:${port}/sante`, { signal: AbortSignal.timeout(3_000) })).json(); } catch { return null; } };
 const programmes = {
   pc: { fichier: join(ici, "muninn-pc.mjs"), commande: process.execPath, sante: () => repond(`http://127.0.0.1:${port}/`),
+    lisible: f => spawnSync(process.execPath, ["--check", f]).status === 0 },
+  /* un module de muninn-pc.mjs : c'est le partage qu'on redémarre ; il doit répondre avec la nouvelle version */
+  travail: { fichier: join(ici, "travail.mjs"), module: "pc", sante: async v => (await versionsSante())?.travail === v,
     lisible: f => spawnSync(process.execPath, ["--check", f]).status === 0 },
   voix: { fichier: join(ici, "voix.py"), commande: python, sante: () => repond(`http://127.0.0.1:${portVoix}/etat`),
     lisible: f => spawnSync(python, ["-I", "-c", "import ast,sys; ast.parse(open(sys.argv[1], encoding='utf-8').read())", f]).status === 0 }
 };
-const present = nom => existsSync(programmes[nom].fichier) && existsSync(programmes[nom].commande);
+const present = nom => existsSync(programmes[nom].fichier) && (programmes[nom].module ? present(programmes[nom].module) : existsSync(programmes[nom].commande));
 const enCours = {};      // nom -> processus
 const voulus = new Set();
 
@@ -73,10 +79,11 @@ function arreter(nom) {
   });
 }
 
-async function repondDans(nom, ms) {
+async function repondDans(nom, ms, version) {
+  const proc = programmes[nom].module ?? nom;
   for (const fin = Date.now() + ms; Date.now() < fin;) {
-    if (await programmes[nom].sante()) return true;
-    if (!enCours[nom]) return false;
+    if (await programmes[nom].sante(version)) return true;
+    if (!enCours[proc]) return false;
     await attendre(1_000);
   }
   return false;
@@ -105,20 +112,22 @@ async function mettreAJour(nom, version, adresse, etat) {
   await writeFile(nouveau, texte);
   if (!p.lisible(nouveau)) throw new Error("fichier reçu illisible");
   if (nom === "voix") await libre();
-  const avant = versionDe(await readFile(p.fichier, "utf8"));
-  await copyFile(p.fichier, ancien);
-  await arreter(nom);
+  const existait = existsSync(p.fichier);   // un module absent (travail.mjs avant sa première installation) est ajouté
+  const avant = existait ? versionDe(await readFile(p.fichier, "utf8")) : 0;
+  const proc = p.module ?? nom;   // le programme à redémarrer
+  if (existait) await copyFile(p.fichier, ancien);
+  await arreter(proc);
   await rename(nouveau, p.fichier);
-  demarrer(nom);
-  if (await repondDans(nom, SANTE_MS)) {
+  demarrer(proc);
+  if (await repondDans(nom, SANTE_MS, version)) {
     etat.faites = [{ nom, de: avant, a: version, quand: new Date().toISOString() }, ...(etat.faites ?? [])].slice(0, 10);
     noter(`${nom} mis à jour : version ${avant} → ${version}.`);
     return;
   }
   // la nouvelle version ne répond pas : retour à l'ancienne, et cette version ne sera plus réessayée
-  await arreter(nom);
-  await copyFile(ancien, p.fichier);
-  demarrer(nom);
+  await arreter(proc);
+  if (existait) await copyFile(ancien, p.fichier); else await rm(p.fichier, { force: true });
+  demarrer(proc);
   etat.refusees = { ...(etat.refusees ?? {}), [nom]: version };
   throw new Error(`la version ${version} ne répondait pas : retour à la version ${avant}`);
 }
@@ -143,9 +152,10 @@ async function uneVerification() {
     const v = await r.json();
     // ce qui ne peut pas se faire seul : nouvelle installation demandée, ou nouveau lanceur
     etat.relancer = (Number(v.installeur) || 0) > (Number(maj.installeur) || 0) || (Number(v.lanceur) || 0) > LANCEUR;
-    for (const nom of ["pc", "voix"]) {
-      if (!present(nom)) continue;
-      const ici_ = versionDe(await readFile(programmes[nom].fichier, "utf8"));
+    for (const nom of ["pc", "voix", "travail"]) {
+      const module = programmes[nom].module;
+      if (!present(nom) && !(module && present(module))) continue;
+      const ici_ = existsSync(programmes[nom].fichier) ? versionDe(await readFile(programmes[nom].fichier, "utf8")) : 0;
       const la = Number(v[nom]) || 0;
       if (la > ici_ && etat.refusees?.[nom] !== la) await mettreAJour(nom, la, maj.adresse.replace(/\/+$/, ""), etat);
     }
@@ -153,7 +163,7 @@ async function uneVerification() {
     etat.erreur = String(e?.message || e);
     noter("Mise à jour : " + etat.erreur);
   }
-  for (const nom of ["pc", "voix"]) if (present(nom)) etat[nom] = versionDe(await readFile(programmes[nom].fichier, "utf8"));
+  for (const nom of ["pc", "voix", "travail"]) if (present(nom)) etat[nom] = versionDe(await readFile(programmes[nom].fichier, "utf8"));
   etat.lanceur = LANCEUR;
   await writeFile(fEtat, JSON.stringify(etat, null, 1)).catch(() => {});
 }

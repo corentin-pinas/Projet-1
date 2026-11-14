@@ -4,12 +4,17 @@
    Le bouton n'apparaît que si Whisper est joignable. L'enregistreur lui-même est commun avec la dictée (src/enregistreur.ts). */
 import * as db from "./db";
 import { Enregistreur } from "./enregistreur";
+import * as travailPC from "./travail-pc";
 import { toast } from "./ui";
 
 let zone: HTMLElement | null = null, cible: HTMLTextAreaElement | null = null;
 let apres: () => void = () => {};   // enregistre la séance une fois la voix transcrite
 let dossier = "";                    // patient de la fiche ouverte
 let nom = "";                        // son nom, donné à Whisper
+/* nouvelle séance (pas une modification) : l'enregistrement peut être confié au PC (1.9.0) ; date : celle du formulaire ;
+   envoye : le formulaire se ferme */
+export type PourPC = { date: () => string; envoye: () => void };
+let pourPC: PourPC | null = null;
 
 /* Un enregistrement pas encore transcrit est gardé dans la base de l'appareil (audit M1) : il survit à un changement
    d'écran, à la fermeture ou à la mise à jour de l'appli, et revient quand on rouvre « Dicter la séance » de ce patient. */
@@ -23,6 +28,15 @@ const enr = new Enregistreur({
   noms: async () => nom ? [nom] : [],
   garder: son => garder(son, dossier),
   oublier: () => db.ecrireParametre(GARDE, undefined),
+  /* 1.9.0 : le PC transcrit, enregistre la séance et la met au propre en tâche de fond ; le texte déjà tapé passe devant */
+  envoyer: async son => {
+    const p = pourPC, d = dossier, a = p && d ? await travailPC.accepte() : null;
+    if (!p || !d || !a) return false;
+    await travailPC.confier(a, { type: "seance", date: p.date(), dossierId: d, ...(cible?.value.trim() ? { debut: cible.value.trim() } : {}) }, son);
+    toast("Enregistrement envoyé au PC : la séance sera transcrite et rangée toute seule. Vous pouvez fermer Muninn.");
+    p.envoye();
+    return true;
+  },
   transcrit: t => {
     const ta = cible;
     if (!ta || !ta.isConnected) return;
@@ -38,8 +52,8 @@ export const occupe = () => enr.occupe();
 /* le micro tourne en ce moment (pas seulement une transcription en cours) */
 export const enregistre = () => !!enr.enCours;
 
-export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () => void, dossierId = "", nomPatient = "") {
-  zone = z; cible = ta; apres = enregistrer; nom = nomPatient;
+export function monter(z: HTMLElement, ta: HTMLTextAreaElement, enregistrer: () => void, dossierId = "", nomPatient = "", pc: PourPC | null = null) {
+  zone = z; cible = ta; apres = enregistrer; nom = nomPatient; pourPC = pc;
   if (dossierId !== dossier) { dossier = dossierId; if (!enr.occupe()) enr.attente = null; }
   dessiner();
   if (!enr.attente && !enr.enCours && dossierId) db.lireParametre<Garde>(GARDE).then(g => {
@@ -57,7 +71,7 @@ export function quitter(jeter = false) {
     await garder(son, d).catch(() => {});
     toast("Enregistrement arrêté et gardé : rouvrez « Dicter la séance » de ce patient pour le transcrire.");
   });
-  enr.attente = null; enr.erreur = ""; zone = null; cible = null;
+  enr.attente = null; enr.erreur = ""; zone = null; cible = null; pourPC = null;
 }
 
 function dessiner() {

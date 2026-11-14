@@ -1,16 +1,17 @@
 {
   "name": "suivi-patients-kine",
   "private": true,
-  "version": "1.8.1",
+  "version": "1.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node scripts/pc-travail.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
     "icons": "node scripts/icones.mjs",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "pc": "node scripts/pc-travail.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

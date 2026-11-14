@@ -42,8 +42,10 @@ export function texteMajPC(pc: synchro.EtatSync["pc"]): string {
   if (m.relancer) return "Le PC a besoin d'une nouvelle installation : relancez la ligne d'installation sur le PC (ci-dessous).";
   const faite = m.faites?.[0];
   const recente = faite && Date.now() - new Date(faite.quand).getTime() < 7 * 86_400_000
-    ? ` Dernière mise à jour : ${depuis(faite.quand)} (${faite.nom === "voix" ? "Whisper" : "partage"}).` : "";
-  return (m.erreur ? `Mise à jour du PC : le dernier essai n'a pas abouti (${m.erreur}).` : `Le PC se met à jour tout seul (version ${pc.version}).`) + recente;
+    ? ` Dernière mise à jour : ${depuis(faite.quand)} (${faite.nom === "voix" ? "Whisper" : faite.nom === "travail" ? "travail en tâche de fond" : "partage"}).` : "";
+  /* 1.9.0 : le PC range les dictées en tâche de fond */
+  const travail = pc.travail?.pret ? ` Il range vos dictées en tâche de fond${pc.travail.enCours ? ` (${pc.travail.enCours} en cours)` : ""}.` : "";
+  return (m.erreur ? `Mise à jour du PC : le dernier essai n'a pas abouti (${m.erreur}).` : `Le PC se met à jour tout seul (version ${pc.version}).`) + travail + recente;
 }
 
 export function afficherPartage() {

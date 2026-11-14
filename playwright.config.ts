@@ -25,6 +25,11 @@ export default defineConfig({
     url: "http://127.0.0.1:4747/",
     reuseExistingServer: false
   }, {
+    // un second PC, qui fait le travail en tâche de fond (1.9.0) : il connaît l'adresse du serveur de l'appli
+    command: "rm -rf .faux-pc2 && MUNINN_DOSSIER=.faux-pc2 MUNINN_PORT=4757 MUNINN_CODE=ESSA-IPCM-UNIN MUNINN_VOIX_URL=http://localhost:4181 MUNINN_IA_ADRESSE=http://localhost:4173 node public/pc/muninn-pc.mjs",
+    url: "http://127.0.0.1:4757/",
+    reuseExistingServer: false
+  }, {
     command: "PORT=4181 node tests/faux/whisper.mjs",
     url: "http://localhost:4181/dernier",
     reuseExistingServer: false

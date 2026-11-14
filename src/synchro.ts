@@ -16,7 +16,9 @@ const PAQUET = 200;
 export type MajPC = { verifie?: string; erreur?: string; relancer?: boolean; pc?: number; voix?: number; faites?: { nom: string; de: number; a: number; quand: string }[] } | null;
 export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null; pcRevenu?: boolean;
   attente?: string | null;                      // plus vieux changement de cet appareil pas encore parti au PC (1.7.0)
-  pc?: { version: number; maj: MajPC } };
+  pc?: { version: number; maj: MajPC; travail?: TravailPC } };
+/* travail en tâche de fond du PC (1.9.0) : null = pas installé (travail.mjs absent) ; pret : il sait joindre le serveur de l'appli */
+export type TravailPC = { version: number; pret: boolean; enCours: number } | null;
 let etat: EtatSync = { relie: false, enCours: false, derniere: null, erreur: null };
 const abonnes = new Set<() => void>();
 export function abonner(fn: () => void) { abonnes.add(fn); return () => abonnes.delete(fn); }
@@ -142,10 +144,10 @@ async function unEchange() {
     await recevoirFichiers(cfg);
     const quand = new Date().toISOString();
     await db.ecrireParametre(PARAM_OK, quand);
-    const pc = await json<{ version?: number; maj?: MajPC }>(cfg, "/api/sync/etat").catch(() => null);
+    const pc = await json<{ version?: number; maj?: MajPC; travail?: TravailPC }>(cfg, "/api/sync/etat").catch(() => null);
     // les changements faits avant le début de cet échange sont partis
     if (lireAttente() && lireAttente()! <= debut) ecrireAttente(null);
-    maj({ enCours: false, derniere: quand, erreur: null, pcRevenu: false, attente: lireAttente(), ...(pc ? { pc: { version: pc.version ?? 0, maj: pc.maj ?? null } } : {}) });
+    maj({ enCours: false, derniere: quand, erreur: null, pcRevenu: false, attente: lireAttente(), ...(pc ? { pc: { version: pc.version ?? 0, maj: pc.maj ?? null, travail: pc.travail ?? null } } : {}) });
   } catch (e) {
     console.error("Partage avec le PC :", e);
     maj({ enCours: false, erreur: e instanceof ErreurSync ? e.message : "L'échange avec le PC n'a pas abouti.", pcRevenu: e instanceof ErreurPCRevenu, attente: lireAttente() });

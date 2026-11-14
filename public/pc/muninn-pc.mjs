@@ -11,15 +11,22 @@
 //   rev-max.txt    le plus grand numéro de modification jamais enregistré (repère pour voir si la base est revenue en arrière) ;
 //   journal.log    ce qui s'est passé d'inhabituel (fichier abîmé, base reprise d'une copie), jamais le contenu des dossiers ;
 //   modeles/       le modèle de Whisper (voix.py, transcription de la voix sur le PC) ;
-//   maj-etat.json  où en est la mise à jour automatique (écrit par lanceur.mjs depuis la 1.7.0, montré dans l'appli).
+//   maj-etat.json  où en est la mise à jour automatique (écrit par lanceur.mjs depuis la 1.7.0, montré dans l'appli) ;
+//   travaux/       les enregistrements de voix envoyés par les appareils, le temps de les transcrire (1.9.0) ;
+//   ia.json        le code d'accès au serveur de l'appli, donné par les appareils avec chaque travail (1.9.0).
+//
+// Travail en tâche de fond (1.9.0) : travail.mjs, à côté de ce fichier, transcrit et range les dictées envoyées par les
+// appareils, puis écrit le résultat dans la base (voir src/pc/travail.ts). Sans lui, Muninn marche comme avant.
 import { createServer } from "node:http";
 import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const VERSION = 7;
+const VERSION = 8;
+const ici = dirname(fileURLToPath(import.meta.url));
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -32,6 +39,7 @@ const PAR_PAGE = 500;
 
 const fDonnees = join(dossier, "donnees.json"), dFichiers = join(dossier, "fichiers"), dCopies = join(dossier, "copies"), fCode = join(dossier, "code.txt");
 const fJournal = join(dossier, "journal.log"), fRevMax = join(dossier, "rev-max.txt");
+const dTravaux = join(dossier, "travaux"), fIA = join(dossier, "ia.json");
 const COPIE = /^\d{4}-\d{2}-\d{2}\.json$/;
 
 /* ---------- les données ---------- */
@@ -190,7 +198,7 @@ const echecs = new Map();   // adresse -> { n, depuis }
 
 const entetes = req => ({
   "Access-Control-Allow-Origin": req.headers.origin || "*",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Muninn-IA",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
   "Access-Control-Allow-Private-Network": "true",
   "Access-Control-Max-Age": "600",
@@ -239,7 +247,7 @@ async function api(req, res, url) {
   if (req.method === "GET" && chemin === "/api/sync/etat") {
     let maj = null;
     try { maj = JSON.parse(await readFile(join(dossier, "maj-etat.json"), "utf8")); } catch { /* pas encore de lanceur */ }
-    return json(req, res, 200, { muninn: true, version: VERSION, id: base.id, origine: base.origine, rev: base.rev, elements: Object.keys(base.elements).length, maj });
+    return json(req, res, 200, { muninn: true, version: VERSION, id: base.id, origine: base.origine, rev: base.rev, elements: Object.keys(base.elements).length, maj, travail: etatTravail() });
   }
 
   /* les modifications depuis le numéro donné, dans l'ordre */
@@ -273,6 +281,8 @@ async function api(req, res, url) {
       if (acceptes.length) await enregistrer();
       return { acceptes, conflits, rev: base.rev };
     });
+    // un travail relancé ou abandonné sur un appareil : le travail en tâche de fond le voit tout de suite
+    if (r.acceptes.some(a => a.cle === "parametres/travaux")) atelier?.reveiller();
     return json(req, res, 200, r);
   }
 
@@ -367,24 +377,129 @@ async function apiVoix(req, res, url) {
   json(req, res, 404, { erreur: "Introuvable." });
 }
 
+/* ---------- le travail en tâche de fond (1.9.0) : travail.mjs ---------- */
+
+let atelier = null, versionTravail = null;
+const ID_TRAVAIL = /^[A-Za-z0-9_-]{8,64}$/;
+const valeur = cle => { const e = base.elements[cle]; return e && !e.supprime ? e.valeur : null; };
+const lecture = {
+  lire: valeur,
+  liste: prefixe => Object.entries(base.elements).filter(([cle, e]) => cle.startsWith(prefixe) && !e.supprime).map(([, e]) => e.valeur)
+};
+async function adresseIA() {
+  if (process.env.MUNINN_IA_ADRESSE) return process.env.MUNINN_IA_ADRESSE;
+  try { return JSON.parse(await readFile(join(dossier, "maj.json"), "utf8")).adresse || null; } catch { return null; }
+}
+let ia = { adresse: null, code: null };
+
+const env = {
+  ...lecture,
+  /* f lit l'état du moment et rend ses écritures : tout est écrit d'un coup, à la suite des envois des appareils */
+  transaction: f => enFile(async () => {
+    const ecritures = f(lecture).filter(e => e && typeof e.cle === "string" && CLE.test(e.cle));
+    if (!ecritures.length) return;
+    if (base.rev) await copieDuJour(JSON.stringify(base));
+    for (const e of ecritures) {
+      base.rev++;
+      base.elements[e.cle] = e.valeur === null || e.valeur === undefined ? supprime(base.elements[e.cle]) : { rev: base.rev, valeur: e.valeur };
+    }
+    await enregistrer();
+  }),
+  transcrire: async (son, indice) => {
+    let r;
+    try {
+      r = await fetch(voix + "/transcrire", { method: "POST", body: son.octets, signal: AbortSignal.timeout(20 * 60_000),
+        headers: { "Content-Type": son.type || "audio/webm", "X-Muninn-Indice": encodeURIComponent(indice || "") } });
+    } catch { throw Object.assign(new Error("Whisper ne répond pas sur le PC."), { nature: "passager" }); }
+    let corps = {};
+    try { corps = await r.json(); } catch { /* réponse vide */ }
+    if (!r.ok) throw Object.assign(new Error(corps.erreur || "La transcription a échoué sur le PC."), { nature: r.status === 400 || r.status === 413 ? "definitif" : "passager" });
+    return corps.texte || "";
+  },
+  sons: {
+    garder: async (id, son) => {
+      await mkdir(dTravaux, { recursive: true });
+      await writeFile(join(dTravaux, id + ".type"), son.type || "audio/webm");
+      await ecrireSur(join(dTravaux, id), son.octets);
+    },
+    lire: async id => {
+      if (!ID_TRAVAIL.test(id) || !existsSync(join(dTravaux, id))) return null;
+      const type = existsSync(join(dTravaux, id + ".type")) ? (await readFile(join(dTravaux, id + ".type"), "utf8")).trim() : "audio/webm";
+      return { octets: await readFile(join(dTravaux, id)), type };
+    },
+    oublier: async id => { if (!ID_TRAVAIL.test(id)) return; await rm(join(dTravaux, id), { force: true }); await rm(join(dTravaux, id + ".type"), { force: true }); },
+    liste: async () => existsSync(dTravaux) ? (await readdir(dTravaux)).filter(n => ID_TRAVAIL.test(n)) : []
+  },
+  ia: () => ia.adresse && ia.code ? { adresse: ia.adresse, code: ia.code } : null,
+  noter: t => { noter(t); },
+  ...(process.env.MUNINN_TRAVAIL_DELAI_MS ? { delai: () => Number(process.env.MUNINN_TRAVAIL_DELAI_MS) } : {})
+};
+
+async function chargerTravail() {
+  if (!existsSync(join(ici, "travail.mjs"))) return;
+  try {
+    ia.adresse = await adresseIA();
+    try { ia.code = JSON.parse(await readFile(fIA, "utf8")).code || null; } catch { ia.code = null; }
+    const m = await import(pathToFileURL(join(ici, "travail.mjs")).href);
+    atelier = m.creer(env);
+    versionTravail = m.VERSION;
+    m.lireDemande && (lireDemande = m.lireDemande);
+    atelier.demarrer().catch(e => noter("Travail en tâche de fond arrêté : " + (e?.message || e)));
+  } catch (e) {
+    atelier = null; versionTravail = null;
+    await noter("Travail en tâche de fond indisponible (travail.mjs illisible) : " + (e?.message || e));
+  }
+}
+let lireDemande = () => null;
+
+/* pret : le PC sait à quel serveur demander l'IA ; les appareils lui confient alors leurs dictées */
+const etatTravail = () => atelier ? { ...atelier.etat(), pret: !!ia.adresse } : null;
+
+/* un appareil confie un travail : texte (JSON) ou enregistrement (le son, la demande dans l'adresse) ; il donne aussi le code
+   d'accès au serveur de l'appli (X-Muninn-IA), gardé pour les nouveaux essais */
+async function apiTravail(req, res, url) {
+  if (req.method !== "POST" || url.pathname !== "/api/travail") return json(req, res, 404, { erreur: "Introuvable." });
+  if (!atelier || !ia.adresse) return json(req, res, 503, { erreur: "Le travail en tâche de fond n'est pas installé sur le PC." });
+  const codeIA = String(req.headers["x-muninn-ia"] || "").trim();
+  if (codeIA && codeIA !== ia.code && codeIA.length <= 200) { ia.code = codeIA; await ecrireSur(fIA, JSON.stringify({ code: codeIA })); }
+  const enJson = String(req.headers["content-type"] || "").startsWith("application/json");
+  let demande, son;
+  if (enJson) demande = lireDemande((await lireJson(req, 2e6)).demande);
+  else {
+    try { demande = lireDemande(JSON.parse(url.searchParams.get("demande") || "{}")); } catch { demande = null; }
+    const octets = await lireOctets(req, 150e6);
+    if (octets.length) son = { octets, type: String(req.headers["content-type"] || "audio/webm") };
+  }
+  if (!demande) return json(req, res, 400, { erreur: "Demande illisible." });
+  try { return json(req, res, 200, { travail: await atelier.recevoir(demande, son) }); }
+  catch (e) { return json(req, res, 400, { erreur: e?.message || "Demande refusée." }); }
+}
+
 await charger();
 const purgerSur = () => enFile(() => purger().catch(e => noter("Effacement définitif interrompu : " + (e?.message || e))));
 await purgerSur();
 setInterval(purgerSur, 6 * 3600_000).unref();
 code = await lireCode();
+await chargerTravail();
 
 const serveur = createServer(async (req, res) => {
   let url;
   try { url = new URL(req.url ?? "/", "http://x"); } catch { res.writeHead(400).end(); return; }
   if (req.method === "OPTIONS") { res.writeHead(204, entetes(req)).end(); return; }
+  /* version des programmes, sans code : le lanceur vérifie ainsi qu'une mise à jour du travail en tâche de fond a pris */
+  if (url.pathname === "/sante") {
+    res.writeHead(200, { "Content-Type": "application/json", ...entetes(req) });
+    res.end(JSON.stringify({ pc: VERSION, travail: versionTravail }));
+    return;
+  }
   if (url.pathname === "/") {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...entetes(req) });
     res.end("Muninn est en marche sur ce PC. Ouvrez Muninn sur vos appareils pour vous en servir.\n");
     return;
   }
-  if (!url.pathname.startsWith("/api/sync/") && !url.pathname.startsWith("/api/voix/")) return json(req, res, 404, { erreur: "Introuvable." });
+  if (!url.pathname.startsWith("/api/sync/") && !url.pathname.startsWith("/api/voix/") && url.pathname !== "/api/travail") return json(req, res, 404, { erreur: "Introuvable." });
   if (!autorise(req, res)) return;
-  try { await (url.pathname.startsWith("/api/voix/") ? apiVoix(req, res, url) : api(req, res, url)); }
+  try { await (url.pathname.startsWith("/api/voix/") ? apiVoix(req, res, url) : url.pathname === "/api/travail" ? apiTravail(req, res, url) : api(req, res, url)); }
   catch (e) {
     console.error(e);
     if (!res.headersSent) json(req, res, e?.message === "trop gros" ? 413 : 400, { erreur: e?.message === "trop gros" ? "Trop volumineux." : "Demande illisible." });

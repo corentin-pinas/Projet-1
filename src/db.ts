@@ -217,6 +217,15 @@ export async function garderDictee(date: string, texte: string) {
   prevenir();
 }
 
+/* un réglage partagé modifié à partir de sa version du moment (lue et réécrite dans la même transaction), puis partagé */
+export async function modifierParametrePartage<T>(cle: string, f: (v: T | undefined) => T | undefined) {
+  const tx = (await ouvrir()).transaction("parametres", "readwrite");
+  const v = f((await tx.store.get(cle))?.valeur as T | undefined);
+  if (v === undefined) await tx.store.delete(cle); else await tx.store.put({ cle, valeur: v });
+  await tx.done;
+  prevenir();
+}
+
 export async function dicteesDu(date: string): Promise<DicteeGardee[]> {
   const liste = (((await (await ouvrir()).get("parametres", "dictees"))?.valeur as { dictees?: DicteeGardee[] } | undefined)?.dictees ?? []);
   return liste.filter(x => x.date === date).sort((a, b) => a.cree.localeCompare(b.cree));
@@ -396,7 +405,7 @@ async function nettoyerFichiers() {
    Les PDF et photos voyagent à part (un fichier ne change jamais une fois déposé).
    Base : la version de l'élément au dernier échange avec le PC (rev : son numéro sur le PC). */
 export type Base = { cle: string; valeur: unknown; rev: number };
-export const PARAMS_PARTAGES = ["horaires", "transmissions_mot", "dictees"];
+export const PARAMS_PARTAGES = ["horaires", "transmissions_mot", "dictees", "travaux"];   // travaux : travail en tâche de fond du PC (1.9.0)
 const MAGASINS = ["dossiers", "bilans", "seances"] as const;
 
 /* identifiant de cet appareil, créé à la première demande (jamais partagé avec les autres appareils) */

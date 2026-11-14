@@ -15,6 +15,7 @@ import * as prochain from "./prochain-rdv";
 import * as manquantes from "./seances-manquantes";
 import * as objectifs from "./objectifs";
 import * as voixSeance from "./voix-seance";
+import * as travailPC from "./travail-pc";
 import { $, confirmer, esc, toast } from "./ui";
 
 
@@ -73,6 +74,7 @@ export async function demarrer() {
   });
   donnees = await db.tout();
   moteur.abonner(() => { renderList(); if (!busy()) renderMain(); });
+  travailPC.abonner(() => { if (!busy()) renderMain(); });
   moteur.surMessage(toast);
   addEventListener("online", () => moteur.resumerEnAttente());
   await rafraichirIA();
@@ -374,11 +376,17 @@ function seancesHtml(D: Dossier) {
     ...absences.map(d => ({ date: d, html: manquantes.absence(D, d) }))
   ];
   const avant = (date: string, apres: string | null) => elements.filter(e => e.date > date && (apres === null || e.date <= apres)).sort((a, b) => b.date.localeCompare(a.date)).map(e => e.html).join("");
-  return `<div class="seances"><h3>Séances (${list.length})${!form ? `<button class="primary" id="sadd">Ajouter une séance</button>` : ""}</h3>${form}
+  /* séances dites à la voix et confiées au PC (1.9.0), pas encore rangées */
+  const parPC = travailPC.seancesVoix(D.id).map(t => `<div class="seance pcseance" data-pc="${esc(t.id)}"><div class="sd">Séance du ${esc(frDate(t.date))}, dite à la voix</div>
+      ${t.etat === "erreur"
+        ? `<p class="pcerreur">⚠ Le PC n'a pas pu la ranger : ${esc(t.erreur ?? "erreur inconnue.")}</p>${t.texte ? `<details class="orig"><summary>Texte transcrit</summary><div class="sc">${esc(t.texte)}</div></details>` : ""}
+           <div class="sa"><button class="primary" data-pcrelancer="${esc(t.id)}">Réessayer</button><button data-pcretirer="${esc(t.id)}">L'effacer</button></div>`
+        : `<div class="note" role="status">🖥️ ${t.etat === "transcription" ? "Transcription de votre voix sur le PC…" : t.texte ? "Mise au propre sur le PC…" : "Envoyée au PC, elle s'affichera ici toute seule."}${t.erreur ? ` <small>Dernier essai : ${esc(t.erreur)} Le PC réessaie tout seul.</small>` : ""}</div>`}</div>`).join("");
+  return `<div class="seances"><h3>Séances (${list.length})${!form ? `<button class="primary" id="sadd">Ajouter une séance</button>` : ""}</h3>${form}${parPC}
     ${list.length || elements.length ? list.map((s, k) => {
       const ok = propreOk(s), orig = s.brut || s.contenu;
       return avant(s.date, k ? list[k - 1].date : null) + `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre!) : esc(s.contenu)}</div>
-      ${moteur.occupe(s.id) ? `<div class="note">Mise au propre en cours…</div>` : ""}
+      ${moteur.occupe(s.id) ? `<div class="note">Mise au propre en cours…</div>` : travailPC.surSeance(s.id) ? `<div class="note">Mise au propre en cours sur le PC…</div>` : ""}
       ${ok && orig !== s.propre ? `<details class="orig"><summary>Texte d'origine</summary><div class="sc">${esc(orig)}</div></details>` : ""}
       <div class="sa"><button data-edit="${esc(s.id)}">Modifier</button>${!ok && aCle && !moteur.occupe(s.id) ? `<button data-clean="${esc(s.id)}">Mettre au propre</button>` : ""}<button data-sdel="${esc(s.id)}">Supprimer</button></div></div>`;
     }).join("") + elements.filter(e => !list.length || e.date <= list[list.length - 1].date).sort((a, b) => b.date.localeCompare(a.date)).map(e => e.html).join("")
@@ -398,7 +406,9 @@ function wireSeances(D: Dossier) {
     voixSeance.quitter(true); formOpen = false; editing = null; renderMain();
   };
   const ta = $<HTMLTextAreaElement>("#stext"), prev = $("#avprev");
-  if (ta) voixSeance.monter($("#svoix"), ta, () => $<HTMLButtonElement>("#ssave")?.click(), D.id, D.label); else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
+  if (ta) voixSeance.monter($("#svoix"), ta, () => $<HTMLButtonElement>("#ssave")?.click(), D.id, D.label,
+    editing ? null : { date: () => $<HTMLInputElement>("#sdate")?.value || aujourdhui(), envoye: () => { formOpen = false; editing = null; renderMain(); } });
+  else voixSeance.quitter();   // formulaire fermé (autre patient, autre écran) : micro coupé
   if (ta && prev) {
     const show = () => {
       const a = avenirFrom(ta.value);
@@ -436,6 +446,13 @@ function wireSeances(D: Dossier) {
       toast(avant ? "Séance modifiée." : "Séance enregistrée.");
     } catch { save.disabled = false; toast("L'enregistrement a échoué. Réessayez."); }
   };
+  $("#main").querySelectorAll<HTMLElement>("[data-pcrelancer]").forEach(el => el.onclick = async () => {
+    try { await travailPC.relancer(el.dataset.pcrelancer!); toast("Le PC va réessayer."); } catch { toast("L'enregistrement a échoué. Réessayez."); }
+  });
+  $("#main").querySelectorAll<HTMLElement>("[data-pcretirer]").forEach(el => el.onclick = async () => {
+    if (!await confirmer("Effacer cette séance dite à la voix ? Elle n'a pas été rangée.", "L'effacer")) return;
+    try { await travailPC.retirer(el.dataset.pcretirer!); } catch { toast("La suppression a échoué."); }
+  });
   $("#main").querySelectorAll<HTMLElement>("[data-clean]").forEach(el => el.onclick = () => {
     const s = donnees.seances.find(x => x.id === el.dataset.clean); if (s) moteur.analyser(s, true, false);
   });

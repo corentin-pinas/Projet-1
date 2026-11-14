@@ -26,7 +26,9 @@ const IDENTITES: Record<string, (x: unknown) => string> = {
   valides: x => String(x),
   absences: x => String(x),                                                      // un jour d'absence
   retirer: x => String(x),                                                       // un rendez-vous dit annulé, à confirmer
-  dictees: x => String((x as Objet)?.id)                                         // une dictée gardée
+  dictees: x => String((x as Objet)?.id),                                        // une dictée gardée
+  travaux: x => String((x as Objet)?.id),                                        // un travail confié au PC (1.9.0)
+  doutes: x => String((x as Objet)?.id)                                          // un passage de dictée à ranger à la main
 };
 
 function fusionListe(base: unknown, local: unknown, distant: unknown, id: (x: unknown) => string): unknown[] {

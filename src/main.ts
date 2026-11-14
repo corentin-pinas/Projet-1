@@ -13,6 +13,7 @@ import * as exportDossier from "./export-dossier";
 import * as fenetres from "./fenetres";
 import { brancherPartage } from "./partage";
 import * as synchro from "./synchro";
+import * as travailPC from "./travail-pc";
 import { afficherIA, brancherReglagesIA } from "./reglages-ia";
 import { $, toast, esc } from "./ui";
 import { verifications, type EtatAppareil } from "./verifications";
@@ -131,6 +132,7 @@ db.quandBloque(b => {
 surveillerCopies();
 brancherPartage();
 alerteCode.brancher();
+travailPC.brancher().catch(() => {});   // travaux confiés au PC (1.9.0)
 demarrer().then(() => synchro.brancher()).catch(() => {
   $("#list").innerHTML = `<div class="note">Vos données n'ont pas pu être chargées. Fermez l'appli et rouvrez-la.</div>`;
 });

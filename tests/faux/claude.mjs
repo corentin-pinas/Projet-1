@@ -47,7 +47,13 @@ if (args[0] === "auth" && args[1] === "login") {
   }
   const document = contenu.some(b => b.type === "document" || b.type === "image");
   const texte = contenu.map(b => b.text ?? "").join("");
-  const sortie = texte.includes("Retrouve le passage") ? { trouve: false, extrait: null }
+  /* dictée groupée (1.9.0, rangée par le PC) : un passage par patient annoncé par « Avec » ou « Ensuite » */
+  const dictee = texte.includes("Voici une dictée groupée") ? (texte.split("Dictée :\n")[1] ?? "").split(/\b(?:Avec|Ensuite|avec|ensuite)\s+/).filter(x => x.trim()).map(x => {
+    const [, nom, extrait] = /^([^,.]+)[,.]\s*([\s\S]*)$/.exec(x.trim()) ?? [null, null, x.trim()];
+    return { nom, extrait: extrait.trim(), propre: "Fait en séance : " + extrait.trim(), resume: null, bref: extrait.trim().slice(0, 40), rdv_date: null, rdv_heure: null, rdv_demi: null, rdv_autres: [], rdv_annules: [], objectifs: [], fin_traitement: false };
+  }) : null;
+  const sortie = dictee ? { seances: dictee }
+    : texte.includes("Retrouve le passage") ? { trouve: false, extrait: null }
     : document
     ? { region: "Épaule G", date_bilan: "02/10/2026", age: 61, coup_oeil: "Raideur d'épaule gauche depuis 3 mois (résumé par l'abonnement).", chiffres: [{ label: "EVA", valeur: "4/10" }], sections: [{ titre: "Examen", items: ["Élévation 110°"] }], a_verifier: [] }
     : { propre: "État du patient : douleur 2/10.\nFait en séance : mobilisations passives de l'épaule gauche.\nÀ venir : reprendre le renforcement, dans une semaine.", resume: "Reprendre le renforcement.", bref: "Douleur 2/10. Mobilisations passives de l'épaule gauche.", rdv_date: null, rdv_heure: null };

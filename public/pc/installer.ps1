@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $Adresse = "__ADRESSE__"
 $Dossier = Join-Path $env:ProgramData "Muninn"
 $Port = 4747
-$Installeur = 2   # à augmenter quand une mise à jour demande de relancer cette installation (droits, Python, lanceur)
+$Installeur = 3   # à augmenter quand une mise à jour demande de relancer cette installation (droits, Python, lanceur)
 
 function Etape($t) { Write-Host ""; Write-Host "== $t" -ForegroundColor Cyan }
 function Stop-Erreur($t) { Write-Host ""; Write-Host $t -ForegroundColor Red; Write-Host "Envoyez une capture de cette fenêtre à Claude."; exit 1 }
@@ -38,6 +38,8 @@ New-Item -ItemType Directory -Force -Path $Dossier | Out-Null
 icacls $Dossier /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "$($env:USERDOMAIN)\$($env:USERNAME):(OI)(CI)F" "*S-1-5-19:(OI)(CI)M" | Out-Null
 icacls (Join-Path $Dossier "*") /reset /T /C /Q | Out-Null
 Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/muninn-pc.mjs" -OutFile (Join-Path $Dossier "muninn-pc.mjs")
+# le travail en tâche de fond (1.9.0) : le PC transcrit et range les dictées envoyées par les appareils
+Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/travail.mjs" -OutFile (Join-Path $Dossier "travail.mjs")
 # le lanceur fait tourner le partage et Whisper, et les met à jour tout seul depuis cette adresse (maj.json)
 Invoke-WebRequest -UseBasicParsing -Uri "$Adresse/pc/lanceur.mjs" -OutFile (Join-Path $Dossier "lanceur.mjs")
 [IO.File]::WriteAllText((Join-Path $Dossier "maj.json"), (@{ adresse = $Adresse; installeur = $Installeur } | ConvertTo-Json))
@@ -173,6 +175,7 @@ Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host " Muninn est installé sur ce PC." -ForegroundColor Green
 Write-Host " Il se met désormais à jour tout seul (au démarrage puis toutes les 6 heures)." -ForegroundColor Green
+Write-Host " Il range aussi vos dictées en tâche de fond : vous pouvez fermer Muninn après avoir dicté." -ForegroundColor Green
 Write-Host " Ne relancez cette ligne que si « État de l'appli » vous le demande." -ForegroundColor Green
 Write-Host ""
 Write-Host " Adresse du PC : $AdressePC" -ForegroundColor Yellow
