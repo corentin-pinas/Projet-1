@@ -18,6 +18,12 @@ async function nouvellePage(browser: Browser): Promise<Page> {
 async function semer(page: Page, magasins: Record<string, unknown[]>) {
   await page.evaluate(async magasins => {
     const db: IDBDatabase = await new Promise((ok, ko) => { const r = indexedDB.open("mes-patients"); r.onsuccess = () => ok(r.result); r.onerror = ko; });
+    /* l'appli crée son identifiant d'appareil au démarrage : on attend qu'il soit écrit, sinon il pourrait écraser celui semé ici */
+    for (let i = 0; i < 100; i++) {
+      const p = await new Promise(ok => { const g = db.transaction("parametres").objectStore("parametres").get("appareil"); g.onsuccess = () => ok(g.result); });
+      if (p) break;
+      await new Promise(r => setTimeout(r, 50));
+    }
     const tx = db.transaction(Object.keys(magasins), "readwrite");
     for (const [nom, l] of Object.entries(magasins)) for (const x of l) tx.objectStore(nom).put(x);
     tx.commit(); await new Promise(ok => tx.oncomplete = ok);

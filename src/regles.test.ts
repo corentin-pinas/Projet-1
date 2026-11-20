@@ -389,6 +389,24 @@ describe("alerte « sans rendez-vous » (1.5.2)", () => {
   });
 });
 
+describe("alerte « bilan pas encore ajouté » (1.10.0)", () => {
+  it("7 jours après la création ou dès la 2e séance ; jamais avec un bilan, archivé, « Pas de bilan » ; « Plus tard » 7 jours", async () => {
+    const { sansBilan } = await import("./regles");
+    const auj = "2026-11-20";
+    const vieux = dossier({ id: "v", cree: "2026-11-10T10:00:00Z" });
+    const deuxSeances = dossier({ id: "s", cree: "2026-11-18T10:00:00Z" });
+    const neuf = dossier({ id: "n", cree: "2026-11-19T10:00:00Z" });
+    const avecBilan = dossier({ id: "b", cree: "2026-11-01T10:00:00Z" });
+    const archive = dossier({ id: "a", cree: "2026-10-01T10:00:00Z", fin: "2026-10-10" });
+    const jamais = dossier({ id: "j", cree: "2026-10-01T10:00:00Z", sans_bilan: true });
+    const tard = dossier({ id: "t", cree: "2026-10-01T10:00:00Z", bilan_plus_tard: "2026-11-25" });
+    const seances = [seance({ id: "1", dossierId: "s" }), seance({ id: "2", dossierId: "s" }), seance({ id: "3", dossierId: "n" })];
+    const l = sansBilan([vieux, deuxSeances, neuf, avecBilan, archive, jamais, tard], [{ id: "x", dossierId: "b" } as never], seances, auj);
+    expect(l.map(x => [x.dossier.id, x.jours, x.seances])).toEqual([["v", 10, 0], ["s", 2, 2]]);
+    expect(sansBilan([tard], [], [], "2026-11-25").map(x => x.dossier.id)).toEqual(["t"]);
+  });
+});
+
 /* plusieurs rendez-vous dictés d'un coup, rendez-vous dits annulés (choix de Corentin du 11 novembre 2026) */
 import { aRetirer, poserRdvs } from "./regles";
 describe("poserRdvs", () => {

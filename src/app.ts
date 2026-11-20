@@ -166,7 +166,7 @@ export function renderMain() {
   const D = donnees.dossiers.find(d => d.id === selD);
   if (!D) {
     if (history.state?.muninn === "fiche") history.replaceState(null, "");   // fiche disparue (patient supprimé ailleurs)
-    voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient); return;
+    voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient, id => { bilanPour = id; $("#file").click(); }); return;
   }
   const bilans = bilansDe(D), age = ageDe(D);
   const b = bilans.find(x => x.id === selB) ?? bilans[0] as Bilan | undefined, r = b?.resume;

@@ -34,6 +34,8 @@ export type Dossier = {
   objectifs?: Objectifs;                              // objectifs actuels du patient (sinon : ceux du bilan)
   objectifs_hist?: Objectifs[];                       // versions précédentes, la plus récente d'abord (10 au plus)
   objectifs_propose?: { liste: string[]; date: string };   // objectifs dits dans une dictée, à confirmer
+  sans_bilan?: boolean;                               // « Pas de bilan » : ce patient n'en aura pas, plus d'alerte (1.10.0)
+  bilan_plus_tard?: string;                           // « Plus tard » : alerte « bilan pas encore ajouté » tue jusqu'à ce jour (AAAA-MM-JJ)
 };
 
 /* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
@@ -342,6 +344,25 @@ export function sansRendezVous(dossiers: Dossier[], bilans: Bilan[], seances: Se
     sortie.push({ dossier: d, depuis, jours, archiver: jours >= JOURS_ARCHIVER });
   }
   return sortie.sort((a, b) => a.depuis.localeCompare(b.depuis));
+}
+
+/* Bilan pas encore ajouté (choix de Corentin du 20 novembre 2026) : un dossier créé sans bilan est signalé 7 jours après sa
+   création, ou dès sa 2e séance (le premier des deux). « Plus tard » le fait taire 7 jours, « Pas de bilan » pour toujours.
+   Les archivés ne sont pas signalés. Du plus ancien au plus récent. */
+export const JOURS_SANS_BILAN = 7, SEANCES_SANS_BILAN = 2;
+export type SansBilan = { dossier: Dossier; cree: string; jours: number; seances: number };
+export function sansBilan(dossiers: Dossier[], bilans: Bilan[], seances: Seance[], aujourdhui: string): SansBilan[] {
+  const avecBilan = new Set(bilans.map(b => b.dossierId));
+  const sortie: SansBilan[] = [];
+  for (const d of dossiers) {
+    if (estArchive(d) || d.sans_bilan || avecBilan.has(d.id)) continue;
+    if (d.bilan_plus_tard && aujourdhui < d.bilan_plus_tard) continue;
+    const cree = String(d.cree).slice(0, 10);
+    const jours = /^\d{4}-\d{2}-\d{2}$/.test(cree) ? Math.max(0, joursEntre(cree, aujourdhui)) : 0;
+    const n = seances.filter(s => s.dossierId === d.id).length;
+    if (jours >= JOURS_SANS_BILAN || n >= SEANCES_SANS_BILAN) sortie.push({ dossier: d, cree, jours, seances: n });
+  }
+  return sortie.sort((a, b) => a.cree.localeCompare(b.cree));
 }
 
 /* ---------- liste des patients ---------- */

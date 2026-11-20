@@ -4,7 +4,7 @@
    Aucune demande à l'IA ici : tout vient de ce qui est déjà enregistré. */
 import * as db from "./db";
 import type { Donnees } from "./db";
-import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansRendezVous, type Carte, type SansRdv } from "./regles";
+import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, type Carte, type SansBilan, type SansRdv } from "./regles";
 import { esc, toast } from "./ui";
 
 /* ce qui est affiché : une demi-journée d'aujourd'hui, ou toute la journée de demain ; null = choisi par l'appli */
@@ -45,6 +45,19 @@ function blocSansRdv(l: SansRdv[]): string {
     ${l.length > vus.length ? `<button class="lien" data-srtous>Voir les ${l.length - vus.length} autres</button>` : ""}</section>`;
 }
 
+/* Alerte « bilan pas encore ajouté » (choix de Corentin du 20 novembre 2026) : 7 jours après la création du dossier, ou dès
+   la 2e séance. « Ajouter le bilan » ouvre le choix du fichier, qui rejoint le dossier. Cinq patients montrés, les autres sur demande. */
+let tousSansBilan = false;
+function blocSansBilan(l: SansBilan[]): string {
+  if (!l.length) return "";
+  const vus = tousSansBilan ? l : l.slice(0, 5);
+  return `<section class="sansbilan" aria-label="Patients sans bilan"><h3>À vérifier : ${l.length === 1 ? "un bilan pas encore ajouté" : l.length + " bilans pas encore ajoutés"}</h3>
+    ${vus.map(x => `<div class="lsr" data-sb="${esc(x.dossier.id)}">
+      <b>${esc(x.dossier.label)}</b> : dossier créé le ${esc(frDate(x.cree))}${x.jours ? ` (${pluriel(x.jours, "jour")})` : ""}${x.seances ? `, ${pluriel(x.seances, "séance")}` : ""}, toujours sans bilan.
+      <div class="row"><button class="primary" data-sbajout>Ajouter le bilan</button><button data-sbtard>Plus tard</button><button data-sbnon>Pas de bilan</button></div></div>`).join("")}
+    ${l.length > vus.length ? `<button class="lien" data-sbtous>Voir les ${l.length - vus.length} autres</button>` : ""}</section>`;
+}
+
 /* Par défaut : la demi-journée en cours (avant 13 h, le matin) ; le matin sans patient, on montre directement l'après-midi. */
 /* Aujourd'hui sans aucun rendez-vous (dimanche, congé) : la prochaine journée qui a des patients (choix de Corentin, 8 nov.). */
 /* À partir de 20 h, la journée est finie : la prochaine journée avec patients (choix de Corentin, 10 nov.). */
@@ -56,7 +69,7 @@ export function vueParDefaut(maintenant: Date, cartes: Carte[]): Vue {
 }
 
 /* contenu de l'écran ; surPatient est appelé quand on touche une petite fiche */
-export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) => void) {
+export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) => void, surBilan: (id: string) => void = surPatient) {
   const now = new Date(), auj = isoDay(now), demain = decalerJours(auj, 1);
   if (!d.dossiers.length) { el.innerHTML = `<div class="empty">Ajoutez vos premiers bilans avec le bouton « Ajouter des bilans ».</div>`; return; }
   /* « demain » = la prochaine journée qui a des patients (demain, ou lundi un samedi), sinon demain */
@@ -74,7 +87,7 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   const quand = vue === "am" ? "matin" : vue === "pm" ? "après-midi" : "";
 
   const sans = sansRendezVous(d.dossiers, d.bilans, d.seances, auj);
-  let html = blocSansRdv(sans) + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
+  let html = blocSansRdv(sans) + blocSansBilan(sansBilan(d.dossiers, d.bilans, d.seances, auj)) + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
     <div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
       .map(([v, t, n]) => `<button data-vue="${v}" aria-pressed="${vue === v}">${t} <small>${n}</small></button>`).join("")}</div></div>`;
   if (cartes.length) {
@@ -99,8 +112,17 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
     on("[data-srcalme]", async () => { await db.modifierDossier(id, x => ({ ...x, calme: auj })); toast("Noté : Muninn vous le redemandera dans 30 jours."); });
   });
   const tous = el.querySelector<HTMLElement>("[data-srtous]");
-  if (tous) tous.onclick = () => { tousSansRdv = true; afficher(el, d, surPatient); };
-  el.querySelectorAll<HTMLElement>("[data-vue]").forEach(b => b.onclick = () => { choix = b.dataset.vue as Vue; afficher(el, d, surPatient); });
+  if (tous) tous.onclick = () => { tousSansRdv = true; afficher(el, d, surPatient, surBilan); };
+  el.querySelectorAll<HTMLElement>("[data-sb]").forEach(z => {
+    const id = z.dataset.sb!;
+    const on = (sel: string, f: () => Promise<void> | void) => { const b = z.querySelector<HTMLElement>(sel); if (b) b.onclick = async () => { try { await f(); } catch { toast("L'enregistrement a échoué. Réessayez."); } }; };
+    on("[data-sbajout]", () => surBilan(id));   // le choix du fichier s'ouvre dans le même toucher
+    on("[data-sbtard]", async () => { await db.modifierDossier(id, x => ({ ...x, bilan_plus_tard: decalerJours(auj, 7) })); toast("Noté : Muninn vous le redemandera dans 7 jours."); });
+    on("[data-sbnon]", async () => { await db.modifierDossier(id, x => ({ ...x, sans_bilan: true })); toast("Noté : Muninn ne vous le demandera plus pour ce patient."); });
+  });
+  const tousB = el.querySelector<HTMLElement>("[data-sbtous]");
+  if (tousB) tousB.onclick = () => { tousSansBilan = true; afficher(el, d, surPatient, surBilan); };
+  el.querySelectorAll<HTMLElement>("[data-vue]").forEach(b => b.onclick = () => { choix = b.dataset.vue as Vue; afficher(el, d, surPatient, surBilan); });
 }
 
 /* au retour sur l'appli un autre jour ou l'après-midi venu, l'appli choisit de nouveau la demi-journée */
