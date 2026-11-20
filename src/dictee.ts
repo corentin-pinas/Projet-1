@@ -65,8 +65,17 @@ const enr = new Enregistreur({
     await garderBrouillon(true);
     await lancer();
   },
-  redessiner: () => { afficher(); }
+  redessiner: () => { afficherVoix(); }
 });
+
+/* la voix change d'état (micro disponible, enregistrement, transcription) : seule sa zone est redessinée, pour ne pas
+   remplacer la zone de texte pendant que Corentin tape */
+function afficherVoix() {
+  const el = ecran?.querySelector<HTMLElement>("#dvoix");
+  if (!el || zoneSaisie() !== basAffiche) { afficher(); return; }
+  el.innerHTML = enr.html();
+  enr.brancher(el);
+}
 
 /* les patients qui ont rendez-vous le jour de la dictée : Whisper écrit leurs noms juste */
 async function nomsDuJour(): Promise<string[]> {
@@ -107,6 +116,7 @@ type Bas = "envoi" | "nouvelle" | "texte";
 const zoneSaisie = (): Bas => phase === "envoi" ? "envoi"
   : (recaps().length || (doutesDe().length && !saisieLibre)) && !texte.trim() ? "nouvelle" : "texte";
 let basAffiche: Bas | null = null;
+let enPreparation = false;   // un affichage complet est en train d'être préparé
 
 /* les travaux changent (le PC avance, un autre appareil range un passage) : seul le haut de l'écran est redessiné tant que
    le bas ne change pas, pour ne pas retirer la zone de texte sous les doigts de Corentin */
@@ -192,7 +202,7 @@ function htmlBas(bas: Bas): string {
       <button data-jour="${hier()}" aria-pressed="${date === hier()}">Hier</button>
       <input type="date" id="ddate" value="${esc(date)}" max="${aujourdhui()}" aria-label="Autre date">
     </div>
-    ${enr.html()}
+    <div id="dvoix">${enr.html()}</div>
     ${relanceRange.plan ? `<div class="wait relance" role="status">⏳ <b>Rangement pas encore fait :</b> ${esc(relanceRange.plan.cause)}<br>${phrase(relanceRange.plan)} Votre dictée est gardée.
       <div class="row" style="margin-top:10px"><button class="primary" id="drelance">Réessayer maintenant</button></div></div>` : ""}
     <textarea id="dtexte" placeholder="Touchez le micro du clavier et dictez tous vos patients à la suite : « Avec Marc D., … Ensuite Élisabeth G., … ». Rien à toucher entre deux patients.">${esc(texte)}</textarea>
@@ -203,7 +213,12 @@ function htmlBas(bas: Bas): string {
 async function afficher() {
   const z = ecran;
   if (!z) return;
-  const haut = await htmlHaut();
+  /* noté tout de suite : un changement des travaux pendant la préparation ne redessine pas tout l'écran une seconde fois
+     (la zone de texte serait remplacée sous les doigts) */
+  basAffiche = zoneSaisie();
+  enPreparation = true;
+  let haut: string;
+  try { haut = await htmlHaut(); } finally { enPreparation = false; }
   if (ecran !== z) return;
   const bas = zoneSaisie();
   basAffiche = bas;
@@ -217,7 +232,8 @@ async function afficher() {
 async function afficherHaut() {
   const z = ecran;
   const h = z?.querySelector<HTMLElement>("#dhaut");
-  if (!z || !h) return afficher();
+  if (!z) return;
+  if (!h) { if (!enPreparation) await afficher(); return; }   // écran en cours de préparation : il montrera l'état du moment
   const html = await htmlHaut();
   if (ecran !== z || !h.isConnected) return;
   h.innerHTML = html;
