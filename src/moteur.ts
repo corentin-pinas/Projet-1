@@ -4,7 +4,7 @@ import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
 import * as travailPC from "./travail-pc";
-import { analyseSurDossier, patchAnalyse, type Doute, type Range } from "./rangement";
+import { analyseSurDossier, messageAbsence, patchAnalyse, type Doute, type Range } from "./rangement";
 import { avenirFrom, empreinteTexte, estArchive, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
@@ -337,7 +337,7 @@ export type { Doute, Range } from "./rangement";
 
 /* Une seule demande à l'IA pour toute la dictée, puis rangement : automatique si un seul dossier convient
    (règle de rattacher), sinon le passage devient un doute. Lève une ErreurIA si rien n'a pu être fait. */
-export async function rangerDictee(date: string, texte: string): Promise<{ ranges: Range[]; doutes: Doute[]; rdvs: string[] }> {
+export async function rangerDictee(date: string, texte: string): Promise<{ ranges: Range[]; doutes: Doute[]; rdvs: string[]; absents: { dossierId: string; date: string }[] }> {
   const ia = await configIA();
   if (!ia) throw new ErreurIA(PAS_REGLE);
   if (!navigator.onLine) throw new ErreurIA("Pas de connexion à internet.", "reseau");
@@ -345,14 +345,16 @@ export async function rangerDictee(date: string, texte: string): Promise<{ range
   const patients = dossiers.filter(d => !estArchive(d)).map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));   // les archivés ne sont pas proposés à l'IA
   const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel);
   await db.ajouterConso("seances", usage);
-  const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [];
+  const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [], absents: { dossierId: string; date: string }[] = [];
   for (const m of morceaux) {
     const { dossier, candidats } = rattacher(m.nom, dossiers, date);
     if (!dossier) { doutes.push({ id: crypto.randomUUID(), date, seance: m, candidats: candidats.map(d => d.id) }); continue; }
+    /* absence dite dans la dictée : notée, sans séance (1.11.0) */
+    if (m.absent) { await db.noterAbsence(dossier.id, date, true); absents.push({ dossierId: dossier.id, date }); rdvs.push(messageAbsence(dossier.label)); continue; }
     const r = await rangerSeance(dossier.id, date, m);
     ranges.push({ ...r.range, prenomSeul: !dossier.rdvs.some(x => x && x.d === date) }); if (r.rdv) rdvs.push(r.rdv);
   }
-  return { ranges, doutes, rdvs };
+  return { ranges, doutes, rdvs, absents };
 }
 
 /* Séance manquante : cherche le patient dans les dictées gardées de ce jour-là. Rend le passage, ou null. */

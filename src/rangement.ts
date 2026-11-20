@@ -66,7 +66,11 @@ export function rouvrirApres(d: Dossier, date: string): Dossier {
 }
 
 export type Options = { nouvelId: () => string; cree: string; origine?: string; auj: string; jour: Jour };
-export type Resultat = { seances: Seance[]; dossiers: Dossier[]; ranges: Range[]; doutes: Doute[]; rdvs: string[] };
+export type Absent = { dossierId: string; date: string };
+export type Resultat = { seances: Seance[]; dossiers: Dossier[]; ranges: Range[]; doutes: Doute[]; rdvs: string[]; absents: Absent[] };
+/* absence notée (dite dans la dictée) : le jour rejoint les absences du dossier */
+export const messageAbsence = (label: string) => "Absence notée pour " + label.replace(/\.?$/, ".");
+export const avecAbsence = (d: Dossier, date: string): Dossier => ({ ...d, absences: [...new Set([...(d.absences ?? []), date])].sort() });
 
 /* Une dictée groupée découpée par l'IA, rangée patient par patient : automatiquement quand un seul dossier convient (règle de
    rattacher, sur l'état d'avant la dictée), sinon le passage devient un doute. Rend les séances créées, les dossiers changés
@@ -75,10 +79,15 @@ export function rangerMorceaux(dossiers: Dossier[], seances: Seance[], date: str
   const parId = new Map(dossiers.map(d => [d.id, d] as const));
   const changes = new Set<string>();
   const toutes = [...seances];
-  const r: Resultat = { seances: [], dossiers: [], ranges: [], doutes: [], rdvs: [] };
+  const r: Resultat = { seances: [], dossiers: [], ranges: [], doutes: [], rdvs: [], absents: [] };
   for (const m of morceaux) {
     const { dossier, candidats } = rattacher(m.nom, dossiers, date);
     if (!dossier) { r.doutes.push({ id: o.nouvelId(), date, seance: m, candidats: candidats.map(d => d.id) }); continue; }
+    if (m.absent) {
+      parId.set(dossier.id, avecAbsence(parId.get(dossier.id)!, date)); changes.add(dossier.id);
+      r.absents.push({ dossierId: dossier.id, date }); r.rdvs.push(messageAbsence(dossier.label));
+      continue;
+    }
     const placee = placerSeance(parId.get(dossier.id)!, toutes, date, m, o);
     parId.set(dossier.id, placee.dossier); changes.add(dossier.id);
     toutes.push(placee.seance); r.seances.push(placee.seance);

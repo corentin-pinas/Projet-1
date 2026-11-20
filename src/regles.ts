@@ -36,6 +36,7 @@ export type Dossier = {
   objectifs_propose?: { liste: string[]; date: string };   // objectifs dits dans une dictée, à confirmer
   sans_bilan?: boolean;                               // « Pas de bilan » : ce patient n'en aura pas, plus d'alerte (1.10.0)
   bilan_plus_tard?: string;                           // « Plus tard » : alerte « bilan pas encore ajouté » tue jusqu'à ce jour (AAAA-MM-JJ)
+  absences_vu?: number;                               // « Vu » sur l'alerte des absences : nombre d'absences à ce moment (1.11.0)
 };
 
 /* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
@@ -363,6 +364,33 @@ export function sansBilan(dossiers: Dossier[], bilans: Bilan[], seances: Seance[
     if (jours >= JOURS_SANS_BILAN || n >= SEANCES_SANS_BILAN) sortie.push({ dossier: d, cree, jours, seances: n });
   }
   return sortie.sort((a, b) => a.cree.localeCompare(b.cree));
+}
+
+/* Absences (choix de Corentin du 20 novembre 2026) : comptées seulement à partir de DEBUT_ABSENCES (avant, « Il était
+   absent » servait aussi pour une erreur de rendez-vous : ces absences restent notées mais ne comptent pas). On distingue
+   les absences d'affilée (pas de séance entre elles) du total. Alerte : 3 d'affilée, ou 5 en tout. */
+export const DEBUT_ABSENCES = "2026-11-20";
+export const ABSENCES_SUITE = 3, ABSENCES_TOTAL = 5;
+export type Absences = { dates: string[]; total: number; suite: number; alerte: boolean };
+export function absencesDe(D: Dossier, seances: Seance[]): Absences {
+  const dates = [...new Set(D.absences ?? [])].filter(d => d >= DEBUT_ABSENCES).sort();
+  const absents = new Set(dates);
+  const faits = [...dates.map(d => ({ d, absent: true })),
+    ...seances.filter(s => s.dossierId === D.id && s.date >= DEBUT_ABSENCES && !absents.has(s.date)).map(s => ({ d: s.date, absent: false }))]
+    .sort((a, b) => a.d.localeCompare(b.d));
+  let suite = 0, n = 0;
+  for (const f of faits) { n = f.absent ? n + 1 : 0; suite = Math.max(suite, n); }
+  return { dates, total: dates.length, suite, alerte: suite >= ABSENCES_SUITE || dates.length >= ABSENCES_TOTAL };
+}
+/* patients à signaler dans Ma journée : alerte, pas archivés, et une absence de plus depuis le dernier « Vu » */
+export function souventAbsents(dossiers: Dossier[], seances: Seance[]): { dossier: Dossier; absences: Absences }[] {
+  return dossiers.filter(d => !estArchive(d)).map(d => ({ dossier: d, absences: absencesDe(d, seances) }))
+    .filter(x => x.absences.alerte && x.absences.total > (x.dossier.absences_vu ?? 0))
+    .sort((a, b) => b.absences.suite - a.absences.suite || b.absences.total - a.absences.total);
+}
+/* « 3 absences, dont 3 d'affilée » */
+export function texteAbsences(a: Absences): string {
+  return `${a.total} absence${a.total > 1 ? "s" : ""}${a.suite >= 2 ? `, dont ${a.suite} d'affilée` : ""}`;
 }
 
 /* ---------- liste des patients ---------- */

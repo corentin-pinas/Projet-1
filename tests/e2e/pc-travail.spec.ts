@@ -97,3 +97,26 @@ test("séance dite à la voix sans transcription en direct : l'enregistrement es
   await expect(page.locator("details.orig").first()).toContainText("Patient en forme.\navec Odile mobilisation passive, transcrit sur le PC");
   await page.context().close();
 });
+
+test("absence dite dans la dictée confiée au PC : notée sans séance, comptée sur la fiche, retirée par « Annuler cette dictée »", async ({ browser }) => {
+  const page = await appareil(browser);
+  await creer(page, "Victor Blanc");
+  await relier(page);
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  // un récapitulatif d'une dictée précédente peut être encore affiché : « Nouvelle dictée » rend la zone de texte
+  const nouvelle = page.getByRole("button", { name: "Nouvelle dictée" });
+  await expect(page.locator("#dtexte").or(nouvelle)).toBeVisible();
+  if (await nouvelle.isVisible()) await nouvelle.click();
+  await page.locator("#dtexte").fill("Avec Victor, absent aujourd'hui, il avait prévenu ce matin par téléphone.");
+  await page.getByRole("button", { name: "Ranger la dictée" }).click();
+  await expect(page.locator(".recap")).toContainText("Absence notée pour Victor B.", { timeout: 30_000 });
+  await item(page, "Victor B.").click();
+  await expect(page.locator("#absbadge")).toHaveText("1 absence");
+  await expect(page.locator(".seance")).toHaveCount(0);
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await page.getByRole("button", { name: "Annuler cette dictée" }).click();
+  await page.locator("dialog.confirm").getByRole("button", { name: "Annuler la dictée" }).click();
+  await item(page, "Victor B.").click();
+  await expect(page.locator("#absbadge")).toHaveCount(0);
+  await page.context().close();
+});

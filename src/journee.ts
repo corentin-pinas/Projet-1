@@ -4,7 +4,7 @@
    Aucune demande à l'IA ici : tout vient de ce qui est déjà enregistré. */
 import * as db from "./db";
 import type { Donnees } from "./db";
-import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, type Carte, type SansBilan, type SansRdv } from "./regles";
+import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, souventAbsents, texteAbsences, type Carte, type SansBilan, type SansRdv } from "./regles";
 import { esc, toast } from "./ui";
 
 /* ce qui est affiché : une demi-journée d'aujourd'hui, ou toute la journée de demain ; null = choisi par l'appli */
@@ -58,6 +58,18 @@ function fenetreSansBilan(l: SansBilan[]): string {
     <div class="row"><button id="sbfermer">Fermer</button></div></dialog>`;
 }
 
+/* Patients souvent absents (choix de Corentin du 20 novembre 2026) : 3 absences d'affilée ou 5 en tout. Petite pastille à
+   côté de celle des bilans ; la liste en fenêtre : « Voir la fiche », « Vu » (plus signalé avant une nouvelle absence). */
+let listeAbsentsOuverte = false;
+function fenetreAbsents(l: ReturnType<typeof souventAbsents>): string {
+  return `<dialog class="sbdlg absdlg" aria-labelledby="abstitre"><h3 id="abstitre">Patients souvent absents</h3>
+    <p class="note">3 séances manquées d'affilée, ou 5 en tout (absences comptées depuis le 20/11/2026).</p>
+    ${l.map(x => `<div class="lsb" data-ab="${esc(x.dossier.id)}" data-abn="${x.absences.total}">
+      <div><b>${esc(x.dossier.label)}</b> <small>${esc(texteAbsences(x.absences))}</small></div>
+      <div class="row"><button class="primary" data-abfiche>Voir la fiche</button><button data-abvu>Vu</button></div></div>`).join("")}
+    <div class="row"><button id="abfermer">Fermer</button></div></dialog>`;
+}
+
 /* Par défaut : la demi-journée en cours (avant 13 h, le matin) ; le matin sans patient, on montre directement l'après-midi. */
 /* Aujourd'hui sans aucun rendez-vous (dimanche, congé) : la prochaine journée qui a des patients (choix de Corentin, 8 nov.). */
 /* À partir de 20 h, la journée est finie : la prochaine journée avec patients (choix de Corentin, 10 nov.). */
@@ -90,8 +102,11 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   const manquants = sansBilan(d.dossiers, d.bilans, d.seances, auj);
   if (!manquants.length) listeBilansOuverte = false;
   const puce = manquants.length ? `<button class="puce" id="sbpuce" aria-haspopup="dialog">⚠ ${manquants.length === 1 ? "1 bilan manquant" : manquants.length + " bilans manquants"}</button>` : "";
-  let html = blocSansRdv(sans) + (manquants.length ? fenetreSansBilan(manquants) : "") + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
-    <div class="jdroite">${puce}<div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
+  const absents = souventAbsents(d.dossiers, d.seances);
+  if (!absents.length) listeAbsentsOuverte = false;
+  const puceAbs = absents.length ? `<button class="puce" id="abpuce" aria-haspopup="dialog">⚠ ${absents.length === 1 ? "1 patient souvent absent" : absents.length + " patients souvent absents"}</button>` : "";
+  let html = blocSansRdv(sans) + (manquants.length ? fenetreSansBilan(manquants) : "") + (absents.length ? fenetreAbsents(absents) : "") + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
+    <div class="jdroite">${puce || puceAbs ? `<div class="puces">${puce}${puceAbs}</div>` : ""}<div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
       .map(([v, t, n]) => `<button data-vue="${v}" aria-pressed="${vue === v}">${t} <small>${n}</small></button>`).join("")}</div></div></div>`;
   if (cartes.length) {
     if (vue === "demain") {
@@ -123,6 +138,19 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
     el.querySelector<HTMLElement>("#sbfermer")!.onclick = () => { listeBilansOuverte = false; dlg.close(); };
     if (listeBilansOuverte) dlg.showModal();
   }
+  const dlgA = el.querySelector<HTMLDialogElement>(".absdlg"), puceA = el.querySelector<HTMLElement>("#abpuce");
+  if (dlgA && puceA) {
+    puceA.onclick = () => { listeAbsentsOuverte = true; dlgA.showModal(); };
+    el.querySelector<HTMLElement>("#abfermer")!.onclick = () => { listeAbsentsOuverte = false; dlgA.close(); };
+    if (listeAbsentsOuverte) dlgA.showModal();
+  }
+  el.querySelectorAll<HTMLElement>("[data-ab]").forEach(z => {
+    const id = z.dataset.ab!, n = Number(z.dataset.abn);
+    z.querySelector<HTMLElement>("[data-abfiche]")!.onclick = () => { listeAbsentsOuverte = false; dlgA?.close(); surPatient(id); };
+    z.querySelector<HTMLElement>("[data-abvu]")!.onclick = async () => {
+      try { await db.modifierDossier(id, x => ({ ...x, absences_vu: n })); } catch { toast("L'enregistrement a échoué. Réessayez."); }
+    };
+  });
   el.querySelectorAll<HTMLElement>("[data-sb]").forEach(z => {
     const id = z.dataset.sb!;
     const on = (sel: string, f: () => Promise<void> | void) => { const b = z.querySelector<HTMLElement>(sel); if (b) b.onclick = async () => { try { await f(); } catch { toast("L'enregistrement a échoué. Réessayez."); } }; };

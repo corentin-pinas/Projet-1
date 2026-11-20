@@ -2,6 +2,7 @@
    Reprise de la version d'essai ; l'IA (résumés, mise au propre) arrive à l'étape 3. */
 import * as db from "./db";
 import {
+  ABSENCES_SUITE, absencesDe, DEBUT_ABSENCES, jourCourt, texteAbsences,
   ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
   prochainRdv, propreOk, questionHomonyme, questionRdv, seancesManquantes, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Demi, type Dossier, type Seance,
@@ -173,7 +174,7 @@ export function renderMain() {
   const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b ? b.fichier : "Bilan à venir"])].filter(Boolean).join(", ");
   const titre = nomOpen
     ? `<div class="vedit nomedit"><input type="text" id="nomval" value="${esc(D.label)}" aria-label="Nom du patient (prénom et initiale)" autocomplete="off"><button class="primary" id="nomsave">Enregistrer</button><button id="nomcancel">Annuler</button></div>`
-    : `<button class="retour" id="majournee"><span aria-hidden="true">←</span> Ma journée</button><div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button></div>`;
+    : `<button class="retour" id="majournee"><span aria-hidden="true">←</span> Ma journée</button><div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button>${badgeAbsences(D)}</div>${detailAbsences(D)}`;
   let html = `<div class="head"><div>${titre}<div class="meta">${esc(meta)}</div></div>${!formOpen && !editing ? `<button class="primary dict" id="dict">Dicter la séance</button>` : ""}</div>`;
 
   const autre = questionHomonyme(D, donnees.dossiers, donnees.bilans);
@@ -279,6 +280,8 @@ export function renderMain() {
 function wireNom(D: Dossier) {
   const ouvrir = $("#renom");
   if (ouvrir) ouvrir.onclick = () => { nomOpen = true; renderMain(); const i = $<HTMLInputElement>("#nomval"); i.focus(); i.select(); };
+  const abs = $("#absbadge");
+  if (abs) abs.onclick = () => { absOuvert = absOuvert === D.id ? null : D.id; renderMain(); };
   const annuler = $("#nomcancel");
   if (annuler) annuler.onclick = () => { nomOpen = false; renderMain(); };
   const save = $<HTMLButtonElement>("#nomsave");
@@ -355,6 +358,22 @@ function wireRdv(D: Dossier) {
     const type = document.querySelector<HTMLInputElement>('input[name="rtype"]:checked')?.value === "bilan" ? "bilan" : "seance";
     save.disabled = true; saveRdv(D, date, demi, type);
   };
+}
+
+/* ---------- absences (1.11.0, choix de Corentin du 20 novembre 2026) ---------- */
+
+/* sur la fiche complète seulement : « ⚠ 3 absences, dont 3 d'affilée » (orange à 3 d'affilée ou 5 en tout) ; le toucher montre les dates */
+let absOuvert: string | null = null;
+function badgeAbsences(D: Dossier): string {
+  const a = absencesDe(D, donnees.seances);
+  if (!a.total) return "";
+  return `<button class="absbadge${a.alerte ? " alerte" : ""}" id="absbadge" aria-expanded="${absOuvert === D.id}">${a.alerte ? "⚠ " : ""}${esc(texteAbsences(a))}</button>`;
+}
+function detailAbsences(D: Dossier): string {
+  if (absOuvert !== D.id) return "";
+  const a = absencesDe(D, donnees.seances);
+  if (!a.total) return "";
+  return `<p class="note absdetail">Absences notées depuis le ${esc(frDate(DEBUT_ABSENCES))} : ${esc(a.dates.map(jourCourt).join(", ").replace(/\.?$/, "."))}${a.alerte ? ` <b>${a.suite >= ABSENCES_SUITE ? `${a.suite} séances manquées d'affilée` : `${a.total} séances manquées`} : à voir avec le patient.</b>` : ""}</p>`;
 }
 
 /* ---------- séances ---------- */

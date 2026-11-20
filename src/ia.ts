@@ -433,8 +433,8 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
 
 const SEANCE_DICTEE = {
   type: "object", additionalProperties: false,
-  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "fin_traitement"],
-  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, fin_traitement: { type: "boolean" } }
+  required: ["nom", "extrait", "absent", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "fin_traitement"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, absent: { type: "boolean" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, fin_traitement: { type: "boolean" } }
 };
 export const SCHEMA_DICTEE = {
   type: "object", additionalProperties: false, required: ["seances"],
@@ -453,6 +453,7 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     "Pour chaque entrée, huit champs :\n" +
     '- "nom" : le patient tel qu\'il est annoncé. S\'il correspond manifestement à un patient de la liste, écris-le exactement comme dans la liste ; sinon le prénom, et l\'initiale si elle est dite. Jamais de nom de famille complet. null si aucun patient n\'est nommé.\n' +
     '- "extrait" : le texte dicté pour ce patient, mot pour mot, sans l\'annonce de son nom (« Avec Marc D., » disparaît). Ne corrige rien, mais réduis tout nom de famille complet à son initiale suivie d\'un point.\n' +
+    '- "absent" : ' + CONSIGNE_ABSENT + "\n" +
     '- "propre" : cet extrait remis au propre. ' + REGLES_PROPRE + "\n" +
     '- "resume" : si l\'extrait contient ce qui est prévu pour la prochaine séance (après « pour la prochaine séance », « pour la prochaine », « la prochaine fois » ou « à venir : »), un résumé très court (25 mots maximum, style télégraphique) de ce qui est prévu, sans la date ni l\'heure du rendez-vous. N\'ajoute rien. Sinon null.\n' +
     '- "bref" : ' + CONSIGNE_BREF + "\n" +
@@ -463,11 +464,13 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
     '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"fin_traitement":false}]}\n\n' +
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"fin_traitement":false,"absent":false}]}\n\n' +
     "Dictée :\n" + texte.slice(0, MAX_DICTEE);
 }
 
-export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string };
+export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string; absent?: boolean };
+/* absences dites dans la dictée (choix de Corentin du 20 novembre 2026) : notées, sans séance */
+const CONSIGNE_ABSENT = "true seulement si le passage dit que le patient n'est pas venu à sa séance ce jour-là (« absent aujourd'hui », « pas venu », « lapin », « a oublié son rendez-vous ») et qu'aucune séance n'a eu lieu ; false sinon (un rendez-vous futur annulé n'est pas une absence).";
 
 /* Garde-fous : chaque extrait passe par les mêmes contrôles qu'une séance seule (mise au propre trop courte rejetée…),
    et si l'ensemble des extraits est bien plus court que la dictée, une partie a été perdue : rien n'est retenu. */
@@ -478,7 +481,7 @@ export function lireDictee(x: unknown, texte: string): SeanceDictee[] {
     const it = (e && typeof e === "object" ? e : {}) as Record<string, unknown>;
     const contenu = typeof it.extrait === "string" ? it.extrait.trim() : "";
     const nom = typeof it.nom === "string" && it.nom.trim() ? it.nom.trim() : null;
-    return { nom, contenu, ...lireAnalyse(it, contenu, false) };
+    return { nom, contenu, ...lireAnalyse(it, contenu, false), ...(it.absent === true ? { absent: true } : {}) };
   }).filter(s => s.contenu);
   const total = seances.reduce((n, s) => n + s.contenu.length, 0);
   if (!seances.length || total < texte.trim().length * 0.6) throw new ErreurIA("L'IA a laissé de côté une partie de la dictée. Rien n'a été rangé.", "passager");

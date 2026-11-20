@@ -389,6 +389,25 @@ describe("alerte « sans rendez-vous » (1.5.2)", () => {
   });
 });
 
+describe("absences (1.11.0)", () => {
+  it("comptées depuis le 20/11/2026 seulement ; d'affilée = sans séance entre elles ; alerte à 3 d'affilée ou 5 en tout ; « Vu »", async () => {
+    const { absencesDe, souventAbsents, texteAbsences } = await import("./regles");
+    const s = (date: string) => seance({ id: date, dossierId: "p", date });
+    const d = dossier({ id: "p", absences: ["2026-11-10", "2026-11-23", "2026-11-25", "2026-12-01", "2026-12-03"] });
+    const seances = [s("2026-11-24"), s("2026-11-30")];
+    const a = absencesDe(d, seances);
+    expect(a).toEqual({ dates: ["2026-11-23", "2026-11-25", "2026-12-01", "2026-12-03"], total: 4, suite: 2, alerte: false });
+    expect(texteAbsences(a)).toBe("4 absences, dont 2 d'affilée");
+    const trois = absencesDe(d, [s("2026-11-24")]);
+    expect([trois.suite, trois.alerte]).toEqual([3, true]);
+    const cinq = dossier({ id: "p", absences: ["2026-11-21", "2026-11-23", "2026-11-25", "2026-11-27", "2026-11-30"] });
+    expect(absencesDe(cinq, [s("2026-11-22"), s("2026-11-24"), s("2026-11-26"), s("2026-11-28")]).alerte).toBe(true);
+    expect(souventAbsents([cinq], [])).toHaveLength(1);
+    expect(souventAbsents([{ ...cinq, absences_vu: 5 }], [])).toHaveLength(0);
+    expect(texteAbsences(absencesDe(dossier({ id: "p", absences: ["2026-11-23"] }), []))).toBe("1 absence");
+  });
+});
+
 describe("alerte « bilan pas encore ajouté » (1.10.0)", () => {
   it("7 jours après la création ou dès la 2e séance ; jamais avec un bilan, archivé, « Pas de bilan » ; « Plus tard » 7 jours", async () => {
     const { sansBilan } = await import("./regles");

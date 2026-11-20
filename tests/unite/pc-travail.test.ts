@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CODE, dossierPC, lancerPC, type PC } from "./pc";
 
 const CODE_IA = "code-acces-essai-123";
+const VERSION_TRAVAIL = Number(/export const VERSION = (\d+);/.exec(readFileSync(resolve(__dirname, "../../src/pc/travail.ts"), "utf8"))![1]);
 let port = 5300;
 const fermer: (() => Promise<void> | void)[] = [];
 afterEach(async () => { for (const f of fermer.splice(0)) await f(); });
@@ -95,9 +96,9 @@ describe("le PC fait le travail en tâche de fond", () => {
   it("sans adresse du serveur de l'appli : le travail n'est pas proposé aux appareils", async () => {
     const pc = await lancerPC(dossierPC());
     fermer.push(() => pc.arreter());
-    expect((await api(pc, "/api/sync/etat")).corps.travail).toMatchObject({ version: 1, pret: false });
+    expect((await api(pc, "/api/sync/etat")).corps.travail).toMatchObject({ version: VERSION_TRAVAIL, pret: false });
     expect((await confier(pc, { id: ID, type: "dictee", date: JOUR, texte: "x" })).statut).toBe(503);
-    expect(await (await fetch(pc.url + "/sante")).json()).toEqual({ pc: 8, travail: 1 });
+    expect(await (await fetch(pc.url + "/sante")).json()).toEqual({ pc: 8, travail: VERSION_TRAVAIL });
   });
 
   it("dictée tapée : rangée par le PC dans la base commune, récapitulatif dans le travail, code d'accès gardé", async () => {
@@ -108,7 +109,7 @@ describe("le PC fait le travail en tâche de fond", () => {
     ] } } }));
     const pc = await pcAvec(ia.url, "http://127.0.0.1:1");
     await poser(pc, { "dossiers/dos-marc": marc, "dossiers/dos-lea": lea });
-    expect((await api(pc, "/api/sync/etat")).corps.travail).toMatchObject({ version: 1, pret: true });
+    expect((await api(pc, "/api/sync/etat")).corps.travail).toMatchObject({ version: VERSION_TRAVAIL, pret: true });
     const r = await confier(pc, { id: ID, type: "dictee", date: JOUR, texte: dictee, appareil: "tablette" });
     expect(r.statut).toBe(200);
     expect(r.corps.travail).toMatchObject({ id: ID, etat: "attente" });

@@ -46,6 +46,11 @@ describe("rangement du résultat de l'IA", () => {
     expect(r.doutes.map(d => d.seance.nom)).toEqual(["Paul"]);
     expect(r.dossiers.find(d => d.id === "d2")!.rdvs).toEqual([{ d: "2026-11-18", h: "" }]);
     expect(r.rdvs).toEqual(["Rendez-vous repéré pour Léa P. : le 2026-11-18."]);
+    const absent = rangerMorceaux([marc, lea], [], "2026-11-16", [{ ...m("Marc", "absent aujourd'hui"), absent: true }], opts);
+    expect(absent.seances).toEqual([]);
+    expect(absent.absents).toEqual([{ dossierId: "d1", date: "2026-11-16" }]);
+    expect(absent.dossiers[0].absences).toEqual(["2026-11-16"]);
+    expect(absent.rdvs).toEqual(["Absence notée pour Marc D."]);
     const p = placerSeance(D({ fin: "2026-11-01" }), [], "2026-11-16", { ...vide, contenu: "reprise" }, opts);
     expect(p.dossier.fin).toBeUndefined();
   });

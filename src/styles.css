@@ -528,3 +528,9 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .sbdlg .lsb{border-top:1px solid var(--line);padding:10px 0}
 .sbdlg .lsb small{color:var(--soft)}
 .sbdlg .lsb .row{margin-top:6px}
+
+/* absences (1.11.0) : compteur sur la fiche, pastilles côte à côte dans Ma journée */
+.puces{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.absbadge{min-height:32px;padding:2px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--panel);color:var(--soft);font-size:.9rem;margin-left:8px}
+.absbadge.alerte{border-color:var(--warn);background:var(--warn-bg);color:var(--warn);font-weight:700}
+.absdetail{margin:6px 0 0}
