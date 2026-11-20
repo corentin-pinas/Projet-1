@@ -23,38 +23,47 @@ const journee = async (page: Page) => {
   await expect(page.locator("#main h2").last()).toHaveText("Ma journée");
 };
 
-test("dès la 2e séance sans bilan : alerte dans Ma journée ; « Ajouter le bilan », « Plus tard », « Pas de bilan »", async ({ page }) => {
+test("dès la 2e séance sans bilan : pastille « bilans manquants » dans Ma journée, liste dans une fenêtre ; « Ajouter le bilan », « Plus tard », « Pas de bilan »", async ({ page }) => {
   await page.goto("/");
   await patientAvecSeances(page, "Anne Leroy", "Anne L.", 2);
   await patientAvecSeances(page, "Bruno Petit", "Bruno P.", 2);
   await patientAvecSeances(page, "Chloé Roux", "Chloé R.", 2);
   await patientAvecSeances(page, "Denis Vidal", "Denis V.", 1);     // une seule séance, créé aujourd'hui : pas encore
   await journee(page);
-  const alerte = page.locator(".sansbilan");
-  await expect(alerte.locator("h3")).toHaveText("À vérifier : 3 bilans pas encore ajoutés");
-  await expect(alerte).toContainText("Anne L. : dossier créé le");
-  await expect(alerte).toContainText("2 séances, toujours sans bilan.");
-  await expect(alerte).not.toContainText("Denis V.");
+  const puce = page.locator("#sbpuce"), fenetre = page.locator(".sbdlg");
+  await expect(puce).toHaveText("⚠ 3 bilans manquants");
+  await expect(fenetre).toBeHidden();                                // rien d'encombrant : la liste n'apparaît qu'au toucher
+  await puce.click();
+  await expect(fenetre).toBeVisible();
+  await expect(fenetre.locator("[data-sb]")).toHaveCount(3);
+  await expect(fenetre).toContainText("2 séances");
+  await expect(fenetre).not.toContainText("Denis V.");
 
-  // « Ajouter le bilan » : le choix du fichier s'ouvre, le bilan rejoint le dossier
+  // « Ajouter le bilan » : la fenêtre se ferme, le choix du fichier s'ouvre, le bilan rejoint le dossier
   const choix = page.waitForEvent("filechooser");
-  await alerte.locator("[data-sb]", { hasText: "Anne L." }).getByRole("button", { name: "Ajouter le bilan" }).click();
+  await fenetre.locator("[data-sb]", { hasText: "Anne L." }).getByRole("button", { name: "Ajouter le bilan" }).click();
   await (await choix).setFiles([{ name: "Bilan épaule.png", mimeType: "image/png", buffer: png }]);
   await expect(item(page, "Anne L.")).not.toContainText("Bilan à venir");
   await journee(page);
-  await expect(alerte.locator("h3")).toHaveText("À vérifier : 2 bilans pas encore ajoutés");
+  await expect(puce).toHaveText("⚠ 2 bilans manquants");
 
-  await alerte.locator("[data-sb]", { hasText: "Bruno P." }).getByRole("button", { name: "Plus tard" }).click();
-  await expect(page.locator(".toast").last()).toContainText("dans 7 jours");
-  await alerte.locator("[data-sb]", { hasText: "Chloé R." }).getByRole("button", { name: "Pas de bilan" }).click();
-  await expect(page.locator(".sansbilan")).toHaveCount(0);
+  // « Plus tard » (7 jours) et « Pas de bilan » : la fenêtre reste ouverte et se vide ; la pastille disparaît
+  await puce.click();
+  await fenetre.locator("[data-sb]", { hasText: "Bruno P." }).getByRole("button", { name: "Plus tard" }).click();
+  await expect(fenetre.locator("[data-sb]")).toHaveCount(1);
+  await fenetre.locator("[data-sb]", { hasText: "Chloé R." }).getByRole("button", { name: "Pas de bilan" }).click();
+  await expect(puce).toHaveCount(0);
+  await expect(page.locator(".sbdlg")).toHaveCount(0);
 
   // 8 jours plus tard : Bruno revient (Plus tard), Denis aussi (7 jours après sa création) ; Chloé jamais
   await page.clock.install({ time: new Date(Date.now() + 8 * 864e5) });
   await page.reload();
   await journee(page);
-  await expect(alerte.locator("h3")).toHaveText("À vérifier : 2 bilans pas encore ajoutés");
-  await expect(alerte).toContainText("Bruno P.");
-  await expect(alerte).toContainText("Denis V. : dossier créé le");
-  await expect(alerte).not.toContainText("Chloé R.");
+  await expect(puce).toHaveText("⚠ 2 bilans manquants");
+  await puce.click();
+  await expect(fenetre).toContainText("Bruno P.");
+  await expect(fenetre).toContainText("Denis V.");
+  await expect(fenetre).not.toContainText("Chloé R.");
+  await fenetre.getByRole("button", { name: "Fermer" }).click();
+  await expect(fenetre).toBeHidden();
 });

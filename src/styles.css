@@ -492,11 +492,11 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .item.archive{opacity:.75}
 .item.archive b{font-weight:600}
 /* alerte « sans rendez-vous » dans Ma journée */
-.sansrdv,.sansbilan{border:2px solid var(--warn);background:var(--warn-bg);color:var(--ink);border-radius:12px;padding:12px 14px;margin:0 0 16px}
-.sansrdv h3,.sansbilan h3{margin:0 0 6px;font-size:1.05rem;color:var(--warn)}
-.sansrdv .lsr,.sansbilan .lsr{border-top:1px solid var(--line);padding:10px 0 4px}
-.sansrdv .lsr:first-of-type,.sansbilan .lsr:first-of-type{border-top:0}
-.sansrdv .row,.sansbilan .row{margin-top:8px}
+.sansrdv{border:2px solid var(--warn);background:var(--warn-bg);color:var(--ink);border-radius:12px;padding:12px 14px;margin:0 0 16px}
+.sansrdv h3{margin:0 0 6px;font-size:1.05rem;color:var(--warn)}
+.sansrdv .lsr{border-top:1px solid var(--line);padding:10px 0 4px}
+.sansrdv .lsr:first-of-type{border-top:0}
+.sansrdv .row{margin-top:8px}
 
 /* « État de l'appli » dans les Réglages ; la roue orange quand un point est à voir (1.5.3) */
 .etatdansreg{width:100%;margin:4px 0 14px;min-height:52px;border:1px solid var(--line);font-size:1rem}
@@ -519,3 +519,12 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .objectifs ul,.objpropose ul{margin:6px 0 4px;padding-left:22px}
 .objectifs textarea{width:100%;margin:6px 0;min-height:90px}
 .objectifs .note{margin:2px 0 0}
+
+/* bilans manquants (1.10.0) : petite pastille en haut à droite de Ma journée, la liste dans une fenêtre */
+.jdroite{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.puce{min-height:36px;padding:4px 12px;border-radius:999px;border:1.5px solid var(--warn);background:var(--warn-bg);color:var(--warn);font-weight:700;font-size:.92rem}
+.sbdlg{width:min(560px,calc(100vw - 32px))}
+.sbdlg h3{margin:0 0 4px}
+.sbdlg .lsb{border-top:1px solid var(--line);padding:10px 0}
+.sbdlg .lsb small{color:var(--soft)}
+.sbdlg .lsb .row{margin-top:6px}

@@ -45,17 +45,17 @@ function blocSansRdv(l: SansRdv[]): string {
     ${l.length > vus.length ? `<button class="lien" data-srtous>Voir les ${l.length - vus.length} autres</button>` : ""}</section>`;
 }
 
-/* Alerte « bilan pas encore ajouté » (choix de Corentin du 20 novembre 2026) : 7 jours après la création du dossier, ou dès
-   la 2e séance. « Ajouter le bilan » ouvre le choix du fichier, qui rejoint le dossier. Cinq patients montrés, les autres sur demande. */
-let tousSansBilan = false;
-function blocSansBilan(l: SansBilan[]): string {
-  if (!l.length) return "";
-  const vus = tousSansBilan ? l : l.slice(0, 5);
-  return `<section class="sansbilan" aria-label="Patients sans bilan"><h3>À vérifier : ${l.length === 1 ? "un bilan pas encore ajouté" : l.length + " bilans pas encore ajoutés"}</h3>
-    ${vus.map(x => `<div class="lsr" data-sb="${esc(x.dossier.id)}">
-      <b>${esc(x.dossier.label)}</b> : dossier créé le ${esc(frDate(x.cree))}${x.jours ? ` (${pluriel(x.jours, "jour")})` : ""}${x.seances ? `, ${pluriel(x.seances, "séance")}` : ""}, toujours sans bilan.
+/* Bilans manquants (choix de Corentin du 20 novembre 2026) : 7 jours après la création du dossier, ou dès la 2e séance.
+   Une petite pastille en haut à droite de Ma journée (« ⚠ 2 bilans manquants ») ; la toucher ouvre la liste dans une
+   fenêtre : « Ajouter le bilan » (choix du fichier, qui rejoint le dossier), « Plus tard » (7 jours), « Pas de bilan ». */
+let listeBilansOuverte = false;   // la fenêtre reste ouverte quand l'écran se redessine après un choix
+function fenetreSansBilan(l: SansBilan[]): string {
+  return `<dialog class="sbdlg" aria-labelledby="sbtitre"><h3 id="sbtitre">Bilans manquants</h3>
+    <p class="note">Dossiers créés sans bilan depuis 7 jours, ou qui ont déjà 2 séances.</p>
+    ${l.map(x => `<div class="lsb" data-sb="${esc(x.dossier.id)}">
+      <div><b>${esc(x.dossier.label)}</b> <small>créé le ${esc(frDate(x.cree).slice(0, 5))}${x.seances ? ` · ${pluriel(x.seances, "séance")}` : ""}</small></div>
       <div class="row"><button class="primary" data-sbajout>Ajouter le bilan</button><button data-sbtard>Plus tard</button><button data-sbnon>Pas de bilan</button></div></div>`).join("")}
-    ${l.length > vus.length ? `<button class="lien" data-sbtous>Voir les ${l.length - vus.length} autres</button>` : ""}</section>`;
+    <div class="row"><button id="sbfermer">Fermer</button></div></dialog>`;
 }
 
 /* Par défaut : la demi-journée en cours (avant 13 h, le matin) ; le matin sans patient, on montre directement l'après-midi. */
@@ -87,9 +87,12 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   const quand = vue === "am" ? "matin" : vue === "pm" ? "après-midi" : "";
 
   const sans = sansRendezVous(d.dossiers, d.bilans, d.seances, auj);
-  let html = blocSansRdv(sans) + blocSansBilan(sansBilan(d.dossiers, d.bilans, d.seances, auj)) + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
-    <div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
-      .map(([v, t, n]) => `<button data-vue="${v}" aria-pressed="${vue === v}">${t} <small>${n}</small></button>`).join("")}</div></div>`;
+  const manquants = sansBilan(d.dossiers, d.bilans, d.seances, auj);
+  if (!manquants.length) listeBilansOuverte = false;
+  const puce = manquants.length ? `<button class="puce" id="sbpuce" aria-haspopup="dialog">⚠ ${manquants.length === 1 ? "1 bilan manquant" : manquants.length + " bilans manquants"}</button>` : "";
+  let html = blocSansRdv(sans) + (manquants.length ? fenetreSansBilan(manquants) : "") + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
+    <div class="jdroite">${puce}<div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
+      .map(([v, t, n]) => `<button data-vue="${v}" aria-pressed="${vue === v}">${t} <small>${n}</small></button>`).join("")}</div></div></div>`;
   if (cartes.length) {
     if (vue === "demain") {
       const groupes: [string, Carte[]][] = [["Matin", cartes.filter(c => (demiDe(c.rdv) ?? "am") === "am")], ["Après-midi", cartes.filter(c => demiDe(c.rdv) === "pm")]];
@@ -113,15 +116,20 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   });
   const tous = el.querySelector<HTMLElement>("[data-srtous]");
   if (tous) tous.onclick = () => { tousSansRdv = true; afficher(el, d, surPatient, surBilan); };
+  const dlg = el.querySelector<HTMLDialogElement>(".sbdlg");
+  const pastille = el.querySelector<HTMLElement>("#sbpuce");
+  if (dlg && pastille) {
+    pastille.onclick = () => { listeBilansOuverte = true; dlg.showModal(); };
+    el.querySelector<HTMLElement>("#sbfermer")!.onclick = () => { listeBilansOuverte = false; dlg.close(); };
+    if (listeBilansOuverte) dlg.showModal();
+  }
   el.querySelectorAll<HTMLElement>("[data-sb]").forEach(z => {
     const id = z.dataset.sb!;
     const on = (sel: string, f: () => Promise<void> | void) => { const b = z.querySelector<HTMLElement>(sel); if (b) b.onclick = async () => { try { await f(); } catch { toast("L'enregistrement a échoué. Réessayez."); } }; };
-    on("[data-sbajout]", () => surBilan(id));   // le choix du fichier s'ouvre dans le même toucher
-    on("[data-sbtard]", async () => { await db.modifierDossier(id, x => ({ ...x, bilan_plus_tard: decalerJours(auj, 7) })); toast("Noté : Muninn vous le redemandera dans 7 jours."); });
-    on("[data-sbnon]", async () => { await db.modifierDossier(id, x => ({ ...x, sans_bilan: true })); toast("Noté : Muninn ne vous le demandera plus pour ce patient."); });
+    on("[data-sbajout]", () => { listeBilansOuverte = false; dlg?.close(); surBilan(id); });   // le choix du fichier s'ouvre dans le même toucher
+    on("[data-sbtard]", async () => { await db.modifierDossier(id, x => ({ ...x, bilan_plus_tard: decalerJours(auj, 7) })); });   // la ligne disparaît de la liste : pas de message en plus
+    on("[data-sbnon]", async () => { await db.modifierDossier(id, x => ({ ...x, sans_bilan: true })); });
   });
-  const tousB = el.querySelector<HTMLElement>("[data-sbtous]");
-  if (tousB) tousB.onclick = () => { tousSansBilan = true; afficher(el, d, surPatient, surBilan); };
   el.querySelectorAll<HTMLElement>("[data-vue]").forEach(b => b.onclick = () => { choix = b.dataset.vue as Vue; afficher(el, d, surPatient, surBilan); });
 }
 
