@@ -459,12 +459,7 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .basbar .regbtn{min-height:52px;min-width:56px;justify-content:center;color:var(--accent)}
 
 /* partage avec le PC */
-.syncmini{justify-content:flex-start;gap:8px;background:transparent;border-color:transparent;color:var(--soft);font-size:.85rem;min-height:36px;padding:4px 10px}
-.syncmini.encours .pastille-mini{animation:clignote 1.2s ease-in-out infinite}
-.syncmini.alerte{color:var(--warn)}
-.syncmini.alerte .pastille-mini{background:var(--warn)}
 @keyframes clignote{50%{opacity:.3}}
-@media (prefers-reduced-motion:reduce){.syncmini.encours .pastille-mini{animation:none}}
 .commande{display:block;font-family:ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;word-break:break-all;user-select:all}
 
 /* repère le remplissage automatique de Chrome dans la recherche (voir app.ts) */

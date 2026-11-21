@@ -40,7 +40,6 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   // un mauvais code est refusé
   await relier(tablette, "MAUV-AISC-ODE0");
   await expect(tablette.locator(".toast")).toContainText("refuse le code");
-  await expect(tablette.locator("#syncmini")).toBeHidden();
 
   // relier : tout part vers le PC
   await tablette.locator("#synccode").fill(CODE);
@@ -48,11 +47,10 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   await expect(tablette.locator(".toast")).toContainText("Relié au PC");
   await expect(tablette.locator("#syncetat")).toContainText("Dernier échange");
   await tablette.locator("#etatclose").click();
-  await expect(tablette.locator("#syncmini")).toContainText("À jour avec le PC");
+  await expect(tablette.locator("#syncmini")).toHaveCount(0);            // plus de ligne sur l'écran de base (1.12.0)
 
   // le PC (un autre appareil, vide) reçoit tout, PDF compris
   const pc = await appareil(browser);
-  await expect(pc.locator("#syncmini")).toBeHidden();
   await relier(pc);
   await expect(pc.locator(".toast")).toContainText("Relié au PC");
   await pc.locator("#etatclose").click();
@@ -72,7 +70,7 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   await expect(pc.locator(".seance")).toHaveCount(2);
   await expect.poll(revPC, { timeout: 10_000 }).toBeGreaterThan(rev);
 
-  await tablette.locator("#syncmini").click();
+  await tablette.locator("#regbtn").click(); await tablette.locator("#etatbtn").click();
   await tablette.getByRole("button", { name: "Échanger maintenant" }).click();
   await expect(tablette.locator(".toast")).toContainText("cet appareil est à jour");
   await tablette.locator("#etatclose").click();
@@ -86,7 +84,7 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   await tablette.getByRole("dialog").getByRole("button", { name: "Supprimer" }).click();
   await expect(item(tablette, "Odile P.")).toHaveCount(0);
   await expect.poll(revPC, { timeout: 10_000 }).toBeGreaterThan(rev);
-  await pc.locator("#syncmini").click();
+  await pc.locator("#regbtn").click(); await pc.locator("#etatbtn").click();
   await pc.getByRole("button", { name: "Échanger maintenant" }).click();
   await pc.locator("#etatclose").click();
   await expect(item(pc, "Odile P.")).toHaveCount(0);
@@ -96,7 +94,6 @@ test("tablette et PC partagent patients, bilans et séances par le PC", async ({
   await pc.getByRole("button", { name: "Délier cet appareil" }).click();
   await pc.locator("dialog.confirm").getByRole("button", { name: "Délier" }).click();
   await expect(pc.locator("#syncetat")).toContainText("pas relié");
-  await expect(pc.locator("#syncmini")).toBeHidden();
 
   await tablette.context().close();
   await pc.context().close();

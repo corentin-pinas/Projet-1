@@ -1,5 +1,6 @@
 /* « Partage avec le PC », dans « État de l'appli » : relier l'appareil au PC (adresse + code), voir où en est l'échange.
-   Sous les boutons de gauche, une petite ligne rappelle l'état du partage ; la toucher ouvre « État de l'appli ». */
+   L'état du partage n'est montré que là (la petite ligne sous les boutons de gauche a été retirée en 1.12.0, choix de
+   Corentin) ; un vrai souci se voit par le bandeau « pas encore partagés » (30 minutes). */
 import * as synchro from "./synchro";
 import { etatPC } from "./transcription";
 import { $, confirmer, toast } from "./ui";
@@ -56,13 +57,6 @@ export function afficherPartage() {
   $("#syncmajpc").textContent = e.relie ? texteMajPC(e.pc) : "";
   /* bouton « Mettre à jour le PC maintenant » : seulement avec un lanceur qui sait le recevoir (version 3, 1.12.0) */
   $("#syncmajmaint").hidden = !(e.relie && (e.pc?.maj?.lanceur ?? 0) >= 3);
-  const mini = $("#syncmini"), txt = $("#syncminitxt");
-  mini.hidden = !e.relie;
-  mini.classList.toggle("encours", e.enCours);
-  mini.classList.toggle("alerte", !!e.erreur && !e.enCours);
-  txt.textContent = e.enCours ? "Échange avec le PC…" : e.pcRevenu ? "PC revenu en arrière : à remettre à niveau" : e.erreur ? "PC pas joint" + (e.derniere ? " · à jour " + depuis(e.derniere) : "")
-    : e.derniere ? "À jour avec le PC · " + depuis(e.derniere) : "Relié au PC";
-  mini.title = e.erreur ?? "";
 
   $("#syncform").hidden = e.relie;
   $("#syncactions").hidden = !e.relie;
@@ -81,7 +75,6 @@ export function brancherPartage() {
   synchro.abonner(afficherPartage);
   setInterval(afficherPartage, 60_000);   // « il y a 3 min » avance tout seul
   $("#etatbtn").addEventListener("click", () => { afficherVoix(); });
-  $("#syncmini").addEventListener("click", () => { afficherVoix(); $<HTMLDialogElement>("#etatdlg").showModal(); $("#synctitre").scrollIntoView({ block: "start" }); });
 
   $("#syncrelier").addEventListener("click", async () => {
     const adresse = $<HTMLInputElement>("#syncadresse").value, code = $<HTMLInputElement>("#synccode").value;
