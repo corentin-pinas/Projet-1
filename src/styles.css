@@ -316,61 +316,43 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 .side h1{display:flex;align-items:center;gap:10px}
 .nomappli{display:flex;flex-direction:column;line-height:1.1;letter-spacing:.02em}
 .nomappli small{font-size:.55em;font-weight:400;color:var(--soft);letter-spacing:0;margin-top:3px}
-.compagnon{position:relative;flex:none;width:var(--compagnon,74px);aspect-ratio:100/118;z-index:4}
-.compagnon svg{display:block;width:100%;height:100%;overflow:visible}
-.compagnon .perchoir{position:absolute;inset:0}
-.p-bois{fill:#8A5A3B}
-.p-bois-fonce{fill:#6B4429}
-.p-feuille{fill:var(--accent)}
+.compagnon{position:relative;flex:none;width:var(--compagnon,84px);aspect-ratio:1/1.02;z-index:4}
+.compagnon .perchoir{position:absolute;left:2%;bottom:0;width:96%;aspect-ratio:600/148;pointer-events:none;filter:drop-shadow(0 0 calc(var(--compagnon,84px)/40) color-mix(in srgb,var(--accent) 40%,transparent))}
 /* tablette : une colonne étroite à gauche, le corbeau en grand en haut, le nom et tous les boutons dessous ;
    le reste de l'écran est pour « Ma journée » ou la fiche */
 @media (min-width:821px){
   .side h1{position:relative;flex-direction:column;align-items:center;text-align:center;gap:4px;font-size:1.6rem;padding-top:4px}
-  .side h1 .compagnon{--compagnon:130px}
+  .side h1 .compagnon{--compagnon:190px;margin-top:18px}
   .side h1::after{position:absolute;top:0;right:4px}
   .nomappli{align-items:center}
 }
-.corbeau{position:absolute;left:0;top:0;width:100%;aspect-ratio:1;padding:0;min-height:0;border:0;background:none;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.corbeau svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 40%,transparent)) drop-shadow(0 1px 2px rgb(0 0 0 / .25))}
-.corbeau .c-plume{fill:#2A2638}
-.corbeau .c-corps-plume{fill:#363247}
-.corbeau .c-ventre{fill:#4A4560}
-.corbeau .c-ecaille{fill:none;stroke:#5E5878;stroke-width:1.6;stroke-linecap:round}
-.corbeau .c-patte{fill:none;stroke:#E8913A;stroke-width:2.6;stroke-linecap:round}
-.corbeau .c-joue{fill:#F49C9C;opacity:.6}
-.corbeau .c-bec-haut{fill:#F5BC4A}
-.corbeau .c-bec-bas{fill:#E08A2E;transform-origin:50px 55px}
-.corbeau .c-yeux{transform-origin:50px 45px;animation:cligne 5.3s infinite}
-.corbeau .c-corps{transform-origin:50px 92px;animation:respire 3.2s ease-in-out infinite}
-.corbeau .c-tete{transform-origin:50px 80px}
-.corbeau .c-aile.g{transform-origin:24px 50px}
-.corbeau .c-aile.d{transform-origin:76px 50px}
-.corbeau .c-bulle{position:absolute;left:78%;top:-12%;padding:1px 8px;border-radius:10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:.75rem;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
+/* le corbeau : pièces peintes superposées (même cadre carré), animées par src/mascotte.ts ;
+   le masque -l.webp de chaque pièce est peint à la couleur de l'ambiance */
+.corbeau{position:absolute;left:-2%;bottom:5.6%;width:96%;aspect-ratio:1;padding:0;min-height:0;border:0;background:none;border-radius:0;cursor:pointer;-webkit-tap-highlight-color:transparent;z-index:1;filter:drop-shadow(0 0 calc(var(--compagnon,84px)/30) color-mix(in srgb,var(--accent) 45%,transparent))}
+.corbeau span,.compagnon .perchoir>*{position:absolute;inset:0;display:block}
+.corbeau .calque img,.corbeau .calque i,.compagnon .perchoir img{width:100%;height:100%;user-select:none;-webkit-user-drag:none}
+.corbeau .calque img,.compagnon .perchoir img{position:absolute;inset:0;display:block}
+.corbeau .calque i,.compagnon .perchoir i{position:absolute;inset:0;display:block;background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 55%,#FFFFFF),var(--accent) 60%);-webkit-mask:var(--m) center/100% 100% no-repeat;mask:var(--m) center/100% 100% no-repeat}
+.corbeau .c-sens,.corbeau .c-groupe{transform-origin:55% 98%}
+.corbeau .p-tete,.corbeau .p-cou,.corbeau .p-nuque{transform-origin:60.6% 49.4%}
+.corbeau .p-aile{transform-origin:76.6% 26.3%}
+.corbeau .p-queue{transform-origin:71.8% 49.4%}
+.corbeau .p-aile-ouverte{transform-origin:63% 41.5%;opacity:0}
+.corbeau .p-aile-loin{transform-origin:70.2% 37.5%;opacity:0;filter:brightness(.7)}
+.corbeau .c-tete-cri,.corbeau .c-tete-dort,.corbeau .c-face{opacity:0}
+.corbeau .p-ftete{transform-origin:55% 46.5%}
+.corbeau span.paup{inset:auto;left:61.2%;top:11.4%;width:7.6%;height:7%;border-radius:50%;background:radial-gradient(circle at 50% 30%,#3A3646,#1D1A24);transform:scaleY(0);transform-origin:50% 0}
+.corbeau span.paup.p1{left:43.5%;top:17%;width:7.2%;height:6.8%}
+.corbeau span.paup.p2{left:60.1%;top:17%;width:7.2%;height:6.8%}
+.corbeau span.c-ombre{inset:auto;left:38.5%;top:92.6%;width:19%;height:4%;margin-left:-3%;border-radius:50%;background:radial-gradient(closest-side,rgb(0 0 0 / .8),rgb(0 0 0 / 0))}
+.corbeau span.c-ombre.d{left:58.5%;top:93.6%}
+.corbeau span.c-zz{inset:auto;left:70%;top:6%;width:0;height:0;overflow:visible}
+.corbeau .c-zz span{inset:auto;left:0;bottom:0;font-weight:700;font-size:calc(var(--compagnon,84px)*.12);line-height:1;color:var(--accent);text-shadow:0 0 6px var(--accent);opacity:0}
+.corbeau .chapeaux{position:absolute;left:46.8%;top:-18.5%;width:34%;height:28.8%;overflow:visible;transform:rotate(-8deg)}
+.corbeau .p-ftete .chapeaux{left:38%;top:-16.9%;transform:none}
+.corbeau span.c-bulle{inset:auto;left:78%;top:-6%;padding:1px 8px;border-radius:10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:.75rem;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
 .corbeau.croasse .c-bulle{opacity:1}
-.corbeau.croasse .c-bec-bas{animation:croa .3s ease-in-out 4 alternate}
-.corbeau.croasse .c-corps{animation:saut-leger .6s ease-in-out 2}
-.corbeau.ailes .c-aile.g,.corbeau.vol .c-aile.g,.corbeau.ebroue .c-aile.g{animation:bat-g .14s ease-in-out infinite alternate}
-.corbeau.ailes .c-aile.d,.corbeau.vol .c-aile.d,.corbeau.ebroue .c-aile.d{animation:bat-d .14s ease-in-out infinite alternate}
-.corbeau.ailes .c-corps{animation:envol-court 1.4s ease-in-out}
-.corbeau.penche .c-tete{animation:penche 2.2s ease-in-out}
-.corbeau.regarde .c-pupilles{animation:regarde 2.6s ease-in-out}
-.corbeau.ebroue .c-corps{animation:ebroue .11s linear 10 alternate}
-.corbeau.sautille .c-corps{animation:sautille 1.5s ease-in-out}
-.corbeau.vol{animation:vol-corbeau 7s ease-in-out}
-@keyframes cligne{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
-@keyframes respire{0%,100%{transform:scale(1,1)}50%{transform:scale(1.03,.97)}}
-@keyframes croa{to{transform:translateY(4px) scaleY(1.3)}}
-@keyframes saut-leger{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-@keyframes envol-court{0%,100%{transform:translateY(0)}40%,60%{transform:translateY(-26px)}}
-@keyframes bat-g{from{transform:rotate(0)}to{transform:rotate(40deg)}}
-@keyframes bat-d{from{transform:rotate(0)}to{transform:rotate(-40deg)}}
-@keyframes penche{0%,100%{transform:rotate(0)}20%,45%{transform:rotate(12deg)}60%,85%{transform:rotate(-9deg)}}
-@keyframes regarde{0%,100%{transform:translate(0,0)}15%,40%{transform:translate(-3px,0)}55%,80%{transform:translate(3px,1px)}}
-@keyframes ebroue{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}
-@keyframes sautille{0%,100%{transform:translateY(0)}20%{transform:translateY(-10px)}40%{transform:translateY(0)}60%{transform:translateY(-6px)}80%{transform:translateY(0)}}
-/* le tour en vol : il quitte son perchoir, traverse l'appli, tourne et revient se poser */
-@keyframes vol-corbeau{0%,100%{transform:translate(0,0) rotate(0)}8%{transform:translate(10px,-24px) rotate(-8deg)}30%{transform:translate(35vw,10vh) scale(.8) rotate(10deg)}50%{transform:translate(55vw,35vh) scale(.75) rotate(-6deg)}70%{transform:translate(28vw,50vh) scale(.8) rotate(-12deg)}88%{transform:translate(4vw,8vh) scale(.95) rotate(8deg)}96%{transform:translate(0,-10px) rotate(0)}}
-@media (prefers-reduced-motion: reduce){.compagnon *{animation:none!important}}
+@media (prefers-reduced-motion: reduce){.compagnon *{animation:none!important;transition:none!important}}
 
 /* Noël (de plus en plus fourni au fil de décembre), Pâques, anniversaire */
 .saison .flocon,.saison .confetti{position:absolute;top:-30px;width:calc(18px * var(--t));height:calc(18px * var(--t));color:var(--accent);opacity:.4;animation:neige var(--v) linear infinite;animation-delay:var(--d)}
