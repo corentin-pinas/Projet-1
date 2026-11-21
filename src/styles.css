@@ -305,7 +305,8 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 :root[data-saison="halloween"] .side h1::after{content:"🎃"}
 :root[data-noel="1"] .side h1::after,:root[data-noel="2"] .side h1::after{content:"❄️"}
 :root[data-noel="3"] .side h1::after,:root[data-noel="4"] .side h1::after{content:"🎄"}
-:root[data-noel="5"] .side h1::after{content:"🎅"}
+/* le père Noël de Muninn porte un cache-œil, comme Odin */
+:root[data-noel="5"] .side h1::after{content:"";width:1.6em;height:1.6em;background:url(/corbeau/pere-noel.svg) center/contain no-repeat}
 :root[data-saison="paques"] .side h1::after{content:"🐣"}
 :root[data-saison="anniversaire"] .side h1::after{content:"🎂"}
 @keyframes balance{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}
