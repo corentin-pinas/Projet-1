@@ -348,8 +348,8 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 .corbeau span.c-ombre.d{left:58.5%;top:93.6%}
 .corbeau span.c-zz{inset:auto;left:70%;top:6%;width:0;height:0;overflow:visible}
 .corbeau .c-zz span{inset:auto;left:0;bottom:0;font-weight:700;font-size:calc(var(--compagnon,84px)*.12);line-height:1;color:var(--accent);text-shadow:0 0 6px var(--accent);opacity:0}
-.corbeau .chapeaux{position:absolute;left:46.8%;top:-18.5%;width:34%;height:28.8%;overflow:visible;transform:rotate(-8deg)}
-.corbeau .p-ftete .chapeaux{left:38%;top:-16.9%;transform:none}
+.corbeau .chapeaux{position:absolute;left:36%;top:-14.5%;width:34%;height:28.8%;overflow:visible;transform:rotate(-22deg)}
+.corbeau .p-ftete .chapeaux{left:38%;top:-14.5%;transform:none}
 .corbeau span.c-bulle{inset:auto;left:78%;top:-6%;padding:1px 8px;border-radius:10px;background:var(--panel);color:var(--ink);border:1px solid var(--line);font-size:.75rem;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s}
 .corbeau.croasse .c-bulle{opacity:1}
 @media (prefers-reduced-motion: reduce){.compagnon *{animation:none!important;transition:none!important}}
