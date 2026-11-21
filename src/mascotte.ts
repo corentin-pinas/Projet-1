@@ -36,7 +36,12 @@ const OISEAU = `<span class="c-pos"><span class="c-ombre g"></span><span class="
   <span class="c-zz"></span>
 </span></span></span>`;
 
-const PERCHOIR = `<span class="perchoir" aria-hidden="true"><img src="${DOSSIER}branche.webp" alt="" draggable="false"><i style="--m:url(${DOSSIER}branche-l.webp)"></i></span>`;
+/* décorations de Noël sur la branche, de plus en plus fournies au fil de décembre (data-noel, styles.css) :
+   neige, guirlande, houx, boule, étoile ; le rouge du houx et de la boule prend la couleur de l'ambiance */
+const deco = (n: string, masque = false) =>
+  `<span class="deco d-${n}"><img src="${DOSSIER}noel-${n}.webp" alt="" draggable="false">${masque ? `<i style="--m:url(${DOSSIER}noel-${n}-l.webp)"></i>` : ""}</span>`;
+const PERCHOIR = `<span class="perchoir" aria-hidden="true"><img src="${DOSSIER}branche.webp" alt="" draggable="false"><i style="--m:url(${DOSSIER}branche-l.webp)"></i>`
+  + deco("neige") + deco("guirlande") + deco("houx", true) + deco("boule", true) + deco("etoile") + `</span>`;
 
 const DOUX = "cubic-bezier(.45,0,.25,1)";
 const dors = (ms: number) => new Promise<void>(r => setTimeout(r, ms));

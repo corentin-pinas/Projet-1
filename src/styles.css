@@ -330,7 +330,7 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
    le masque -l.webp de chaque pièce est peint à la couleur de l'ambiance */
 .corbeau{position:absolute;left:-2%;bottom:5.6%;width:96%;aspect-ratio:1;padding:0;min-height:0;border:0;background:none;border-radius:0;cursor:pointer;-webkit-tap-highlight-color:transparent;z-index:1;filter:drop-shadow(0 0 calc(var(--compagnon,84px)/30) color-mix(in srgb,var(--accent) 45%,transparent))}
 .corbeau span,.compagnon .perchoir>*{position:absolute;inset:0;display:block}
-.corbeau .calque img,.corbeau .calque i,.compagnon .perchoir img{width:100%;height:100%;user-select:none;-webkit-user-drag:none}
+.corbeau .calque img,.corbeau .calque i,.compagnon .perchoir img,.compagnon .perchoir .deco i{width:100%;height:100%;user-select:none;-webkit-user-drag:none}
 .corbeau .calque img,.compagnon .perchoir img{position:absolute;inset:0;display:block}
 .corbeau .calque i,.compagnon .perchoir i{position:absolute;inset:0;display:block;background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 55%,#FFFFFF),var(--accent) 60%);-webkit-mask:var(--m) center/100% 100% no-repeat;mask:var(--m) center/100% 100% no-repeat}
 .corbeau .c-sens,.corbeau .c-groupe{transform-origin:55% 98%}
@@ -377,6 +377,19 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 @keyframes scintille{50%{transform:scale(1.18) rotate(12deg)}}
 @keyframes hop{0%,100%{transform:translateY(0)}30%{transform:translateY(-34px) rotate(-6deg)}55%{transform:translateY(0)}70%{transform:translateY(-12px)}}
 @keyframes monte-ballon{to{transform:translateY(-120vh) rotate(6deg)}}
+
+/* décorations de Noël sur la branche du corbeau (niveau 1 : neige, 2 : guirlande, 3 : houx, 4 : boule, 5 : étoile) */
+.compagnon .perchoir .deco{display:none;position:absolute;inset:auto}
+.compagnon .perchoir .d-neige,.compagnon .perchoir .d-guirlande{inset:0}
+.compagnon .perchoir .d-houx{left:62%;top:-4%;width:27%;aspect-ratio:150/102;transform:rotate(8deg)}
+.compagnon .perchoir .d-boule{left:80%;top:55%;width:12%;aspect-ratio:80/112}
+.compagnon .perchoir .d-etoile{left:88%;top:-22%;width:18%;aspect-ratio:90/65;filter:drop-shadow(0 0 4px #FFD36E);animation:scintille 2.4s ease-in-out infinite}
+.compagnon .perchoir .d-guirlande img{animation:ampoule 2.2s ease-in-out infinite}
+:root[data-noel="1"] .perchoir .d-neige,:root[data-noel="2"] .perchoir .d-neige,:root[data-noel="3"] .perchoir .d-neige,:root[data-noel="4"] .perchoir .d-neige,:root[data-noel="5"] .perchoir .d-neige,
+:root[data-noel="2"] .perchoir .d-guirlande,:root[data-noel="3"] .perchoir .d-guirlande,:root[data-noel="4"] .perchoir .d-guirlande,:root[data-noel="5"] .perchoir .d-guirlande,
+:root[data-noel="3"] .perchoir .d-houx,:root[data-noel="4"] .perchoir .d-houx,:root[data-noel="5"] .perchoir .d-houx,
+:root[data-noel="4"] .perchoir .d-boule,:root[data-noel="5"] .perchoir .d-boule,
+:root[data-noel="5"] .perchoir .d-etoile{display:block}
 
 /* chapeaux du corbeau selon la saison */
 .corbeau .chapeau{display:none}
