@@ -54,6 +54,8 @@ export function afficherPartage() {
   $("#alertesync").hidden = !alerte;
   if (alerte) $("#alertesynctxt").textContent = alerte;
   $("#syncmajpc").textContent = e.relie ? texteMajPC(e.pc) : "";
+  /* bouton « Mettre à jour le PC maintenant » : seulement avec un lanceur qui sait le recevoir (version 3, 1.12.0) */
+  $("#syncmajmaint").hidden = !(e.relie && (e.pc?.maj?.lanceur ?? 0) >= 3);
   const mini = $("#syncmini"), txt = $("#syncminitxt");
   mini.hidden = !e.relie;
   mini.classList.toggle("encours", e.enCours);
@@ -119,6 +121,26 @@ export function brancherPartage() {
       toast(e.erreur ?? "PC remis à niveau. Les autres appareils suivront à leur prochain échange.");
     } catch (err) {
       toast(err instanceof synchro.ErreurSync ? err.message : "La remise à niveau n'a pas abouti. Réessayez.");
+    }
+  });
+
+  $("#syncmajmaint").addEventListener("click", async () => {
+    const b = $<HTMLButtonElement>("#syncmajmaint");
+    b.disabled = true; b.textContent = "Vérification en cours…";
+    const debut = new Date().toISOString();
+    try {
+      const m = await synchro.mettreAJourLePC();
+      const faites = (m?.faites ?? []).filter(f => f.quand >= debut);
+      const nom = (n: string) => n === "voix" ? "Whisper" : n === "travail" ? "travail en tâche de fond" : "partage";
+      toast(!m ? "Le PC n'a pas encore fini de vérifier : regardez de nouveau dans quelques minutes."
+        : m.erreur ? `Le PC n'a pas pu se mettre à jour : ${m.erreur}`
+        : faites.length ? "PC mis à jour : " + faites.map(f => `${nom(f.nom)} version ${f.de} → ${f.a}`).join(", ") + "."
+        : m.relancer ? "Le PC est à jour, mais il demande de relancer la ligne d'installation (ci-dessous)."
+        : "Le PC est déjà à jour.");
+    } catch (err) {
+      toast(err instanceof synchro.ErreurSync ? err.message : "Le PC n'a pas pu être joint.");
+    } finally {
+      b.disabled = false; b.textContent = "Mettre à jour le PC maintenant";
     }
   });
 

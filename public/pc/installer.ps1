@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $Adresse = "__ADRESSE__"
 $Dossier = Join-Path $env:ProgramData "Muninn"
 $Port = 4747
-$Installeur = 3   # à augmenter quand une mise à jour demande de relancer cette installation (droits, Python, lanceur)
+$Installeur = 4   # à augmenter quand une mise à jour demande de relancer cette installation (droits, Python, lanceur)
 
 function Etape($t) { Write-Host ""; Write-Host "== $t" -ForegroundColor Cyan }
 function Stop-Erreur($t) { Write-Host ""; Write-Host $t -ForegroundColor Red; Write-Host "Envoyez une capture de cette fenêtre à Claude."; exit 1 }

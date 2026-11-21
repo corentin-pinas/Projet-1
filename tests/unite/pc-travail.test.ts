@@ -98,7 +98,7 @@ describe("le PC fait le travail en tâche de fond", () => {
     fermer.push(() => pc.arreter());
     expect((await api(pc, "/api/sync/etat")).corps.travail).toMatchObject({ version: VERSION_TRAVAIL, pret: false });
     expect((await confier(pc, { id: ID, type: "dictee", date: JOUR, texte: "x" })).statut).toBe(503);
-    expect(await (await fetch(pc.url + "/sante")).json()).toEqual({ pc: 8, travail: VERSION_TRAVAIL });
+    expect(await (await fetch(pc.url + "/sante")).json()).toEqual({ pc: Number(/const VERSION = (\d+);/.exec(readFileSync(resolve(__dirname, "../../public/pc/muninn-pc.mjs"), "utf8"))![1]), travail: VERSION_TRAVAIL });
   });
 
   it("dictée tapée : rangée par le PC dans la base commune, récapitulatif dans le travail, code d'accès gardé", async () => {

@@ -13,7 +13,7 @@ const PARAM_REV = "sync_rev", PARAM_QUITTE = "sync_adresse_quittee", PARAM_ID = 
 const PAQUET = 200;
 
 /* mise à jour automatique du PC (1.7.0) : ce que le lanceur du PC a noté ; null = pas encore de lanceur (ancienne installation) */
-export type MajPC = { verifie?: string; erreur?: string; relancer?: boolean; pc?: number; voix?: number; faites?: { nom: string; de: number; a: number; quand: string }[] } | null;
+export type MajPC = { verifie?: string; encours?: string; erreur?: string; relancer?: boolean; lanceur?: number; pc?: number; voix?: number; travail?: number; faites?: { nom: string; de: number; a: number; quand: string }[] } | null;
 export type EtatSync = { relie: boolean; enCours: boolean; derniere: string | null; erreur: string | null; pcRevenu?: boolean;
   attente?: string | null;                      // plus vieux changement de cet appareil pas encore parti au PC (1.7.0)
   pc?: { version: number; maj: MajPC; travail?: TravailPC } };
@@ -253,6 +253,24 @@ async function recevoirFichiers(cfg: Config) {
     const r = await appel(cfg, "/api/sync/fichiers/" + encodeURIComponent(id), {}, 300_000);
     if (r) await db.ajouterFichier(id, await r.blob());
   }
+}
+
+/* « Mettre à jour le PC maintenant » (1.12.0) : le PC vérifie aussitôt s'il existe une version plus récente ;
+   rend ce que son lanceur a noté une fois la vérification finie (3 minutes au plus), ou null s'il n'a pas fini */
+export async function mettreAJourLePC(): Promise<MajPC> {
+  const cfg = await config();
+  if (!cfg) throw new ErreurSync("Cet appareil n'est pas relié au PC.");
+  const depuis = new Date().toISOString();
+  await json(cfg, "/api/sync/maj", {});
+  for (const fin = Date.now() + 3 * 60_000; Date.now() < fin;) {
+    await new Promise(r => setTimeout(r, 2_000));
+    const e = await json<{ version?: number; maj?: MajPC; travail?: TravailPC }>(cfg, "/api/sync/etat").catch(() => null);
+    if (e?.maj?.verifie && e.maj.verifie >= depuis && !e.maj.encours) {
+      maj({ pc: { version: e.version ?? 0, maj: e.maj, travail: e.travail ?? null } });
+      return e.maj;
+    }
+  }
+  return null;
 }
 
 /* ---------- quand échanger ---------- */
