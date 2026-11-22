@@ -1,6 +1,6 @@
 # Reprise du projet — appli de suivi patients (kiné)
 
-Point de reprise du **14 novembre 2026** (version **2.1.0** en production depuis le 22 novembre : nouvelle direction artistique (ambiances, Ma journée, suivi chiffré), carte du corps sur planches réalistes, objectifs ajoutés seuls avec case « Atteint » ; avant : 1.13.0, corbeau peint ; voir CLAUDE.md), à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
+Point de reprise du **14 novembre 2026** (version **2.1.1** en production depuis le 22 novembre : nouvelle direction artistique (ambiances, Ma journée, suivi chiffré), carte du corps sur planches réalistes, objectifs ajoutés seuls avec case « Atteint » ; avant : 1.13.0, corbeau peint ; voir CLAUDE.md), à lire en premier pour démarrer une nouvelle conversation sans perte de contexte.
 À lire ensuite : `CLAUDE.md` (contexte détaillé, règles de travail, technique ; certaines parties décrivent encore la version d'essai claude.ai) et `PLAN.md` (plan d'origine).
 Carte du projet (artifact) : https://claude.ai/artifact/7vULqC1G8oPWJv1P8w5ZHb — à jour au 5 novembre (état, schéma des appareils, « Sous le capot » : architecture expliquée, frise, idées, leçons). La tenir à jour à chaque étape, toujours à la même adresse (`edits` sur le même fichier).
 
