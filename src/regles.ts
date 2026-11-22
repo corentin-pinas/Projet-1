@@ -14,12 +14,29 @@ export type Resume = {
   chiffres?: { label: string; valeur: string }[];
   sections?: { titre: string; items: string[] }[];
   objectifs?: string[];                               // objectifs du patient lus dans le bilan (SMART ou ailleurs), depuis 1.8.0
+  zones?: { structure: string; cote: "d" | "g" | "c"; cat: "pain" | "raide" | "nerf" | "frac"; nom: string }[];   // carte du corps (2.1.0)
   a_verifier?: string[];
 };
 
 /* Objectifs du patient (1.8.0, choix de Corentin du 12 novembre 2026) : lus dans le bilan au départ, puis modifiés à la
    main ou proposés par une dictée (jamais changés sans son accord). La version la plus récente compte, l'historique est gardé. */
 export type Objectifs = { liste: string[]; maj: string; source: "bilan" | "main" | "dictee" };
+
+/* zone de la carte du corps (2.1.0) ; règles dans corps.ts */
+export type Categorie = "pain" | "raide" | "nerf" | "frac";
+export type Cote = "d" | "g" | "c";        // droite, gauche, au centre (rachis, menton)
+export type Zone = {
+  id: string;                                         // structure|côté|catégorie : une même zone n'existe qu'une fois
+  structure: string; cote: Cote; cat: Categorie;
+  nom: string;                                        // tel que dit ou écrit (« faisceau postérieur du deltoïde droit »)
+  depuis: string;                                     // AAAA-MM-JJ : bilan ou séance où elle apparaît
+  source: "bilan" | "dictee" | "main";
+  mieux?: string;                                     // « moins de douleur » ce jour-là : la zone pâlit
+  fin?: string;                                       // « plus de douleur » ce jour-là : passe dans les anciennes zones
+  enlevee?: string;                                   // enlevée à la main ce jour-là (jamais redonnée par un bilan)
+  decal?: Record<string, [number, number]>;           // déplacée à la main, par planche
+  maj: string;                                        // ISO : dernière modification (fusion entre appareils)
+};
 
 export type Dossier = {
   id: string;
@@ -34,6 +51,13 @@ export type Dossier = {
   objectifs?: Objectifs;                              // objectifs actuels du patient (sinon : ceux du bilan)
   objectifs_hist?: Objectifs[];                       // versions précédentes, la plus récente d'abord (10 au plus)
   objectifs_propose?: { liste: string[]; date: string };   // objectifs dits dans une dictée, à confirmer
+  sans_bilan?: boolean;                               // « Pas de bilan » : ce patient n'en aura pas, plus d'alerte (1.10.0)
+  bilan_plus_tard?: string;                           // « Plus tard » : alerte « bilan pas encore ajouté » tue jusqu'à ce jour (AAAA-MM-JJ)
+  absences_vu?: number;                               // « Vu » sur l'alerte des absences : nombre d'absences à ce moment (1.11.0)
+  zones?: Zone[];                                     // carte du corps (2.1.0) : zones actives et anciennes (voir corps.ts)
+  vues?: Record<string, number>;                      // vue choisie par Corentin pour chaque région (2.1.0)
+  objectifs_dictes?: { t: string; date: string }[];   // objectifs dits dans une dictée, ajoutés tout seuls (2.1.0)
+  objectifs_atteints?: { t: string; quand: string }[];   // objectifs cochés « Atteint » (2.1.0)
 };
 
 /* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
@@ -344,6 +368,52 @@ export function sansRendezVous(dossiers: Dossier[], bilans: Bilan[], seances: Se
   return sortie.sort((a, b) => a.depuis.localeCompare(b.depuis));
 }
 
+/* Bilan pas encore ajouté (choix de Corentin du 20 novembre 2026) : un dossier créé sans bilan est signalé 7 jours après sa
+   création, ou dès sa 2e séance (le premier des deux). « Plus tard » le fait taire 7 jours, « Pas de bilan » pour toujours.
+   Les archivés ne sont pas signalés. Du plus ancien au plus récent. */
+export const JOURS_SANS_BILAN = 7, SEANCES_SANS_BILAN = 2;
+export type SansBilan = { dossier: Dossier; cree: string; jours: number; seances: number };
+export function sansBilan(dossiers: Dossier[], bilans: Bilan[], seances: Seance[], aujourdhui: string): SansBilan[] {
+  const avecBilan = new Set(bilans.map(b => b.dossierId));
+  const sortie: SansBilan[] = [];
+  for (const d of dossiers) {
+    if (estArchive(d) || d.sans_bilan || avecBilan.has(d.id)) continue;
+    if (d.bilan_plus_tard && aujourdhui < d.bilan_plus_tard) continue;
+    const cree = String(d.cree).slice(0, 10);
+    const jours = /^\d{4}-\d{2}-\d{2}$/.test(cree) ? Math.max(0, joursEntre(cree, aujourdhui)) : 0;
+    const n = seances.filter(s => s.dossierId === d.id).length;
+    if (jours >= JOURS_SANS_BILAN || n >= SEANCES_SANS_BILAN) sortie.push({ dossier: d, cree, jours, seances: n });
+  }
+  return sortie.sort((a, b) => a.cree.localeCompare(b.cree));
+}
+
+/* Absences (choix de Corentin du 20 novembre 2026) : comptées seulement à partir de DEBUT_ABSENCES (avant, « Il était
+   absent » servait aussi pour une erreur de rendez-vous : ces absences restent notées mais ne comptent pas). On distingue
+   les absences d'affilée (pas de séance entre elles) du total. Alerte : 3 d'affilée, ou 5 en tout. */
+export const DEBUT_ABSENCES = "2026-11-20";
+export const ABSENCES_SUITE = 3, ABSENCES_TOTAL = 5;
+export type Absences = { dates: string[]; total: number; suite: number; alerte: boolean };
+export function absencesDe(D: Dossier, seances: Seance[]): Absences {
+  const dates = [...new Set(D.absences ?? [])].filter(d => d >= DEBUT_ABSENCES).sort();
+  const absents = new Set(dates);
+  const faits = [...dates.map(d => ({ d, absent: true })),
+    ...seances.filter(s => s.dossierId === D.id && s.date >= DEBUT_ABSENCES && !absents.has(s.date)).map(s => ({ d: s.date, absent: false }))]
+    .sort((a, b) => a.d.localeCompare(b.d));
+  let suite = 0, n = 0;
+  for (const f of faits) { n = f.absent ? n + 1 : 0; suite = Math.max(suite, n); }
+  return { dates, total: dates.length, suite, alerte: suite >= ABSENCES_SUITE || dates.length >= ABSENCES_TOTAL };
+}
+/* patients à signaler dans Ma journée : alerte, pas archivés, et une absence de plus depuis le dernier « Vu » */
+export function souventAbsents(dossiers: Dossier[], seances: Seance[]): { dossier: Dossier; absences: Absences }[] {
+  return dossiers.filter(d => !estArchive(d)).map(d => ({ dossier: d, absences: absencesDe(d, seances) }))
+    .filter(x => x.absences.alerte && x.absences.total > (x.dossier.absences_vu ?? 0))
+    .sort((a, b) => b.absences.suite - a.absences.suite || b.absences.total - a.absences.total);
+}
+/* « 3 absences, dont 3 d'affilée » */
+export function texteAbsences(a: Absences): string {
+  return `${a.total} absence${a.total > 1 ? "s" : ""}${a.suite >= 2 ? `, dont ${a.suite} d'affilée` : ""}`;
+}
+
 /* ---------- liste des patients ---------- */
 
 export type Ligne = { dossier: Dossier; bilans: Bilan[]; age: number | null; rdv: ReturnType<typeof prochainRdv>; archive: boolean };
@@ -609,3 +679,80 @@ export const rubriquesTransmission = (r: Resume) => (r.sections ?? []).filter(s 
 /* la dernière séance, sans ce qui est prévu pour la suite (montré à part, avec les objectifs) */
 export const seanceTransmission = (s: Seance) =>
   texteDe(s).split("\n").map(l => l.trim()).filter(l => l && !/^(à|a) venir\s*:/i.test(l)).join("\n");
+
+/* ---------- suivi chiffré (2.0.0, choix de Corentin du 22 novembre 2026) ----------
+   Douleur et une mesure propre au patient (élévation, ouverture, flexion…), lues sans IA dans ce qui est écrit :
+   les chiffres du bilan, puis chaque séance (« douleur 4/10 », « EVA 3 », « élévation 120° »). Un point seulement quand
+   la valeur est écrite ; rien n'est deviné. « Moins de douleur » sans chiffre : tendance, sans valeur inventée. */
+export type Point = { date: string; v: number };
+export type Suivi = {
+  douleur: Point[];
+  mesure: { label: string; unite: string; points: Point[] } | null;
+  tendance: { date: string; texte: string } | null;   // « moins de douleur » dit sans chiffre à la dernière séance
+};
+
+const nombre = (t: string) => Number(t.replace(",", "."));
+/* « EVA 4 », « EN : 4 », ou « douleur … 4/10 », « mal … 4 sur 10 » (le « sur 10 » évite « mal depuis 3 jours ») */
+const EVA = /\bEVA\s*(?:à|a|=|:|de)?\s*(\d{1,2}(?:[.,]\d)?)\b/i, EN = /\bEN\s*[:=]\s*(\d{1,2}(?:[.,]\d)?)\b/;
+const DOULEUR = /\b(?:douleurs?|mal)\b[^.\n\d]{0,25}?(\d{1,2}(?:[.,]\d)?)\s*(?:\/|sur)\s*10\b/i;
+const sansAccent = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function douleurDans(t: string): number | null {
+  const m = t.match(EVA) ?? t.match(EN) ?? t.match(DOULEUR);
+  if (!m) return null;
+  const v = nombre(m[1]);
+  return v >= 0 && v <= 10 ? v : null;
+}
+
+/* date du bilan : celle écrite dessus (JJ/MM/AAAA), sinon le jour du dépôt */
+const dateBilan = (b: Bilan) => { const m = b.resume?.date_bilan?.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : b.ajoute.slice(0, 10); };
+
+export function suiviDe(dossierId: string, bilans: Bilan[], seances: Seance[]): Suivi {
+  const siens = trierBilans(bilans.filter(b => b.dossierId === dossierId && b.resume)).reverse();   // du plus ancien au plus récent
+  const ses = seances.filter(s => s.dossierId === dossierId).sort((a, b) => a.date.localeCompare(b.date) || a.cree.localeCompare(b.cree));
+  const douleur: Point[] = [];
+  let mesure: Suivi["mesure"] = null;
+  for (const b of siens) for (const c of b.resume!.chiffres ?? []) {
+    const lib = sansAccent(c.label);
+    /* « EVA », « EVN pire », « EN », « ENS » : la douleur (2.1.2) ; l'âge, le poids, la taille ne sont pas des mesures à suivre */
+    if (/^(?:age|poids|taille|imc|date|anciennete|duree|depuis|nombre|nb)\b/.test(lib)) continue;
+    if (/\beva\b|\bevn\b|\bens?\b|douleur/.test(lib)) { const v = douleurDans("EVA " + c.valeur.replace(/\s*(?:\/|sur)\s*10.*/, "")); if (v != null) douleur.push({ date: dateBilan(b), v }); continue; }
+    const m = c.valeur.match(/(-?\d+(?:[.,]\d+)?)\s*(°|mm|cm|min|kg|%|m)?/);
+    if (!m) continue;
+    if (!mesure) mesure = { label: c.label, unite: m[2] ?? "", points: [] };
+    if (sansAccent(mesure.label) === lib) mesure.points.push({ date: dateBilan(b), v: nombre(m[1]) });
+  }
+  /* la mesure dans les séances : son premier mot (« élévation », « ouverture »), suivi d'un nombre dans la phrase */
+  const mot = mesure ? sansAccent(mesure.label).split(/[^a-z]+/).find(x => x.length >= 4) : null;
+  const unite = mesure?.unite ? "\\s*" + mesure.unite.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
+  const reMesure = mot ? new RegExp(`\\b${mot}\\w*[^.\\n\\d]{0,30}?(\\d+(?:[.,]\\d+)?)${unite}`, "i") : null;
+  let tendance: Suivi["tendance"] = null;
+  for (const s of ses) {
+    const brut = texteDe(s), t = sansAccent(brut);
+    const v = douleurDans(brut);
+    if (v != null) { douleur.push({ date: s.date, v }); tendance = null; }
+    else if (/moins (?:de )?(?:douleur|mal)\b|douleurs? (?:en baisse|diminue)/.test(t)) tendance = { date: s.date, texte: "moins de douleur" };
+    if (reMesure && mesure) { const m = t.match(reMesure); if (m) mesure.points.push({ date: s.date, v: nombre(m[1]) }); }
+  }
+  return { douleur: douleur.slice(-20), mesure: mesure && { ...mesure, points: mesure.points.slice(-20) }, tendance };
+}
+
+/* prochain rendez-vous après ce jour (pour les petites fiches) */
+export const rdvApres = (D: Dossier, iso: string) => D.rdvs.filter(r => r.d > iso).sort((a, b) => a.d.localeCompare(b.d))[0] ?? null;
+
+/* Objectifs affichés (2.1.0) : ceux du bilan ou modifiés à la main, puis ceux dits dans les dictées (ajoutés tout seuls),
+   chacun avec sa case « Atteint le … ». Un même objectif n'apparaît qu'une fois. */
+export type ObjectifVu = { t: string; source: "bilan" | "main" | "dictee"; date?: string; atteint?: string };
+export function objectifsVus(D: Dossier, bilans: Bilan[]): ObjectifVu[] {
+  const base = objectifsDe(D, bilans), vus = new Set<string>(), l: ObjectifVu[] = [];
+  const atteint = (t: string) => (D.objectifs_atteints ?? []).find(a => a.t.toLowerCase() === t.toLowerCase())?.quand;
+  const ajouter = (o: ObjectifVu) => { const k = o.t.trim().toLowerCase(); if (!k || vus.has(k)) return; vus.add(k); const a = atteint(o.t); l.push(a ? { ...o, atteint: a } : o); };
+  for (const t of base?.liste ?? []) ajouter({ t, source: base!.source === "dictee" ? "dictee" : base!.source });
+  for (const o of D.objectifs_dictes ?? []) ajouter({ t: o.t, source: "dictee", date: o.date });
+  return l;
+}
+export const objectifsEnCours = (D: Dossier, bilans: Bilan[]) => objectifsVus(D, bilans).filter(o => !o.atteint);
+export function cocherObjectif(D: Dossier, t: string, quand: string | null): Dossier {
+  const autres = (D.objectifs_atteints ?? []).filter(a => a.t.toLowerCase() !== t.toLowerCase());
+  return { ...D, objectifs_atteints: quand ? [...autres, { t, quand }] : autres };
+}

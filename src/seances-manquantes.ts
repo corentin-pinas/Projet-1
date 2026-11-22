@@ -1,7 +1,8 @@
 /* Séances manquantes (choix de Corentin, 5 novembre 2026). Un rendez-vous passé sans séance ce jour-là apparaît dans la
    liste des séances de la fiche, et dans le récapitulatif de la dictée groupée : « Retrouver dans mes dictées » (l'IA
    légère relit la dictée gardée de ce jour-là et montre le passage ; « Ranger cette séance » en fait une séance normale)
-   ou « Il était absent » (absence notée sur le dossier). Un lien permet aussi de chercher un autre jour. */
+   ou « Il était absent » (absence notée sur le dossier), ou « Erreur : pas de rendez-vous ce jour-là » (le rendez-vous est
+   retiré, 1.11.0). Un lien permet aussi de chercher un autre jour. */
 import { ErreurIA } from "./ia";
 import * as db from "./db";
 import * as moteur from "./moteur";
@@ -27,7 +28,7 @@ export function bloc(D: Dossier, d: string, demi: Demi | null, nom = "", libre =
   const texte = e?.etat === "rien" ? esc(e.message)
     : libre ? "aucune séance notée ce jour-là." : "rendez-vous prévu, aucune séance notée.";
   return `<div class="trou" ${attrs}><b>${titre} :</b> ${texte}
-      <div class="row">${e?.etat === "rien" ? "" : `<button class="primary" data-mchercher>Retrouver dans mes dictées</button>`}<button data-mabsent>Il était absent</button>${libre || e?.etat === "rien" ? `<button data-mfermer>Fermer</button>` : ""}</div></div>`;
+      <div class="row">${e?.etat === "rien" ? "" : `<button class="primary" data-mchercher>Retrouver dans mes dictées</button>`}<button data-mabsent>Il était absent</button>${libre ? "" : `<button data-merreur>Erreur : pas de rendez-vous ce jour-là</button>`}${libre || e?.etat === "rien" ? `<button data-mfermer>Fermer</button>` : ""}</div></div>`;
 }
 
 export function absence(D: Dossier, d: string): string {
@@ -62,6 +63,11 @@ export function brancher(racine: HTMLElement, redessiner: () => void) {
     on("[data-mchercher]", () => chercher(id, d));
     on("[data-mabsent]", async () => {
       try { await db.noterAbsence(id, d, true); fin(id, d); toast("Absence notée."); redessiner(); }
+      catch { toast("L'enregistrement a échoué. Réessayez."); }
+    });
+    /* rendez-vous noté par erreur (1.11.0) : il est retiré, rien n'est compté comme absence */
+    on("[data-merreur]", async () => {
+      try { await db.modifierRdvs(id, rdvs => rdvs.filter(r => r && r.d !== d)); fin(id, d); toast("Rendez-vous retiré."); redessiner(); }
       catch { toast("L'enregistrement a échoué. Réessayez."); }
     });
     on("[data-mpresent]", async () => {

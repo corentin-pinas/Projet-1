@@ -30,7 +30,7 @@ function serveurMaj(versions: Record<string, number>, fichier: string, travail?:
   return new Promise(r => s.listen(p, "127.0.0.1", () => r(`http://127.0.0.1:${p}`)));
 }
 
-async function lancer(adresse: string, installeur = 3, avecTravail = false) {
+async function lancer(adresse: string, installeur = 4, avecTravail = false, premiere = "300") {
   const ici = mkdtempSync(join(tmpdir(), "muninn-lanceur-")), dossier = mkdtempSync(join(tmpdir(), "muninn-donnees-"));
   copyFileSync(join(PCDIR, "lanceur.mjs"), join(ici, "lanceur.mjs"));
   copyFileSync(join(PCDIR, "muninn-pc.mjs"), join(ici, "muninn-pc.mjs"));
@@ -39,7 +39,7 @@ async function lancer(adresse: string, installeur = 3, avecTravail = false) {
   const p = port++;
   const proc: ChildProcess = spawn(process.execPath, [join(ici, "lanceur.mjs")], {
     env: { ...process.env, MUNINN_DOSSIER: dossier, MUNINN_PORT: String(p), MUNINN_CODE: CODE, MUNINN_PYTHON: join(ici, "pas-de-python"),
-      MUNINN_MAJ_PREMIERE: "300", MUNINN_MAJ_INTERVALLE: "3600000", MUNINN_MAJ_SANTE: "8000" },
+      MUNINN_MAJ_PREMIERE: premiere, MUNINN_MAJ_INTERVALLE: "3600000", MUNINN_MAJ_SANTE: "8000", MUNINN_MAJ_SCRUTE: "200" },
     stdio: ["ignore", "pipe", "pipe"]
   });
   let sortie = ""; proc.stdout!.on("data", x => sortie += x); proc.stderr!.on("data", x => sortie += x);
@@ -57,7 +57,7 @@ async function lancer(adresse: string, installeur = 3, avecTravail = false) {
     }
     throw new Error("pas de vérification : " + sortie);
   };
-  return { ici, dossier, etatPC, apresVerification, sortie: () => sortie };
+  return { ici, dossier, url, etatPC, apresVerification, sortie: () => sortie };
 }
 
 describe("mise à jour automatique du PC", () => {
@@ -72,7 +72,7 @@ describe("mise à jour automatique du PC", () => {
   });
 
   it("travail.mjs (1.9.0) : ajouté s'il manque, puis une version qui ne se charge pas est refusée et l'ancienne remise", async () => {
-    const pc = await lancer(await serveurMaj({ pc: VERSION, voix: 1, travail: TRAVAIL_VERSION, lanceur: 2, installeur: 3 }, SOURCE, TRAVAIL));
+    const pc = await lancer(await serveurMaj({ pc: VERSION, voix: 1, travail: TRAVAIL_VERSION, lanceur: 3, installeur: 4 }, SOURCE, TRAVAIL));
     const e = await pc.apresVerification();
     for (let i = 0; i < 50 && !(await pc.etatPC())?.travail; i++) await new Promise(r => setTimeout(r, 100));
     const apres = await pc.etatPC();
@@ -81,7 +81,7 @@ describe("mise à jour automatique du PC", () => {
     expect(e.maj.erreur).toBeUndefined();
 
     const casse = TRAVAIL.replace(/VERSION = \d+/, "VERSION = 50").replace("export {", "throw new Error(\"cassé\");\nexport {");
-    const pc2 = await lancer(await serveurMaj({ pc: VERSION, voix: 1, travail: 50, lanceur: 2, installeur: 3 }, SOURCE, casse), 3, true);
+    const pc2 = await lancer(await serveurMaj({ pc: VERSION, voix: 1, travail: 50, lanceur: 3, installeur: 4 }, SOURCE, casse), 4, true);
     const e2 = await pc2.apresVerification();
     expect(e2.maj.erreur).toContain("retour à la version " + TRAVAIL_VERSION);
     expect(e2.maj.refusees).toEqual({ travail: 50 });
@@ -91,7 +91,7 @@ describe("mise à jour automatique du PC", () => {
 
   it("une version plus récente est installée seule, l'ancienne gardée à côté, les données intactes", async () => {
     const nouvelle = SOURCE.replace(/\bVERSION = \d+;/, "VERSION = 99;");
-    const pc = await lancer(await serveurMaj({ pc: 99, voix: 1, lanceur: 2, installeur: 3 }, nouvelle));
+    const pc = await lancer(await serveurMaj({ pc: 99, voix: 1, lanceur: 3, installeur: 4 }, nouvelle));
     const e = await pc.apresVerification();
     for (let i = 0; i < 50 && (await pc.etatPC())?.version !== 99; i++) await new Promise(r => setTimeout(r, 100));
     const apres = await pc.etatPC();
@@ -104,7 +104,7 @@ describe("mise à jour automatique du PC", () => {
 
   it("une version qui ne démarre pas : retour à l'ancienne, et elle n'est plus réessayée", async () => {
     const cassee = SOURCE.replace(/\bVERSION = \d+;/, "VERSION = 98; throw new Error(\"cassée\");");
-    const pc = await lancer(await serveurMaj({ pc: 98, voix: 1, lanceur: 2, installeur: 3 }, cassee));
+    const pc = await lancer(await serveurMaj({ pc: 98, voix: 1, lanceur: 3, installeur: 4 }, cassee));
     const e = await pc.apresVerification();
     expect(e.version).toBe(VERSION);
     expect(e.maj.erreur).toContain("retour à la version " + VERSION);
@@ -113,15 +113,32 @@ describe("mise à jour automatique du PC", () => {
   }, 40_000);
 
   it("un fichier au mauvais numéro ou illisible n'est jamais installé", async () => {
-    const pc = await lancer(await serveurMaj({ pc: 97, voix: 1, lanceur: 2, installeur: 3 }, "VERSION = 97; ceci n'est pas du JavaScript ("));
+    const pc = await lancer(await serveurMaj({ pc: 97, voix: 1, lanceur: 3, installeur: 4 }, "VERSION = 97; ceci n'est pas du JavaScript ("));
     const e = await pc.apresVerification();
     expect(e.version).toBe(VERSION);
     expect(e.maj.erreur).toContain("illisible");
     expect(existsSync(join(pc.ici, "muninn-pc.mjs.ancien"))).toBe(false);
   }, 40_000);
 
+  it("« Mettre à jour le PC maintenant » (1.12.0) : demandée par un appareil, la vérification se fait aussitôt", async () => {
+    const nouvelle = SOURCE.replace(/\bVERSION = \d+;/, "VERSION = 96;");
+    const pc = await lancer(await serveurMaj({ pc: 96, voix: 1, lanceur: 3, installeur: 4 }, nouvelle), 4, false, "3600000");   // pas de vérification au démarrage
+    for (let i = 0; i < 100 && !(await pc.etatPC()); i++) await new Promise(r => setTimeout(r, 100));
+    expect((await pc.etatPC()).maj).toBeNull();                                  // rien de vérifié pour l'instant
+    const r = await fetch(pc.url + "/api/sync/maj", { method: "POST", headers: { Authorization: "Bearer " + CODE, "Content-Type": "application/json" }, body: "{}" });
+    expect(r.status).toBe(200);
+    const e = await pc.apresVerification();
+    for (let i = 0; i < 80 && (await pc.etatPC())?.version !== 96; i++) await new Promise(r => setTimeout(r, 100));
+    const apres = await pc.etatPC();
+    expect(apres.version).toBe(96);
+    expect(apres.maj).toMatchObject({ lanceur: 3, faites: [{ nom: "pc", a: 96 }] });
+    expect(apres.maj.encours).toBeUndefined();
+    expect(existsSync(join(pc.dossier, "maj-demande"))).toBe(false);
+    expect(e).toBeTruthy();
+  }, 40_000);
+
   it("une nouvelle installation demandée (droits Windows, Python, lanceur) : « relancer » est signalé", async () => {
-    const pc = await lancer(await serveurMaj({ pc: VERSION, voix: 1, lanceur: 2, installeur: 4 }, SOURCE), 3);
+    const pc = await lancer(await serveurMaj({ pc: VERSION, voix: 1, lanceur: 3, installeur: 5 }, SOURCE), 4);
     const e = await pc.apresVerification();
     expect(e.maj.relancer).toBe(true);
     expect(e.maj.erreur).toBeUndefined();

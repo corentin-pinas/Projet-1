@@ -25,7 +25,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const VERSION = 8;
+const VERSION = 9;
 const ici = dirname(fileURLToPath(import.meta.url));
 const voix = process.env.MUNINN_VOIX_URL || "http://127.0.0.1:4748";   // Whisper du PC (voix.py)
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
@@ -248,6 +248,12 @@ async function api(req, res, url) {
     let maj = null;
     try { maj = JSON.parse(await readFile(join(dossier, "maj-etat.json"), "utf8")); } catch { /* pas encore de lanceur */ }
     return json(req, res, 200, { muninn: true, version: VERSION, id: base.id, origine: base.origine, rev: base.rev, elements: Object.keys(base.elements).length, maj, travail: etatTravail() });
+  }
+
+  /* « Mettre à jour le PC maintenant » (1.12.0) : le lanceur (version 3 au moins) voit ce fichier et vérifie aussitôt */
+  if (req.method === "POST" && chemin === "/api/sync/maj") {
+    await writeFile(join(dossier, "maj-demande"), new Date().toISOString());
+    return json(req, res, 200, { ok: true });
   }
 
   /* les modifications depuis le numéro donné, dans l'ordre */

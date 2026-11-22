@@ -50,7 +50,7 @@ if (args[0] === "auth" && args[1] === "login") {
   /* dictée groupée (1.9.0, rangée par le PC) : un passage par patient annoncé par « Avec » ou « Ensuite » */
   const dictee = texte.includes("Voici une dictée groupée") ? (texte.split("Dictée :\n")[1] ?? "").split(/\b(?:Avec|Ensuite|avec|ensuite)\s+/).filter(x => x.trim()).map(x => {
     const [, nom, extrait] = /^([^,.]+)[,.]\s*([\s\S]*)$/.exec(x.trim()) ?? [null, null, x.trim()];
-    return { nom, extrait: extrait.trim(), propre: "Fait en séance : " + extrait.trim(), resume: null, bref: extrait.trim().slice(0, 40), rdv_date: null, rdv_heure: null, rdv_demi: null, rdv_autres: [], rdv_annules: [], objectifs: [], fin_traitement: false };
+    return { nom, extrait: extrait.trim(), absent: /\babsente?\b/i.test(extrait), propre: "Fait en séance : " + extrait.trim(), resume: null, bref: extrait.trim().slice(0, 40), rdv_date: null, rdv_heure: null, rdv_demi: null, rdv_autres: [], rdv_annules: [], objectifs: [], fin_traitement: false };
   }) : null;
   const sortie = dictee ? { seances: dictee }
     : texte.includes("Retrouve le passage") ? { trouve: false, extrait: null }

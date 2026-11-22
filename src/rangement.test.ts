@@ -18,14 +18,15 @@ describe("rangement du résultat de l'IA", () => {
     expect(p).toEqual({ ia_ok: true, propre: "État : 3/10.", propre_source: empreinteTexte(se.contenu), bref: "3/10", bref_source: empreinteTexte(se.contenu), avenir_resume: "Tester la force.", avenir_source: empreinteTexte("Tester la force") });
   });
 
-  it("dossier : rendez-vous dits posés (demi-journée de la séance), annulés proposés, objectifs proposés ; rien si ce n'est pas la dernière séance", () => {
+  it("dossier : rendez-vous dits posés (demi-journée de la séance), annulés proposés, objectifs ajoutés seuls (2.1.0) ; rien si ce n'est pas la dernière séance", () => {
     const d = D({ rdvs: [{ d: "2026-11-16", h: "", p: "pm" }, { d: "2026-11-20", h: "", p: "am" }] });
     const a = { ...vide, rdvDate: "2026-11-18", autres: [{ d: "2026-11-19", demi: "am" as const }], annules: ["2026-11-20"], objectifs: ["Courir 20 minutes"] };
     const r = analyseSurDossier(d, [S()], S(), a, "2026-11-16", jour);
     expect(r.dossier.rdvs).toEqual([{ d: "2026-11-16", h: "", p: "pm" }, { d: "2026-11-18", h: "", p: "pm" }, { d: "2026-11-19", h: "", p: "am" }, { d: "2026-11-20", h: "", p: "am" }]);
     expect(r.dossier.retirer).toEqual(["2026-11-20"]);
-    expect(r.dossier.objectifs_propose).toEqual({ liste: ["Courir 20 minutes"], date: "2026-11-16" });
-    expect(r.message).toBe("Rendez-vous repérés pour Marc D. : le 2026-11-18 après-midi, le 2026-11-19 matin. Rendez-vous dit annulé pour Marc D. : le 2026-11-20. À confirmer. Objectif dit pour Marc D. : à confirmer sur sa fiche.");
+    expect(r.dossier.objectifs_propose).toBeUndefined();
+    expect(r.dossier.objectifs_dictes).toEqual([{ t: "Courir 20 minutes", date: "2026-11-16" }]);
+    expect(r.message).toBe("Rendez-vous repérés pour Marc D. : le 2026-11-18 après-midi, le 2026-11-19 matin. Rendez-vous dit annulé pour Marc D. : le 2026-11-20. À confirmer. Objectif ajouté pour Marc D. : Courir 20 minutes.");
     const plusRecente = S({ id: "s2", date: "2026-11-17" });
     expect(analyseSurDossier(d, [S(), plusRecente], S(), a, "2026-11-16", jour)).toEqual({ dossier: d, message: null });
   });
@@ -46,6 +47,11 @@ describe("rangement du résultat de l'IA", () => {
     expect(r.doutes.map(d => d.seance.nom)).toEqual(["Paul"]);
     expect(r.dossiers.find(d => d.id === "d2")!.rdvs).toEqual([{ d: "2026-11-18", h: "" }]);
     expect(r.rdvs).toEqual(["Rendez-vous repéré pour Léa P. : le 2026-11-18."]);
+    const absent = rangerMorceaux([marc, lea], [], "2026-11-16", [{ ...m("Marc", "absent aujourd'hui"), absent: true }], opts);
+    expect(absent.seances).toEqual([]);
+    expect(absent.absents).toEqual([{ dossierId: "d1", date: "2026-11-16" }]);
+    expect(absent.dossiers[0].absences).toEqual(["2026-11-16"]);
+    expect(absent.rdvs).toEqual(["Absence notée pour Marc D."]);
     const p = placerSeance(D({ fin: "2026-11-01" }), [], "2026-11-16", { ...vide, contenu: "reprise" }, opts);
     expect(p.dossier.fin).toBeUndefined();
   });

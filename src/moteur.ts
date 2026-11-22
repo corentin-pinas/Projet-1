@@ -1,11 +1,12 @@
 /* Travail de l'IA en arrière-plan : résumé automatique des bilans déposés,
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
-import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
+import { natureDe, zonesDuDossier, analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
+import { cleZone, zonesDuBilan } from "./corps";
 import * as travailPC from "./travail-pc";
-import { analyseSurDossier, patchAnalyse, type Doute, type Range } from "./rangement";
-import { avenirFrom, empreinteTexte, estArchive, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
+import { analyseSurDossier, messageAbsence, patchAnalyse, type Doute, type Range } from "./rangement";
+import { avenirFrom, empreinteTexte, estArchive, isoDay, trierBilans, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
 
 const enCours = new Set<string>();      // identifiants des bilans et séances en cours de traitement
 const tentes = new Set<string>();       // bilans déjà tentés automatiquement depuis l'ouverture de l'appli
@@ -138,6 +139,11 @@ async function resumerSeul(bilanId: string, manuel: boolean) {
     const confirmees = parDate.flatMap(x => x.valides);   // points « à vérifier » validés par « C'est juste »
     const r = await resumerBilan(ia.secret, await piecesDe(b), corrections, ia.appel, confirmees);
     await db.majBilan(b.id, { resume: r.donnees, resume_erreur: undefined });
+    /* carte du corps (2.1.0) : les zones du bilan rejoignent le dossier ; celles que vous avez enlevées restent enlevées */
+    if (r.donnees.zones?.length) {
+      const m = r.donnees.date_bilan?.match(/(\d{2})\/(\d{2})\/(\d{4})/), date = m ? `${m[3]}-${m[2]}-${m[1]}` : isoDay(new Date());
+      try { await db.modifierDossier(b.dossierId, d => ({ ...d, zones: zonesDuBilan(d.zones, r.donnees.zones!, date, new Date().toISOString()) })); } catch { /* dossier supprimé entre-temps */ }
+    }
     await db.ajouterConso("bilans", r.usage);
     if (manuel) messages("Bilan résumé.");
   } catch (e) {
@@ -337,7 +343,7 @@ export type { Doute, Range } from "./rangement";
 
 /* Une seule demande à l'IA pour toute la dictée, puis rangement : automatique si un seul dossier convient
    (règle de rattacher), sinon le passage devient un doute. Lève une ErreurIA si rien n'a pu être fait. */
-export async function rangerDictee(date: string, texte: string): Promise<{ ranges: Range[]; doutes: Doute[]; rdvs: string[] }> {
+export async function rangerDictee(date: string, texte: string): Promise<{ ranges: Range[]; doutes: Doute[]; rdvs: string[]; absents: { dossierId: string; date: string }[] }> {
   const ia = await configIA();
   if (!ia) throw new ErreurIA(PAS_REGLE);
   if (!navigator.onLine) throw new ErreurIA("Pas de connexion à internet.", "reseau");
@@ -345,14 +351,16 @@ export async function rangerDictee(date: string, texte: string): Promise<{ range
   const patients = dossiers.filter(d => !estArchive(d)).map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));   // les archivés ne sont pas proposés à l'IA
   const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel);
   await db.ajouterConso("seances", usage);
-  const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [];
+  const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [], absents: { dossierId: string; date: string }[] = [];
   for (const m of morceaux) {
     const { dossier, candidats } = rattacher(m.nom, dossiers, date);
     if (!dossier) { doutes.push({ id: crypto.randomUUID(), date, seance: m, candidats: candidats.map(d => d.id) }); continue; }
+    /* absence dite dans la dictée : notée, sans séance (1.11.0) */
+    if (m.absent) { await db.noterAbsence(dossier.id, date, true); absents.push({ dossierId: dossier.id, date }); rdvs.push(messageAbsence(dossier.label)); continue; }
     const r = await rangerSeance(dossier.id, date, m);
     ranges.push({ ...r.range, prenomSeul: !dossier.rdvs.some(x => x && x.d === date) }); if (r.rdv) rdvs.push(r.rdv);
   }
-  return { ranges, doutes, rdvs };
+  return { ranges, doutes, rdvs, absents };
 }
 
 /* Séance manquante : cherche le patient dans les dictées gardées de ce jour-là. Rend le passage, ou null. */
@@ -380,4 +388,58 @@ export async function rangerSeance(dossierId: string, date: string, m: SeanceDic
   const se = await db.ajouterSeance(dossierId, date, m.contenu);
   const rdv = await appliquer(se, m, avenirFrom(m.contenu));
   return { range: { seanceId: se.id, dossierId }, rdv };
+}
+
+
+/* ---------- rattrapage de la carte du corps (2.1.0, une seule fois, demandé par Corentin le 22 novembre 2026) ----------
+   Pour chaque patient en soins qui n'a encore aucune zone : une demande légère (résumé du bilan + séances du dernier
+   mois). Les patients déjà faits sont notés (paramètre « cartes_remplies ») : relancer ne refait que ce qui manque. */
+export type Rattrapage = { faits: number; total: number; sansZone: number; erreurs: number };
+export async function aRemplir(): Promise<string[]> {
+  const { dossiers, bilans, seances } = await db.tout();
+  const faits = new Set((await db.lireParametre<{ ids: string[] }>("cartes_remplies"))?.ids ?? []);
+  const depuis = isoDay(new Date(Date.now() - 31 * 864e5));
+  return dossiers.filter(d => !estArchive(d) && !faits.has(d.id) && !(d.zones ?? []).length
+    && (bilans.some(b => b.dossierId === d.id && b.resume) || seances.some(s => s.dossierId === d.id && s.date >= depuis))).map(d => d.id);
+}
+export async function remplirCartes(avance: (r: Rattrapage) => void): Promise<Rattrapage | null> {
+  const ia = await configIA();
+  if (!ia) { messages(PAS_REGLE); return null; }
+  const ids = await aRemplir();
+  const r: Rattrapage = { faits: 0, total: ids.length, sansZone: 0, erreurs: 0 };
+  avance(r);
+  await seul("cartes", async () => {
+    for (const id of ids) {
+      if (!navigator.onLine) { r.erreurs++; continue; }
+      try {
+        const { bilans, seances } = await db.tout();
+        const b = trierBilans(bilans.filter(x => x.dossierId === id && x.resume))[0], rs = b?.resume;
+        const m = rs?.date_bilan?.match(/(\d{2})\/(\d{2})\/(\d{4})/), dateB = m ? `${m[3]}-${m[2]}-${m[1]}` : (b ? b.ajoute.slice(0, 10) : isoDay(new Date()));
+        const resume = rs ? [rs.region, rs.coup_oeil, ...(rs.chiffres ?? []).map(c => c.label + " : " + c.valeur), ...(rs.sections ?? []).map(x => x.titre + " : " + x.items.join(" ; "))].filter(Boolean).join("\n") : "(pas de bilan)";
+        const depuis = isoDay(new Date(Date.now() - 31 * 864e5));
+        const ses = seances.filter(x => x.dossierId === id && x.date >= depuis).sort((a, c) => a.date.localeCompare(c.date)).map(x => ({ date: x.date, texte: x.propre || x.contenu }));
+        const rep = await zonesDuDossier(ia.secret, resume, ses, dateB, ia.appel);
+        await db.ajouterConso("seances", rep.usage);
+        const quand = new Date().toISOString();
+        await db.modifierDossier(id, d => {
+          const zs = [...(d.zones ?? [])];
+          for (const z of rep.donnees) {
+            const cle = cleZone(z.structure, z.cote, z.cat);
+            if (zs.some(x => x.id === cle)) continue;   // vos gestes font foi
+            zs.push({ id: cle, structure: z.structure, cote: z.cote, cat: z.cat, nom: z.nom || z.structure, depuis: z.depuis, source: "bilan", maj: quand, ...(z.mieux ? { mieux: z.mieux } : {}), ...(z.fin ? { fin: z.fin } : {}) });
+          }
+          return { ...d, zones: zs };
+        });
+        if (!rep.donnees.length) r.sansZone++;
+        const faits = (await db.lireParametre<{ ids: string[] }>("cartes_remplies"))?.ids ?? [];
+        await db.ecrireParametre("cartes_remplies", { ids: [...new Set([...faits, id])] });
+        r.faits++;
+      } catch (e) {
+        r.erreurs++;
+        if (natureDe(e) === "definitif") break;
+      }
+      avance({ ...r });
+    }
+  });
+  return r;
 }

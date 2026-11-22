@@ -28,7 +28,10 @@ const IDENTITES: Record<string, (x: unknown) => string> = {
   retirer: x => String(x),                                                       // un rendez-vous dit annulé, à confirmer
   dictees: x => String((x as Objet)?.id),                                        // une dictée gardée
   travaux: x => String((x as Objet)?.id),                                        // un travail confié au PC (1.9.0)
-  doutes: x => String((x as Objet)?.id)                                          // un passage de dictée à ranger à la main
+  doutes: x => String((x as Objet)?.id),                                         // un passage de dictée à ranger à la main
+  zones: x => String((x as Objet)?.id),                                          // une zone de la carte du corps (2.1.0)
+  objectifs_dictes: x => String((x as Objet)?.t).toLowerCase(),                  // un objectif dit dans une dictée (2.1.0)
+  objectifs_atteints: x => String((x as Objet)?.t).toLowerCase()
 };
 
 function fusionListe(base: unknown, local: unknown, distant: unknown, id: (x: unknown) => string): unknown[] {

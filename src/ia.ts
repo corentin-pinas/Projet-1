@@ -5,6 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaContentBlockParam, BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { avenirFrom, isoDay, type Demi, type Resume } from "./regles";
+import { listePourIA, STRUCTURES, type ZoneDite } from "./corps";
 
 /* Deux niveaux d'IA, choisis par Corentin : la plus puissante pour les bilans (lecture du manuscrit) et la dictée groupée,
    une plus légère pour les séances (mise au propre d'une dictée), qui consomme moins de quota.
@@ -130,10 +131,35 @@ export const coutDollars = (u: Usage) => (u.entree * PRIX.entree + u.sortie * PR
 
 const texteOuNul = { anyOf: [{ type: "string" }, { type: "null" }] };
 
+/* ---------- carte du corps (2.1.0) : les zones touchées, rattachées à une liste fixe de structures ---------- */
+const ZONE_PROPS = {
+  structure: { type: "string", enum: Object.keys(STRUCTURES) },
+  cote: { type: "string", enum: ["d", "g", "c"] },
+  etat: { type: "string", enum: ["pain", "raide", "nerf", "frac"] },
+  nom: { type: "string" }
+};
+const ZONES_BILAN = { type: "array", items: { type: "object", additionalProperties: false, required: ["structure", "cote", "etat", "nom"], properties: ZONE_PROPS } };
+const ZONES_SEANCE = { type: "array", items: { type: "object", additionalProperties: false, required: ["structure", "cote", "etat", "nom", "action"], properties: { ...ZONE_PROPS, action: { type: "string", enum: ["ajout", "mieux", "fini"] } } } };
+const REGLES_ZONES = "structure : la clé la plus précise de cette liste (" + listePourIA() + ") ; cote : « d » droite, « g » gauche, « c » au milieu (rachis, menton, nez) ; " +
+  "etat : « pain » douloureux, « raide » raideur ou tension à assouplir, « nerf » trajet nerveux (irradiation, fourmillements le long d'un nerf), « frac » fracture ; " +
+  "nom : la zone avec ses mots (« faisceau postérieur du deltoïde droit »). Jamais « à renforcer » : ce qui est à renforcer n'est pas une zone. Ne devine pas une zone qui n'est pas écrite ou dessinée.";
+const CONSIGNE_ZONES_BILAN = "les zones touchées, d'après le texte, l'écriture au stylet et les marques sur le schéma du corps (page 1), une par item : " + REGLES_ZONES + " [] s'il n'y en a pas.";
+const CONSIGNE_ZONES_SEANCE = "les zones dont la note parle, une par item, avec action : « ajout » pour une zone nouvelle ou toujours présente (« douleur dorsale depuis lundi »), « mieux » si elle va mieux sans avoir disparu (« moins de douleur dorsale »), « fini » si elle a disparu (« plus de douleur dorsale », « n'a plus mal au genou »). " + REGLES_ZONES + " [] si la note ne parle d'aucune zone.";
+
+export function lireZones(v: unknown, avecAction: boolean): ZoneDite[] {
+  return (Array.isArray(v) ? v : []).map(e => {
+    const o = (e && typeof e === "object" ? e : {}) as Record<string, unknown>;
+    const structure = typeof o.structure === "string" ? o.structure : "", cote = o.cote === "g" || o.cote === "c" ? o.cote : "d";
+    const cat = (["pain", "raide", "nerf", "frac"] as const).find(c => c === o.etat);
+    const action = (["ajout", "mieux", "fini"] as const).find(a => a === o.action);
+    return STRUCTURES[structure] && cat ? { structure, cote, cat, nom: typeof o.nom === "string" ? o.nom.trim().slice(0, 120) : "", ...(avecAction ? { action: action ?? "ajout" } : {}) } as ZoneDite : null;
+  }).filter((z): z is ZoneDite => !!z).slice(0, 24);
+}
+
 export const SCHEMA_RESUME = {
   type: "object",
   additionalProperties: false,
-  required: ["region", "date_bilan", "age", "coup_oeil", "chiffres", "sections", "objectifs", "a_verifier"],
+  required: ["region", "date_bilan", "age", "coup_oeil", "chiffres", "sections", "objectifs", "zones", "a_verifier"],
   properties: {
     region: { type: "string" },
     date_bilan: texteOuNul,
@@ -151,6 +177,7 @@ export const SCHEMA_RESUME = {
       }
     },
     objectifs: { type: "array", items: { type: "string" } },
+    zones: ZONES_BILAN,
     a_verifier: { type: "array", items: { type: "string" } }
   }
 };
@@ -173,6 +200,7 @@ export function systemeBilan(corrections: Correction[], confirmees: string[] = [
     "- chiffres : les mesures clés telles qu'écrites (EVA, amplitudes, force, scores), avec l'âge en premier s'il est connu. Libellés courts.",
     "- sections : le reste du bilan rangé par rubriques (Anamnèse, Examen, Tests, Objectifs… selon le bilan), en items courts.",
     "- objectifs : les objectifs du patient (objectifs SMART de la trame, ou objectifs écrits ailleurs dans le bilan), un par item, avec ses mots ; [] s'il n'y en a pas. Ne les invente pas.",
+    "- zones : " + CONSIGNE_ZONES_BILAN,
     "- a_verifier : chaque lecture incertaine (écriture difficile, abréviation inconnue, valeur ambiguë), formulée pour que le kiné réponde « c'est juste » ou corrige.",
     "",
     "Conventions de ses bilans manuscrits : MVT = mouvement ; « + » entouré = test positif ; « − » entouré = test négatif ; rond barré = non fait ;",
@@ -224,6 +252,7 @@ export function normaliserResume(x: unknown): Resume {
       items: liste((s as Record<string, unknown>)?.items).map(str).filter(Boolean)
     })).filter(s => s.titre && s.items.length),
     objectifs: liste(o.objectifs).map(str).filter(Boolean).slice(0, 12),
+    zones: lireZones(o.zones, false).map(({ structure, cote, cat, nom }) => ({ structure, cote, cat, nom })),
     a_verifier: liste(o.a_verifier).map(str).filter(Boolean)
   };
 }
@@ -251,7 +280,7 @@ export async function resumerBilan(cle: string, pieces: PieceBilan[], correction
 
 /* ---------- report d'une correction dans le résumé ---------- */
 
-const longueurResume = (r: Resume) => JSON.stringify({ ...r, a_verifier: [], objectifs: r.objectifs ?? [] }).length;   // objectifs toujours comptés pareil (1.8.0)
+const longueurResume = (r: Resume) => JSON.stringify({ ...r, a_verifier: [], objectifs: r.objectifs ?? [], zones: undefined }).length;   // zones à part (2.1.0)   // objectifs toujours comptés pareil (1.8.0)
 
 export function promptCorrection(resume: Resume, corrections: Correction[]): string {
   return "Voici le résumé d'un bilan de kinésithérapie, au format JSON, puis des corrections faites par le kinésithérapeute sur des points de lecture incertains.\n" +
@@ -342,15 +371,16 @@ const RDV_AUTRES = { type: "array", items: { type: "object", additionalPropertie
 const RDV_ANNULES = { type: "array", items: { type: "string" } };
 /* objectifs du patient dits dans une dictée (1.8.0) : proposés à Corentin, jamais appliqués tout seuls */
 const OBJECTIFS = { type: "array", items: { type: "string" } };
-const CONSIGNE_OBJECTIFS = "les objectifs du patient que la note énonce ou modifie (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Pas ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.";
+/* 2.1.0 (choix de Corentin) : un objectif se mesure ; « renforcer », « assouplir », « travailler » sont du contenu de séance */
+const CONSIGNE_OBJECTIFS = "les objectifs du patient que la note énonce (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Seulement des objectifs mesurables (un chiffre, une durée, une douleur notée, une activité précise à reprendre) ; jamais ce qui est à renforcer, assouplir ou travailler, ni ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.";
 const CONSIGNE_AUTRES = "les AUTRES séances à venir annoncées en plus de rdv_date (« lundi, mardi et jeudi prochain » : rdv_date = la première, rdv_autres = les suivantes), chacune {\"date\": AAAA-MM-JJ lue dans le calendrier, \"demi\": « matin », « après-midi » ou null si ce n'est pas dit pour ce jour-là}. [] s'il n'y en a pas. Ne devine pas.";
 const CONSIGNE_ANNULES = "les dates (AAAA-MM-JJ, lues dans le calendrier) des séances que la note dit annulées ou qui n'ont plus lieu (« finalement plus jeudi », « on annule mardi », « pas de séance lundi »). [] sinon. Ne devine pas.";
 
 export const SCHEMA_SEANCE = {
   type: "object",
   additionalProperties: false,
-  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "fin_traitement"],
-  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, fin_traitement: { type: "boolean" } }
+  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "zones", "fin_traitement"],
+  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, zones: ZONES_SEANCE, fin_traitement: { type: "boolean" } }
 };
 
 export function promptSeance(date: string, contenu: string, sansPropre: boolean): string {
@@ -368,8 +398,9 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     '- "rdv_autres" : ' + CONSIGNE_AUTRES + "\n" +
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
     '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
+    '- "zones" : ' + CONSIGNE_ZONES_SEANCE + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"fin_traitement":false}\n\n' +
+    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"zones":[],"fin_traitement":false}\n\n' +
     "Note complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
 }
 
@@ -390,7 +421,7 @@ const okHeure = (v: unknown) => {
 };
 
 export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string; rdvDemi: Demi | ""; fin?: boolean;
-  autres?: { d: string; demi: Demi | "" }[]; annules?: string[]; objectifs?: string[] };
+  autres?: { d: string; demi: Demi | "" }[]; annules?: string[]; objectifs?: string[]; zones?: ZoneDite[] };
 
 /* Lecture de la réponse avec les garde-fous de la version d'essai :
    une mise au propre beaucoup plus courte que la dictée a sans doute perdu des informations, on ne la retient pas. */
@@ -415,7 +446,8 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
     rdvDemi: rdvDate ? okDemi(o.rdv_demi, okHeure(o.rdv_heure)) : "",
     fin: o.fin_traitement === true && !rdvDate && !autres.length,   // un prochain rendez-vous dit en même temps : ce n'est pas la fin
     autres, annules,
-    objectifs: (Array.isArray(o.objectifs) ? o.objectifs : []).filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(Boolean).slice(0, 12)
+    objectifs: (Array.isArray(o.objectifs) ? o.objectifs : []).filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(Boolean).slice(0, 12),
+    zones: lireZones(o.zones, true)
   };
 }
 
@@ -433,8 +465,8 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
 
 const SEANCE_DICTEE = {
   type: "object", additionalProperties: false,
-  required: ["nom", "extrait", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "fin_traitement"],
-  properties: { nom: texteOuNul, extrait: { type: "string" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, fin_traitement: { type: "boolean" } }
+  required: ["nom", "extrait", "absent", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "zones", "fin_traitement"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, absent: { type: "boolean" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, zones: ZONES_SEANCE, fin_traitement: { type: "boolean" } }
 };
 export const SCHEMA_DICTEE = {
   type: "object", additionalProperties: false, required: ["seances"],
@@ -450,9 +482,10 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     "Calendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\n" +
     "Découpe la dictée en une entrée par patient, dans l'ordre de la dictée. Il annonce chaque patient par son prénom, parfois suivi d'une initiale (« Avec Marc D. », « ensuite Élisabeth G. », « pour Lucie »). " +
     "Si le même patient revient plus loin, réunis ses passages dans une seule entrée. Un passage qui ne concerne aucun patient nommé forme une entrée avec nom null. Aucun passage de la dictée ne doit être perdu.\n" +
-    "Pour chaque entrée, huit champs :\n" +
+    "Pour chaque entrée, les champs :\n" +
     '- "nom" : le patient tel qu\'il est annoncé. S\'il correspond manifestement à un patient de la liste, écris-le exactement comme dans la liste ; sinon le prénom, et l\'initiale si elle est dite. Jamais de nom de famille complet. null si aucun patient n\'est nommé.\n' +
     '- "extrait" : le texte dicté pour ce patient, mot pour mot, sans l\'annonce de son nom (« Avec Marc D., » disparaît). Ne corrige rien, mais réduis tout nom de famille complet à son initiale suivie d\'un point.\n' +
+    '- "absent" : ' + CONSIGNE_ABSENT + "\n" +
     '- "propre" : cet extrait remis au propre. ' + REGLES_PROPRE + "\n" +
     '- "resume" : si l\'extrait contient ce qui est prévu pour la prochaine séance (après « pour la prochaine séance », « pour la prochaine », « la prochaine fois » ou « à venir : »), un résumé très court (25 mots maximum, style télégraphique) de ce qui est prévu, sans la date ni l\'heure du rendez-vous. N\'ajoute rien. Sinon null.\n' +
     '- "bref" : ' + CONSIGNE_BREF + "\n" +
@@ -462,12 +495,15 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "rdv_autres" : ' + CONSIGNE_AUTRES + "\n" +
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
     '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
+    '- "zones" : ' + CONSIGNE_ZONES_SEANCE + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"fin_traitement":false}]}\n\n' +
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"zones":[],"fin_traitement":false,"absent":false}]}\n\n' +
     "Dictée :\n" + texte.slice(0, MAX_DICTEE);
 }
 
-export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string };
+export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string; absent?: boolean };
+/* absences dites dans la dictée (choix de Corentin du 20 novembre 2026) : notées, sans séance */
+const CONSIGNE_ABSENT = "true seulement si le passage dit que le patient n'est pas venu à sa séance ce jour-là (« absent aujourd'hui », « pas venu », « lapin », « a oublié son rendez-vous ») et qu'aucune séance n'a eu lieu ; false sinon (un rendez-vous futur annulé n'est pas une absence).";
 
 /* Garde-fous : chaque extrait passe par les mêmes contrôles qu'une séance seule (mise au propre trop courte rejetée…),
    et si l'ensemble des extraits est bien plus court que la dictée, une partie a été perdue : rien n'est retenu. */
@@ -478,7 +514,7 @@ export function lireDictee(x: unknown, texte: string): SeanceDictee[] {
     const it = (e && typeof e === "object" ? e : {}) as Record<string, unknown>;
     const contenu = typeof it.extrait === "string" ? it.extrait.trim() : "";
     const nom = typeof it.nom === "string" && it.nom.trim() ? it.nom.trim() : null;
-    return { nom, contenu, ...lireAnalyse(it, contenu, false) };
+    return { nom, contenu, ...lireAnalyse(it, contenu, false), ...(it.absent === true ? { absent: true } : {}) };
   }).filter(s => s.contenu);
   const total = seances.reduce((n, s) => n + s.contenu.length, 0);
   if (!seances.length || total < texte.trim().length * 0.6) throw new ErreurIA("L'IA a laissé de côté une partie de la dictée. Rien n'a été rangé.", "passager");
@@ -493,4 +529,26 @@ export async function decouperDictee(cle: string, date: string, texte: string, p
     schema: SCHEMA_DICTEE, effort: "medium", maxTokens: 32000, niveau: "puissant"
   });
   return { donnees: lireDictee(r.donnees, texte), usage: r.usage };
+}
+
+
+/* ---------- rattrapage de la carte du corps (2.1.0, demandé par Corentin le 22 novembre 2026) ----------
+   Une seule fois, pour les patients déjà suivis : l'IA légère lit le résumé du bilan et les séances du dernier mois
+   (texte seulement : elle ne voit pas les marques du schéma) et rend les zones, avec leur date d'apparition et, si
+   une séance dit qu'elles ont disparu, de disparition. */
+const ZONES_RATTRAPAGE = { type: "object", additionalProperties: false, required: ["zones"], properties: { zones: { type: "array", items: {
+  type: "object", additionalProperties: false, required: ["structure", "cote", "etat", "nom", "depuis", "fin", "mieux"],
+  properties: { ...ZONE_PROPS, depuis: { type: "string" }, fin: texteOuNul, mieux: texteOuNul } } } } };
+export type ZoneRattrapee = ZoneDite & { depuis: string; fin: string | null; mieux: string | null };
+export async function zonesDuDossier(cle: string, resume: string, seances: { date: string; texte: string }[], dateBilan: string, appel: Appel): Promise<Reponse<ZoneRattrapee[]>> {
+  const texte = "Tu aides un kinésithérapeute à remplir la carte du corps d'un patient déjà suivi. Voici le résumé de son bilan (du " + dateBilan + ") puis ses séances récentes, de la plus ancienne à la plus récente.\n\n" +
+    "Rends un objet JSON {\"zones\": [...]} : chaque zone touchée, une par item. " + REGLES_ZONES +
+    " depuis : la date (AAAA-MM-JJ) où elle apparaît (le bilan : " + dateBilan + ", ou la séance qui en parle la première) ; mieux : la date de la séance qui dit qu'elle va mieux sans avoir disparu, sinon null ; fin : la date de la séance qui dit qu'elle a disparu (« plus de douleur dorsale »), sinon null. [] s'il n'y a aucune zone.\n\n" +
+    "Résumé du bilan :\n" + resume.slice(0, 12000) + "\n\nSéances :\n" + (seances.length ? seances.map(x => x.date + " : " + x.texte.slice(0, 2000)).join("\n") : "(aucune)");
+  const r = await appel({ cle, system: "Tu relèves les zones touchées d'un patient de kinésithérapie, sans rien inventer.", contenu: [{ type: "text", text: texte }], schema: ZONES_RATTRAPAGE, effort: "low", maxTokens: 6000, niveau: "leger" });
+  const o = (r.donnees && typeof r.donnees === "object" ? r.donnees : {}) as Record<string, unknown>;
+  const brut = Array.isArray(o.zones) ? o.zones : [];
+  const date = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  const zones = brut.flatMap(e => { const z = lireZones([e], false)[0]; if (!z) return []; const it = e as Record<string, unknown>; return [{ ...z, depuis: date(it.depuis) ?? dateBilan, fin: date(it.fin), mieux: date(it.mieux) }]; }).slice(0, 24);
+  return { donnees: zones, usage: r.usage };
 }

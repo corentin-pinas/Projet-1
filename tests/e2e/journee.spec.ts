@@ -42,7 +42,10 @@ test("ma journée : patients du jour, matin puis après-midi, prévu, séance d'
   await page.getByRole("button", { name: /Après-midi/ }).click();
   await expect(cartes).toHaveCount(1);
   await expect(cartes.nth(0)).toContainText("Prévu : Tester la force en rotation externe");
-  await expect(cartes.nth(0)).toContainText("Séance du 22/10 : douleur 3 sur 10, pendulaires.");
+  // 2.0.0 : plus de « Séance du … » ; la douleur écrite dans la séance d'avant est reprise, avec le nombre de séances
+  await expect(cartes.nth(0)).not.toContainText("Séance du 22/10");
+  await expect(cartes.nth(0).locator(".jmes")).toContainText("Douleur3/10");
+  await expect(cartes.nth(0).locator(".jpuces")).toContainText("1 séance");
   await page.getByRole("button", { name: /Matin/ }).click();
 
   // toucher une fiche ouvre le dossier ; la séance du jour la marque comme notée

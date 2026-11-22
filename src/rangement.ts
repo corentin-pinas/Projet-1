@@ -3,6 +3,7 @@
    Fonctions pures, communes à l'appareil (moteur.ts) et au PC (src/pc/travail.ts, qui fait le travail en tâche de fond) :
    les mêmes règles, où que le travail soit fait. Elles reprennent à l'identique celles de moteur.ts avant la 1.9.0. */
 import type { AnalyseSeance, SeanceDictee } from "./ia";
+import { zonesDeSeance } from "./corps";
 import { avenirFrom, DEMI_FR, demiDe, demiSeance, empreinteTexte, poserRdvs, rattacher, type Dossier, type Seance } from "./regles";
 
 /* libellé d'un jour dans les messages : « demain », « jeudi » sur l'appareil ; « jeudi 20 novembre » sur le PC (le message
@@ -50,10 +51,20 @@ export function analyseSurDossier(d: Dossier, seances: Seance[], se: Seance, a: 
     D = { ...D, retirer: [...new Set([...(D.retirer ?? []), ...annules])] };
     messages.push("Rendez-vous dit annulé pour " + d.label + " : " + annules.map(jour).join(", ") + ". À confirmer.");
   }
-  /* objectifs dits dans la dictée : proposés sur la fiche et dans le récapitulatif (1.8.0), jamais appliqués tout seuls */
+  /* objectifs dits dans la dictée (2.1.0, choix de Corentin du 22 novembre 2026) : ajoutés tout seuls, jamais à la place
+     des anciens ; corrigeables avec « Modifier » sur la fiche */
   if (a.objectifs?.length) {
-    D = { ...D, objectifs_propose: { liste: a.objectifs, date: se.date } };
-    messages.push("Objectif dit pour " + d.label + " : à confirmer sur sa fiche.");
+    const deja = new Set((D.objectifs_dictes ?? []).map(o => o.t.toLowerCase()));
+    const neufs = a.objectifs.filter(t => !deja.has(t.toLowerCase()));
+    if (neufs.length) {
+      D = { ...D, objectifs_dictes: [...(D.objectifs_dictes ?? []), ...neufs.map(t => ({ t, date: se.date }))] };
+      messages.push((neufs.length > 1 ? "Objectifs ajoutés pour " : "Objectif ajouté pour ") + d.label + " : " + neufs.join(" ; ") + ".");
+    }
+  }
+  /* zones de la carte du corps dites dans la séance (2.1.0) : ajoutées, pâlies ou passées dans les anciennes */
+  if (a.zones?.length) {
+    const zones = zonesDeSeance(D.zones, a.zones, se.date, se.cree);
+    if (JSON.stringify(zones) !== JSON.stringify(D.zones ?? [])) D = { ...D, zones };
   }
   return { dossier: D, message: messages.length ? messages.join(" ") : null };
 }
@@ -66,7 +77,11 @@ export function rouvrirApres(d: Dossier, date: string): Dossier {
 }
 
 export type Options = { nouvelId: () => string; cree: string; origine?: string; auj: string; jour: Jour };
-export type Resultat = { seances: Seance[]; dossiers: Dossier[]; ranges: Range[]; doutes: Doute[]; rdvs: string[] };
+export type Absent = { dossierId: string; date: string };
+export type Resultat = { seances: Seance[]; dossiers: Dossier[]; ranges: Range[]; doutes: Doute[]; rdvs: string[]; absents: Absent[] };
+/* absence notée (dite dans la dictée) : le jour rejoint les absences du dossier */
+export const messageAbsence = (label: string) => "Absence notée pour " + label.replace(/\.?$/, ".");
+export const avecAbsence = (d: Dossier, date: string): Dossier => ({ ...d, absences: [...new Set([...(d.absences ?? []), date])].sort() });
 
 /* Une dictée groupée découpée par l'IA, rangée patient par patient : automatiquement quand un seul dossier convient (règle de
    rattacher, sur l'état d'avant la dictée), sinon le passage devient un doute. Rend les séances créées, les dossiers changés
@@ -75,10 +90,15 @@ export function rangerMorceaux(dossiers: Dossier[], seances: Seance[], date: str
   const parId = new Map(dossiers.map(d => [d.id, d] as const));
   const changes = new Set<string>();
   const toutes = [...seances];
-  const r: Resultat = { seances: [], dossiers: [], ranges: [], doutes: [], rdvs: [] };
+  const r: Resultat = { seances: [], dossiers: [], ranges: [], doutes: [], rdvs: [], absents: [] };
   for (const m of morceaux) {
     const { dossier, candidats } = rattacher(m.nom, dossiers, date);
     if (!dossier) { r.doutes.push({ id: o.nouvelId(), date, seance: m, candidats: candidats.map(d => d.id) }); continue; }
+    if (m.absent) {
+      parId.set(dossier.id, avecAbsence(parId.get(dossier.id)!, date)); changes.add(dossier.id);
+      r.absents.push({ dossierId: dossier.id, date }); r.rdvs.push(messageAbsence(dossier.label));
+      continue;
+    }
     const placee = placerSeance(parId.get(dossier.id)!, toutes, date, m, o);
     parId.set(dossier.id, placee.dossier); changes.add(dossier.id);
     toutes.push(placee.seance); r.seances.push(placee.seance);

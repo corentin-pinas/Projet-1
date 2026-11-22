@@ -43,7 +43,7 @@ async function simulerIA(page: Page, reponse: (texte: string) => unknown) {
 }
 
 
-test("objectifs : ceux du bilan, « Modifier », puis un objectif dit dans une séance proposé et ajouté", async ({ browser }) => {
+test("objectifs : ceux du bilan, « Modifier », puis un objectif dit dans une séance ajouté tout seul (2.1.0)", async ({ browser }) => {
   const page = await nouvellePage(browser);
   await simulerIA(page, () => ({ propre: "Fait en séance : course sur tapis.", resume: null, bref: "Course sur tapis.", rdv_date: null, rdv_heure: null, rdv_demi: null,
     rdv_autres: [], rdv_annules: [], objectifs: ["Courir 20 minutes sans douleur"], fin_traitement: false }));
@@ -63,20 +63,19 @@ test("objectifs : ceux du bilan, « Modifier », puis un objectif dit dans une s
   await enc.getByRole("button", { name: "Modifier" }).click();
   await page.locator("#objtexte").fill("Se coiffer sans douleur\nReprendre le tennis en mars");
   await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
-  await expect(page.locator(".objectifs li")).toHaveText(["Se coiffer sans douleur", "Reprendre le tennis en mars"]);
+  await expect(page.locator(".objectifs li .t")).toHaveText(["Se coiffer sans douleur", "Reprendre le tennis en mars"]);
   await expect(page.locator(".objectifs")).toContainText("Mis à jour le");
 
-  // une séance énonce un nouvel objectif : proposé, jamais appliqué tout seul
+  // une séance énonce un nouvel objectif : ajouté tout seul, sans remplacer les autres (choix de Corentin du 22 novembre 2026)
   await page.getByRole("button", { name: "Dicter la séance" }).click();
   await page.locator("#stext").fill("Course sur tapis. Nouvel objectif : courir 20 minutes sans douleur.");
   await page.getByRole("button", { name: "Enregistrer la séance" }).click();
-  await expect(page.locator(".toast")).toContainText("Objectif dit pour Paul G.");
-  const p = page.locator(".objpropose");
-  await expect(p).toContainText("Courir 20 minutes sans douleur");
-  await expect(page.locator(".objectifs li")).toHaveCount(2);
-  await p.getByRole("button", { name: "Ajouter" }).click();
+  await expect(page.locator(".toast")).toContainText("Objectif ajouté pour Paul G.");
   await expect(page.locator(".objpropose")).toHaveCount(0);
-  await expect(page.locator(".objectifs li")).toHaveText(["Se coiffer sans douleur", "Reprendre le tennis en mars", "Courir 20 minutes sans douleur"]);
-  await expect(page.locator(".objectifs")).toContainText("(dictée)");
+  await expect(page.locator(".objectifs li .t")).toHaveText(["Se coiffer sans douleur", "Reprendre le tennis en mars", "Courir 20 minutes sans douleur"]);
+  await expect(page.locator(".objectifs")).toContainText("nouveau");
+  // la case « Atteint »
+  await page.locator(".objectifs [data-objc]").nth(0).check();
+  await expect(page.locator(".objectifs .fait")).toContainText("Atteint le");
   await page.context().close();
 });

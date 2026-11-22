@@ -48,7 +48,19 @@ test("réglages : noir et violet, texte plus grand, écriture arrondie, gardés 
   await page.getByRole("button", { name: "Réglages" }).click();
   await page.getByRole("button", { name: "Revenir aux réglages d'origine" }).click();
   await expect(html).toHaveAttribute("data-palette", "muninn");
-  await expect(html).not.toHaveAttribute("data-theme", /./);
+  // 2.0.0 : l'origine est l'ambiance Néon couchant, toujours sombre
+  await expect(html).toHaveAttribute("data-ambiance", "couchant");
+  await expect(html).toHaveAttribute("data-theme", "dark");
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim().toUpperCase())).toBe("#FF4F9A");
+  // une autre ambiance : Or d'Odin, titres gravés
+  await choisir(page, "ambiance", "odin");
+  await expect(html).toHaveAttribute("data-ambiance", "odin");
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim().toUpperCase())).toBe("#E2B45C");
+  await expect(page.locator('#regchoix [data-cle="ambiance"]')).toHaveCount(9);
+  // toucher une couleur principale revient à l'ambiance « Classique »
+  await choisir(page, "couleur", "vert");
+  await expect(html).not.toHaveAttribute("data-ambiance", /./);
+  await expect(page.locator('#regchoix [data-cle="ambiance"][aria-pressed="true"]')).toHaveText(/Classique/);
 });
 
 test("Halloween : toiles d'araignée dans les coins, sans gêner les doigts, et désactivables", async ({ page }) => {

@@ -28,7 +28,7 @@ test("PC injoignable : bandeau après 30 minutes d'attente, « Réessayer » par
   await page.getByRole("button", { name: "Ajouter une séance" }).click();
   await page.locator("#stext").fill("Mobilisation passive.");
   await page.getByRole("button", { name: "Enregistrer la séance" }).click();
-  await expect(page.locator("#syncmini")).toContainText("PC pas joint");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("partage-attente"))).not.toBeNull();   // le changement attend son envoi
   await expect(page.locator("#alertesync")).toBeHidden();             // moins de 30 minutes : pas encore de bandeau
 
   // 40 minutes plus tard (heure du changement reculée), nouvel essai : le bandeau apparaît

@@ -14,6 +14,7 @@ import * as manquantes from "./seances-manquantes";
 import { Enregistreur } from "./enregistreur";
 import { eveil } from "./transcription";
 import * as travailPC from "./travail-pc";
+import { messageAbsence } from "./rangement";
 import type { Travail } from "./travail-pc";
 import { ageDossier, demiDe, demiFr, estArchive, frDate, isoDay, rdvsDuJour, nomAffiche, nomCorrespond, patientFrom, questionRdv, sansSeanceCeJour, type Dossier } from "./regles";
 import { confirmer, esc, toast } from "./ui";
@@ -33,7 +34,7 @@ let charge = false;
    ranges (séances rangées), doutes, rdvs (messages), rdvs_avant / rdvs_apres (rendez-vous des dossiers touchés, avant et
    juste après leur rangement, pour « Annuler »), crees (patients créés depuis la dictée, bilan à venir). */
 const dictees = () => travailPC.liste().filter(t => t.type === "dictee");
-const recaps = () => dictees().filter(t => t.etat === "fini" && !t.vu && t.ranges?.length);
+const recaps = () => dictees().filter(t => t.etat === "fini" && !t.vu && (t.ranges?.length || t.absents?.length));
 const enAttente = () => dictees().filter(t => t.etat !== "fini");
 const doutesDe = () => dictees().filter(t => t.etat === "fini").flatMap(t => (t.doutes ?? []).map(d => ({ t, d })));
 let ecran: HTMLElement | null = null;   // zone où la dictée est affichée, null si elle est fermée
@@ -64,8 +65,17 @@ const enr = new Enregistreur({
     await garderBrouillon(true);
     await lancer();
   },
-  redessiner: () => { afficher(); }
+  redessiner: () => { afficherVoix(); }
 });
+
+/* la voix change d'état (micro disponible, enregistrement, transcription) : seule sa zone est redessinée, pour ne pas
+   remplacer la zone de texte pendant que Corentin tape */
+function afficherVoix() {
+  const el = ecran?.querySelector<HTMLElement>("#dvoix");
+  if (!el || zoneSaisie() !== basAffiche) { afficher(); return; }
+  el.innerHTML = enr.html();
+  enr.brancher(el);
+}
 
 /* les patients qui ont rendez-vous le jour de la dictée : Whisper écrit leurs noms juste */
 async function nomsDuJour(): Promise<string[]> {
@@ -106,6 +116,7 @@ type Bas = "envoi" | "nouvelle" | "texte";
 const zoneSaisie = (): Bas => phase === "envoi" ? "envoi"
   : (recaps().length || (doutesDe().length && !saisieLibre)) && !texte.trim() ? "nouvelle" : "texte";
 let basAffiche: Bas | null = null;
+let enPreparation = false;   // un affichage complet est en train d'être préparé
 
 /* les travaux changent (le PC avance, un autre appareil range un passage) : seul le haut de l'écran est redessiné tant que
    le bas ne change pas, pour ne pas retirer la zone de texte sous les doigts de Corentin */
@@ -115,8 +126,10 @@ travailPC.abonner(() => {
 });
 
 export async function ouvrir(zone: HTMLElement, surFermeture: () => void) {
-  ecran = zone; fermer = surFermeture;
+  /* brouillon relu AVANT d'afficher quoi que ce soit : sinon un redessin pendant la lecture montrait une zone de texte
+     vide, et ce qui y était tapé était ensuite écrasé par le brouillon relu */
   await charger();
+  ecran = zone; fermer = surFermeture;
   await afficher();
   enr.verifierDispo();
   const ta = zone.querySelector<HTMLTextAreaElement>("#dtexte");
@@ -141,10 +154,10 @@ async function htmlHaut(): Promise<string> {
         Vous pouvez fermer Muninn : elle sera rangée toute seule.${t.erreur ? `<br><small>Dernier essai : ${esc(t.erreur)}${t.prochain ? ` Nouvel essai vers ${esc(heure(t.prochain))}.` : ""}</small>` : ""}</div>`).join("");
 
   const recap = recaps().map(t => {
-    const range = t.ranges!;
+    const range = t.ranges ?? [];
     const ids = [...new Set(range.map(r => r.dossierId))];
     return `<div class="recap" role="status" data-travail="${esc(t.id)}">
-      <p><b>${range.length} séance${range.length > 1 ? "s rangées" : " rangée"}</b> : ${esc([...new Set(range.map(r => parId.get(r.dossierId)?.label ?? "?"))].join(", ").replace(/([^.])$/, "$1."))}${t.local ? "" : ` <small>(rangée par le PC)</small>`}</p>
+      ${range.length ? `<p><b>${range.length} séance${range.length > 1 ? "s rangées" : " rangée"}</b> : ${esc([...new Set(range.map(r => parId.get(r.dossierId)?.label ?? "?"))].join(", ").replace(/([^.])$/, "$1."))}${t.local ? "" : ` <small>(rangée par le PC)</small>`}</p>` : ""}
       ${(t.rdvs ?? []).map(m => `<p class="note">${esc(m)}</p>`).join("")}
       ${range.filter(r => r.prenomSeul).map(r => parId.get(r.dossierId)).filter((x): x is Dossier => !!x).map(D =>
         `<p class="prenomseul">⚠ <b>${esc(D.label)}</b> : rangé d'après le nom seul (pas de rendez-vous noté ce jour-là). Vérifiez que c'est bien ce patient.</p>`).join("")}
@@ -189,7 +202,7 @@ function htmlBas(bas: Bas): string {
       <button data-jour="${hier()}" aria-pressed="${date === hier()}">Hier</button>
       <input type="date" id="ddate" value="${esc(date)}" max="${aujourdhui()}" aria-label="Autre date">
     </div>
-    ${enr.html()}
+    <div id="dvoix">${enr.html()}</div>
     ${relanceRange.plan ? `<div class="wait relance" role="status">⏳ <b>Rangement pas encore fait :</b> ${esc(relanceRange.plan.cause)}<br>${phrase(relanceRange.plan)} Votre dictée est gardée.
       <div class="row" style="margin-top:10px"><button class="primary" id="drelance">Réessayer maintenant</button></div></div>` : ""}
     <textarea id="dtexte" placeholder="Touchez le micro du clavier et dictez tous vos patients à la suite : « Avec Marc D., … Ensuite Élisabeth G., … ». Rien à toucher entre deux patients.">${esc(texte)}</textarea>
@@ -200,7 +213,12 @@ function htmlBas(bas: Bas): string {
 async function afficher() {
   const z = ecran;
   if (!z) return;
-  const haut = await htmlHaut();
+  /* noté tout de suite : un changement des travaux pendant la préparation ne redessine pas tout l'écran une seconde fois
+     (la zone de texte serait remplacée sous les doigts) */
+  basAffiche = zoneSaisie();
+  enPreparation = true;
+  let haut: string;
+  try { haut = await htmlHaut(); } finally { enPreparation = false; }
   if (ecran !== z) return;
   const bas = zoneSaisie();
   basAffiche = bas;
@@ -214,7 +232,8 @@ async function afficher() {
 async function afficherHaut() {
   const z = ecran;
   const h = z?.querySelector<HTMLElement>("#dhaut");
-  if (!z || !h) return afficher();
+  if (!z) return;
+  if (!h) { if (!enPreparation) await afficher(); return; }   // écran en cours de préparation : il montrera l'état du moment
   const html = await htmlHaut();
   if (ecran !== z || !h.isConnected) return;
   h.innerHTML = html;
@@ -228,6 +247,15 @@ const travailDu = (douteId: string) => doutesDe().find(x => x.d.id === douteId);
 
 /* un passage rangé à la main rejoint le récapitulatif de sa dictée (et son « Annuler ») */
 async function rangerDoute(t: Travail, d: moteur.Doute, dossierId: string, cree?: string) {
+  /* un passage « absent » rangé à la main : l'absence est notée, pas de séance (1.11.0) */
+  if (d.seance.absent) {
+    await db.noterAbsence(dossierId, d.date, true);
+    const label = (await db.tout()).dossiers.find(x => x.id === dossierId)?.label ?? "";
+    saisieLibre = false;
+    await travailPC.modifier(t.id, x => ({ ...x, vu: false, doutes: (x.doutes ?? []).filter(y => y.id !== d.id),
+      absents: [...(x.absents ?? []), { dossierId, date: d.date }], rdvs: [...(x.rdvs ?? []), messageAbsence(label)], crees: cree ? [...(x.crees ?? []), cree] : x.crees }));
+    return;
+  }
   const avant = (await db.tout()).dossiers.find(x => x.id === dossierId)?.rdvs;
   const r = await moteur.rangerSeance(dossierId, d.date, d.seance);
   const apres = (await db.tout()).dossiers.find(x => x.id === dossierId)?.rdvs ?? [];
@@ -345,14 +373,15 @@ async function lancer(essai = 1) {
     await travailPC.ajouterLocal({
       id: crypto.randomUUID(), type: "dictee", date: jour, texte: envoye, cree: new Date().toISOString(), fini: new Date().toISOString(),
       etat: "fini", essais: 1, local: true, appareil: await db.appareil(),
-      ranges: r.ranges, doutes: r.doutes, rdvs: r.rdvs,
+      ranges: r.ranges, doutes: r.doutes, rdvs: r.rdvs, absents: r.absents,
       rdvs_avant: Object.fromEntries(touches.map(id => [id, avant.get(id) ?? []])),
       rdvs_apres: Object.fromEntries(touches.map(id => [id, apres.get(id) ?? []]))
     });
     texte = ""; date = aujourdhui(); saisieLibre = false; await garderBrouillon(true);
     phase = "saisie";
     const n = r.ranges.length, m = r.doutes.length;
-    toast(n ? `${n} séance${n > 1 ? "s rangées" : " rangée"}${m ? `, ${m} à ranger à la main` : ""}.` : `${m} passage${m > 1 ? "s" : ""} à ranger à la main.`);
+    toast(!n && !m ? (r.absents.length > 1 ? `${r.absents.length} absences notées.` : "Absence notée.")
+      : n ? `${n} séance${n > 1 ? "s rangées" : " rangée"}${m ? `, ${m} à ranger à la main` : ""}.` : `${m} passage${m > 1 ? "s" : ""} à ranger à la main.`);
   } catch (e) {
     phase = "saisie";
     const p = relanceRange.echec(e, essai);
@@ -368,9 +397,10 @@ async function annulerDictee(id: string) {
   const t = dictees().find(x => x.id === id);
   if (!t) return;
   const range = t.ranges ?? [];
-  if (!await confirmer(`Annuler cette dictée ? Ses ${range.length} séance(s) sont retirées des dossiers et le texte dicté revient pour être corrigé.`, "Annuler la dictée")) return;
+  if (!await confirmer(`Annuler cette dictée ? Ses ${range.length} séance(s)${t.absents?.length ? " et absence(s)" : ""} sont retirées des dossiers et le texte dicté revient pour être corrigé.`, "Annuler la dictée")) return;
   try {
     for (const r of range) await db.supprimerSeance(r.seanceId).catch(() => {});
+    for (const a of t.absents ?? []) await db.noterAbsence(a.dossierId, a.date, false).catch(() => {});
     /* les patients créés pendant cette dictée disparaissent aussi, s'ils n'ont rien reçu d'autre depuis */
     const apres = await db.tout();
     for (const pid of t.crees ?? [])

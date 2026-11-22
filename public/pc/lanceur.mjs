@@ -9,6 +9,8 @@
 // d'installation : maj-etat.json le dit (« relancer »), et l'appli l'affiche dans « État de l'appli ».
 // Depuis le lanceur 2 (1.9.0) : aussi travail.mjs, le travail en tâche de fond, chargé par muninn-pc.mjs (pas un
 // programme à part) : après sa mise à jour, le partage est redémarré et doit annoncer la nouvelle version (/sante).
+// Depuis le lanceur 3 (1.12.0) : « Mettre à jour le PC maintenant » sur un appareil fait écrire au partage le fichier
+// maj-demande ; le lanceur le voit (toutes les 5 s) et vérifie aussitôt, sans attendre les 6 heures.
 // Programme Node sans dépendance.
 import { spawn, spawnSync } from "node:child_process";
 import { copyFile, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -17,7 +19,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 
-export const LANCEUR = 2;
+export const LANCEUR = 3;
 const ici = dirname(fileURLToPath(import.meta.url));
 const dossier = process.env.MUNINN_DOSSIER || (process.platform === "win32" ? join(process.env.ProgramData || "C:\\ProgramData", "Muninn") : join(homedir(), ".muninn"));
 const port = Number(process.env.MUNINN_PORT) || 4747;
@@ -25,7 +27,7 @@ const portVoix = Number(process.env.MUNINN_WHISPER_PORT) || 4748;
 const PREMIERE = Number(process.env.MUNINN_MAJ_PREMIERE ?? 120_000);           // première vérification, 2 min après le démarrage
 const INTERVALLE = Number(process.env.MUNINN_MAJ_INTERVALLE ?? 6 * 3600_000);   // puis toutes les 6 heures
 const SANTE_MS = Number(process.env.MUNINN_MAJ_SANTE ?? 90_000);                 // délai pour répondre après une mise à jour
-const fMaj = join(dossier, "maj.json"), fEtat = join(dossier, "maj-etat.json");
+const fMaj = join(dossier, "maj.json"), fEtat = join(dossier, "maj-etat.json"), fDemande = join(dossier, "maj-demande");
 const python = process.env.MUNINN_PYTHON || join(dossier, "voix-env", "Scripts", "python.exe");
 
 const noter = t => console.log(new Date().toISOString() + " [lanceur] " + t);
@@ -143,6 +145,9 @@ export function verifier() {
 async function uneVerification() {
   const maj = await lireJson(fMaj, {});
   const etat = await lireJson(fEtat, {});
+  /* vérification en cours : les appareils l'affichent (« Vérification en cours… ») */
+  await writeFile(fEtat, JSON.stringify({ ...etat, encours: new Date().toISOString() }, null, 1)).catch(() => {});
+  delete etat.encours;
   etat.verifie = new Date().toISOString();
   delete etat.erreur;
   try {
@@ -174,6 +179,13 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   for (const nom of ["pc", "voix"]) if (present(nom)) demarrer(nom);
   noter(`en marche (lanceur ${LANCEUR}) : ${Object.keys(enCours).join(" et ") || "rien à lancer"}.`);
   setTimeout(() => { verifier(); setInterval(verifier, INTERVALLE); }, PREMIERE);
+  /* demande d'un appareil (« Mettre à jour le PC maintenant ») */
+  setInterval(async () => {
+    if (!existsSync(fDemande)) return;
+    await rm(fDemande, { force: true }).catch(() => {});
+    noter("Mise à jour demandée depuis un appareil.");
+    verifier();
+  }, Number(process.env.MUNINN_MAJ_SCRUTE ?? 5_000)).unref?.();
   for (const s of ["SIGTERM", "SIGINT"]) process.on(s, async () => {
     await Promise.all(Object.keys(enCours).map(arreter));
     process.exit(0);

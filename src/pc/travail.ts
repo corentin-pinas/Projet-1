@@ -13,7 +13,7 @@ import { analyserSeance, appelAbonnementVers, decouperDictee, ErreurIA, natureDe
 import { analyseSurDossier, patchAnalyse, rangerMorceaux, rouvrirApres, type Doute, type Range } from "../rangement";
 import { avenirFrom, empreinteTexte, estArchive, indiceVoix, isoDay, jourLong, nettoyerVoix, rdvsDuJour, type DicteeGardee, type Dossier, type Rdv, type Seance } from "../regles";
 
-export const VERSION = 1;
+export const VERSION = 3;   // 3 : carte du corps et objectifs ajoutés seuls (2.1.0)
 
 /* ---------- les travaux ---------- */
 
@@ -37,6 +37,7 @@ export type Travail = Demande & {
   cree: string; etat: Etat; essais: number; prochain?: string; erreur?: string; son?: boolean; fini?: string;
   // résultat d'une dictée : séances rangées, passages à ranger à la main, messages, rendez-vous avant et après (pour « Annuler »)
   ranges?: Range[]; doutes?: Doute[]; rdvs?: string[]; rdvs_avant?: Record<string, Rdv[]>; rdvs_apres?: Record<string, Rdv[]>; crees?: string[];
+  absents?: { dossierId: string; date: string }[];   // absences dites dans la dictée (1.11.0), retirées par « Annuler »
   vu?: boolean;               // récapitulatif refermé (« Nouvelle dictée »)
   local?: boolean;            // fait sur l'appareil (PC injoignable), gardé ici pour le récapitulatif
 };
@@ -211,7 +212,7 @@ export function creer(env: Env) {
       return [
         ...r.seances.map(s => ({ cle: "seances/" + s.id, valeur: s })),
         ...r.dossiers.map(d => ({ cle: "dossiers/" + d.id, valeur: d })),
-        avec(l, { ...x, etat: "fini", fini: maintenant().toISOString(), erreur: undefined, prochain: undefined, ranges: r.ranges, doutes: r.doutes, rdvs: r.rdvs, rdvs_avant, rdvs_apres })
+        avec(l, { ...x, etat: "fini", fini: maintenant().toISOString(), erreur: undefined, prochain: undefined, ranges: r.ranges, doutes: r.doutes, rdvs: r.rdvs, rdvs_avant, rdvs_apres, absents: r.absents })
       ];
     });
   }

@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 /* 1.9.0 (choix de Corentin du 14 novembre 2026) : le PC fait le travail en tâche de fond. Un second PC de test (port 4757)
    connaît l'adresse du serveur de l'appli ; l'IA est le faux Claude Code du serveur, Whisper le faux Whisper. */
@@ -95,5 +95,48 @@ test("séance dite à la voix sans transcription en direct : l'enregistrement es
   await expect(page.locator(".pcseance")).toHaveCount(0);
   await page.locator("details.orig summary").first().click();
   await expect(page.locator("details.orig").first()).toContainText("Patient en forme.\navec Odile mobilisation passive, transcrit sur le PC");
+  await page.context().close();
+});
+
+test("absence dite dans la dictée confiée au PC : notée sans séance, comptée sur la fiche, retirée par « Annuler cette dictée »", async ({ browser }) => {
+  const page = await appareil(browser);
+  await creer(page, "Victor Blanc");
+  await relier(page);
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  // un récapitulatif d'une dictée précédente peut être encore affiché : « Nouvelle dictée » rend la zone de texte
+  const nouvelle = page.getByRole("button", { name: "Nouvelle dictée" });
+  await expect(page.locator("#dtexte").or(nouvelle)).toBeVisible();
+  if (await nouvelle.isVisible()) await nouvelle.click();
+  await page.locator("#dtexte").fill("Avec Victor, absent aujourd'hui, il avait prévenu ce matin par téléphone.");
+  await page.getByRole("button", { name: "Ranger la dictée" }).click();
+  await expect(page.locator(".recap")).toContainText("Absence notée pour Victor B.", { timeout: 30_000 });
+  await item(page, "Victor B.").click();
+  await expect(page.locator("#absbadge")).toHaveText("1 absence");
+  await expect(page.locator(".seance")).toHaveCount(0);
+  await page.getByRole("button", { name: "Dictée groupée" }).click();
+  await page.getByRole("button", { name: "Annuler cette dictée" }).click();
+  await page.locator("dialog.confirm").getByRole("button", { name: "Annuler la dictée" }).click();
+  await item(page, "Victor B.").click();
+  await expect(page.locator("#absbadge")).toHaveCount(0);
+  await page.context().close();
+});
+
+test("« Mettre à jour le PC maintenant » (1.12.0) : seulement avec un lanceur qui sait le faire ; le PC vérifie aussitôt et l'appareil dit le résultat", async ({ browser }) => {
+  writeFileSync(".faux-pc2/maj-etat.json", JSON.stringify({ verifie: "2026-11-01T08:00:00.000Z", lanceur: 3, pc: 9 }));
+  const page = await appareil(browser);
+  await relier(page);
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
+  const bouton = page.locator("#syncmajmaint");
+  await expect(bouton).toBeVisible();
+  await bouton.click();
+  await expect(bouton).toHaveText("Vérification en cours…");
+  // le lanceur du PC (absent des tests) voit la demande et note sa vérification : on joue son rôle
+  for (let i = 0; i < 50 && !existsSync(".faux-pc2/maj-demande"); i++) await page.waitForTimeout(100);
+  expect(existsSync(".faux-pc2/maj-demande")).toBe(true);
+  const maintenant = new Date().toISOString();
+  writeFileSync(".faux-pc2/maj-etat.json", JSON.stringify({ verifie: maintenant, lanceur: 3, pc: 10, faites: [{ nom: "pc", de: 9, a: 10, quand: maintenant }] }));
+  await expect(page.locator("#etatdlg [role=status]").last()).toContainText("PC mis à jour : partage version 9 → 10.", { timeout: 10_000 });
+  await expect(bouton).toHaveText("Mettre à jour le PC maintenant");
+  writeFileSync(".faux-pc2/maj-etat.json", JSON.stringify({}));
   await page.context().close();
 });

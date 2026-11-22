@@ -66,7 +66,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `journee.ts` | « Ma journée », avec l'alerte « sans rendez-vous » (30 jours ; archivage proposé à 3 mois) | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
 | `transmissions.ts`, `transmissions-pdf.ts` | transmissions pour un remplaçant et leur PDF (sans IA) | db, regles, ui |
-| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, objectifs, prochain-rdv, regles, relance, seances-manquantes, transcription, travail-pc, ui |
+| `dictee.ts` | dictée groupée, rangée patient par patient | db, enregistreur, ia, moteur, objectifs, prochain-rdv, rangement, regles, relance, seances-manquantes, transcription, travail-pc, ui |
 | `voix-seance.ts` | « Enregistrer ma séance » sur la fiche (confiée au PC quand il est prêt) | db, enregistreur, travail-pc, ui |
 | `enregistreur.ts` | l'enregistreur de voix commun (micro, chrono, texte en direct, voix gardée, transcription, relances, boutons) | ia, relance, transcription, ui |
 | `relance.ts` | relances automatiques après un échec (5 minutes, 3 essais au plus, selon la cause), compte à rebours | ia |

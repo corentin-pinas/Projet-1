@@ -2,10 +2,11 @@
    Reprise de la version d'essai ; l'IA (résumés, mise au propre) arrive à l'étape 3. */
 import * as db from "./db";
 import {
+  ABSENCES_SUITE, absencesDe, DEBUT_ABSENCES, jourCourt, texteAbsences,
   ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
   prochainRdv, propreOk, questionHomonyme, questionRdv, seancesManquantes, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Demi, type Dossier, type Seance,
-  empreinteTexte
+  empreinteTexte, suiviDe
 } from "./regles";
 import * as agenda from "./agenda";
 import * as dictee from "./dictee";
@@ -14,9 +15,10 @@ import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
 import * as manquantes from "./seances-manquantes";
 import * as objectifs from "./objectifs";
+import * as carte from "./carte";
 import * as voixSeance from "./voix-seance";
 import * as travailPC from "./travail-pc";
-import { $, confirmer, esc, toast } from "./ui";
+import { $, confirmer, courbe, esc, toast } from "./ui";
 
 
 let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
@@ -166,14 +168,14 @@ export function renderMain() {
   const D = donnees.dossiers.find(d => d.id === selD);
   if (!D) {
     if (history.state?.muninn === "fiche") history.replaceState(null, "");   // fiche disparue (patient supprimé ailleurs)
-    voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient); return;
+    voixSeance.quitter(); journee.afficher($("#main"), donnees, ouvrirPatient, id => { bilanPour = id; $("#file").click(); }); return;
   }
   const bilans = bilansDe(D), age = ageDe(D);
   const b = bilans.find(x => x.id === selB) ?? bilans[0] as Bilan | undefined, r = b?.resume;
   const meta = [age != null ? age + " ans" : "", ...(r ? [r.region, r.date_bilan && "bilan du " + r.date_bilan] : [b ? b.fichier : "Bilan à venir"])].filter(Boolean).join(", ");
   const titre = nomOpen
     ? `<div class="vedit nomedit"><input type="text" id="nomval" value="${esc(D.label)}" aria-label="Nom du patient (prénom et initiale)" autocomplete="off"><button class="primary" id="nomsave">Enregistrer</button><button id="nomcancel">Annuler</button></div>`
-    : `<button class="retour" id="majournee"><span aria-hidden="true">←</span> Ma journée</button><div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button></div>`;
+    : `<button class="retour" id="majournee"><span aria-hidden="true">←</span> Ma journée</button><div class="titre"><h2>${esc(D.label)}</h2><button class="lien" id="renom">Modifier le nom</button>${badgeAbsences(D)}</div>${detailAbsences(D)}`;
   let html = `<div class="head"><div>${titre}<div class="meta">${esc(meta)}</div></div>${!formOpen && !editing ? `<button class="primary dict" id="dict">Dicter la séance</button>` : ""}</div>`;
 
   const autre = questionHomonyme(D, donnees.dossiers, donnees.bilans);
@@ -197,7 +199,16 @@ export function renderMain() {
   const derniere = qrdv ? seancesDe(D).find(s => s.date === qrdv) : undefined;
   if (qrdv && derniere && !moteur.occupe(derniere.id) && (derniere.ia_ok || !aCle)) html += prochain.question(D, qrdv);
   html += prochain.retraits(D);   // rendez-vous dits annulés : à confirmer
+  /* carte du corps (2.1.0) : à droite sur tablette ; sur téléphone, juste après les objectifs (choix de Corentin) */
+  const debutGauche = html.length;
   html += objectifs.proposition(D) + objectifs.encadre(D, donnees.bilans);   // objectifs du patient (1.8.0)
+  const telephone = matchMedia("(max-width:820px)").matches, laCarte = carte.panneau(D);
+  if (telephone) html += laCarte;
+
+  /* suivi chiffré (2.0.0) : douleur et une mesure lues dans le bilan et les séances, avec leur évolution */
+  const su = suiviDe(D.id, donnees.bilans, donnees.seances), nbS = seancesDe(D).length;
+  const vir = (n: number) => String(n).replace(".", ",");
+  if (su.douleur.length || su.mesure?.points.length) html += `<div class="suivi" aria-label="Suivi">${su.douleur.length ? `<div><div class="e">Douleur</div><div class="l"><div class="g">${vir(su.douleur.at(-1)!.v)}<small>/10</small></div>${courbe(su.douleur, { l: 110, h: 36, tend: su.tendance ? 1 : undefined })}</div>${su.tendance ? `<div class="tend">↘ ${esc(su.tendance.texte)} <small>· dit le ${esc(frDate(su.tendance.date).slice(0, 5))}, sans chiffre</small></div>` : ""}</div>` : ""}${su.mesure?.points.length ? `<div><div class="e">${esc(su.mesure.label)}</div><div class="l"><div class="g">${vir(su.mesure.points.at(-1)!.v)}<small>${su.mesure.unite === "°" ? "°" : "&nbsp;" + esc(su.mesure.unite)}</small></div>${courbe(su.mesure.points, { l: 110, h: 36 })}</div></div>` : ""}<div><div class="e">Séances</div><div class="g">${nbS}</div></div></div>`;
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
@@ -236,7 +247,9 @@ export function renderMain() {
     <p class="note" style="margin-top:14px">Fichier : ${esc(b.fichier)}</p>`
     : `<div class="actions"><button id="delpat">Supprimer ce patient</button></div>`;
   html += seancesHtml(D);
+  if (laCarte && !telephone) html = html.slice(0, debutGauche) + `<div class="fiche2"><div class="fgauche">${html.slice(debutGauche)}</div><aside class="fcorps">${laCarte}</aside></div>`;
   $("#main").innerHTML = html;
+  carte.brancher($("#main"), D, renderMain);
 
   wireSeances(D);
   manquantes.brancher($("#main"), () => renderMain());
@@ -279,6 +292,8 @@ export function renderMain() {
 function wireNom(D: Dossier) {
   const ouvrir = $("#renom");
   if (ouvrir) ouvrir.onclick = () => { nomOpen = true; renderMain(); const i = $<HTMLInputElement>("#nomval"); i.focus(); i.select(); };
+  const abs = $("#absbadge");
+  if (abs) abs.onclick = () => { absOuvert = absOuvert === D.id ? null : D.id; renderMain(); };
   const annuler = $("#nomcancel");
   if (annuler) annuler.onclick = () => { nomOpen = false; renderMain(); };
   const save = $<HTMLButtonElement>("#nomsave");
@@ -355,6 +370,22 @@ function wireRdv(D: Dossier) {
     const type = document.querySelector<HTMLInputElement>('input[name="rtype"]:checked')?.value === "bilan" ? "bilan" : "seance";
     save.disabled = true; saveRdv(D, date, demi, type);
   };
+}
+
+/* ---------- absences (1.11.0, choix de Corentin du 20 novembre 2026) ---------- */
+
+/* sur la fiche complète seulement : « ⚠ 3 absences, dont 3 d'affilée » (orange à 3 d'affilée ou 5 en tout) ; le toucher montre les dates */
+let absOuvert: string | null = null;
+function badgeAbsences(D: Dossier): string {
+  const a = absencesDe(D, donnees.seances);
+  if (!a.total) return "";
+  return `<button class="absbadge${a.alerte ? " alerte" : ""}" id="absbadge" aria-expanded="${absOuvert === D.id}">${a.alerte ? "⚠ " : ""}${esc(texteAbsences(a))}</button>`;
+}
+function detailAbsences(D: Dossier): string {
+  if (absOuvert !== D.id) return "";
+  const a = absencesDe(D, donnees.seances);
+  if (!a.total) return "";
+  return `<p class="note absdetail">Absences notées depuis le ${esc(frDate(DEBUT_ABSENCES))} : ${esc(a.dates.map(jourCourt).join(", ").replace(/\.?$/, "."))}${a.alerte ? ` <b>${a.suite >= ABSENCES_SUITE ? `${a.suite} séances manquées d'affilée` : `${a.total} séances manquées`} : à voir avec le patient.</b>` : ""}</p>`;
 }
 
 /* ---------- séances ---------- */

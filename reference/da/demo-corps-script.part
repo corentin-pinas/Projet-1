@@ -1,0 +1,365 @@
+</style>
+
+<div class="app" id="app">
+  <div class="tete">
+    <div><h1 id="nom">Inès T.</h1><div class="meta" id="meta"></div></div>
+    <div class="amb" id="amb">Ambiance</div>
+  </div>
+  <div class="patients" id="patients"></div>
+  <div class="grille">
+    <div class="col">
+      <div class="stats" id="stats"></div>
+      <div class="carte"><div class="etiq acc">🎯 Objectifs</div><ul class="obj" id="obj"></ul></div>
+      <div class="carte"><div class="etiq acc">Essayer une dictée</div>
+        <div class="dictees" id="dictees"></div>
+        <div class="journal" id="journal" aria-live="polite"></div>
+      </div>
+      <div class="carte"><div class="etiq">Anciennes zones douloureuses</div><div class="anciennes" id="anciennes"></div></div>
+    </div>
+    <div class="carte panneau" id="panneau">
+      <div class="barre" id="barre"></div>
+      <div class="vis" id="vis"></div>
+      <div class="liste" id="liste"></div>
+      <div class="indice" id="indice"></div>
+      <div class="legende"><span><span class="pas" style="background:var(--pain)"></span>Douloureux</span><span><span class="pas" style="background:var(--raide)"></span>Raideur, à assouplir</span><span><span class="tr"></span>Trajet nerveux</span><span><svg width="26" height="12" viewBox="0 0 26 12" style="vertical-align:-1px;margin-right:6px"><path d="M1 6 L6 2 L10 9 L15 3 L19 9 L25 5" fill="none" stroke="#140a10" stroke-width="4" stroke-linejoin="round"/><path d="M1 6 L6 2 L10 9 L15 3 L19 9 L25 5" fill="none" stroke="var(--frac)" stroke-width="2" stroke-linejoin="round"/></svg>Fracture</span><span><span class="pas pale" style="background:var(--pain)"></span>Pâle : va mieux</span></div>
+      <div class="credit">Dessins : Servier Medical Art (CC BY 4.0) ; Patrick J. Lynch (CC BY 2.5) ; Sobotta, atlas de 1909 (domaine public). Adaptés aux couleurs de Muninn.</div>
+    </div>
+  </div>
+</div>
+<div id="prep" style="position:fixed;left:-10000px;top:0;width:300px;height:780px" aria-hidden="true"></div>
+
+<script>
+const PLANCHES = { face: /*SVG_FACE*/, dos: /*SVG_DOS*/ };
+/* planches en image (Lynch CC BY 2.5, Sobotta 1909 domaine public) : contours des muscles tracés sur la planche */
+const IMGS = {
+  profil: { src: /*IMG_PROFIL*/, W: 1205, H: 1424, mu: {
+    masseter: "M380 648 C400 644 420 642 440 642 C432 700 428 780 436 860 C444 920 458 960 472 992 C460 1000 448 1002 440 1000 C410 985 390 960 380 930 C366 880 364 790 368 730 C370 700 374 670 380 648 Z",
+    masseterTout: "M385 640 C450 630 540 626 596 634 C604 700 596 800 584 900 C578 950 572 985 566 1000 C530 1012 490 1012 462 1004 C430 990 402 966 384 930 C368 880 366 800 370 740 C372 700 378 664 385 640 Z",
+    temporal: "M352 470 C352 410 390 330 450 292 C520 252 620 244 712 258 C800 274 870 320 904 400 C922 450 912 520 880 566 C840 600 780 606 720 604 C660 604 600 610 540 614 C480 616 420 606 382 578 C360 552 352 510 352 470 Z" } },
+  visage: { src: /*IMG_FACE*/, W: 1017, H: 1436, mu: {
+    masseterg: "M652 738 C680 730 700 726 718 730 C726 800 722 880 712 964 C694 970 676 966 664 956 C654 880 648 800 652 738 Z" } },
+  bras: { src: /*IMG_BRAS*/, W: 821, H: 1000, mu: {
+    deltant: "M60 300 C80 250 130 215 200 215 L290 880 C240 880 200 860 170 820 C110 740 50 620 45 480 C45 400 50 340 60 300 Z",
+    deltmoy: "M200 215 C260 205 330 205 380 212 L350 885 C330 892 305 892 290 880 Z",
+    deltpost: "M380 212 C440 215 500 225 540 245 C560 300 565 400 555 500 C530 640 460 780 350 885 Z",
+    trapeze: "M135 185 C200 140 300 95 470 95 C485 130 490 170 490 205 C400 200 250 200 135 210 Z" } },
+};
+IMGS.profilG = { ...IMGS.profil, miroir: true };
+IMGS.visage.mu.masseterd = "M365 738 C337 730 317 726 299 730 C291 800 295 880 305 964 C323 970 341 966 353 956 C363 880 369 800 365 738 Z";
+IMGS.visage.mu.temporald = "M175 400 C200 370 250 380 265 420 C275 470 268 530 255 560 C230 570 200 560 185 540 C172 500 168 440 175 400 Z";
+const NOMS_VUES = { face: "Face", dos: "Dos", bras: "Profil", profil: "Profil", visage: "Face" };
+const CAT = { pain: "Douloureux", raide: "Raideur, à assouplir", nerf: "Trajet nerveux", frac: "Fracture" };
+const $ = s => document.querySelector(s);
+
+/* ---------- préparation des planches : chaque forme garde son centre, sa taille et sa clarté ---------- */
+const PREP = {};
+const lum = h => { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(c => c + c).join(""); const n = parseInt(h, 16); return (0.3 * (n >> 16 & 255) + 0.59 * (n >> 8 & 255) + 0.11 * (n & 255)) / 255; };
+for (const [k, src] of Object.entries(PLANCHES)) {
+  const box = $("#prep"); box.innerHTML = src; const svg = box.querySelector("svg");
+  svg.setAttribute("width", "300"); svg.setAttribute("height", "780");
+  const inv = svg.getScreenCTM().inverse();
+  for (const p of svg.querySelectorAll("path")) {
+    if (p.closest("clipPath")) continue;
+    const f = p.getAttribute("fill") || "";
+    if (!f.startsWith("#")) continue;
+    const L = lum(f), b = p.getBBox(), m = inv.multiply(p.getScreenCTM());
+    const c = new DOMPoint(b.x + b.width / 2, b.y + b.height / 2).matrixTransform(m);
+    p.dataset.x = c.x.toFixed(1); p.dataset.y = c.y.toFixed(1); p.dataset.w = (Math.max(b.width * Math.abs(m.a), b.height * Math.abs(m.d))).toFixed(1); p.dataset.l = L.toFixed(2);
+    if (/dd9879|c68d72|eaaf92|f6dccf/i.test(f)) p.dataset.m = "1";
+    if (L < .35) p.setAttribute("class", "pt");
+    else { p.setAttribute("class", "pf"); p.setAttribute("fill-opacity", (0.05 + (1 - L) * 0.55).toFixed(2)); }
+  }
+  svg.removeAttribute("width"); svg.removeAttribute("height");
+  PREP[k] = svg.outerHTML; box.innerHTML = "";
+}
+let numSvg = 0;
+function rgbVar(v) { const d = document.createElement("i"); d.style.color = `var(${v})`; $("#app").appendChild(d); const m = getComputedStyle(d).color.match(/[\d.]+/g).map(Number); d.remove(); return m.slice(0, 3).map(x => x / 255); }
+const matrice = ([r, g, b], k, c0) => `0 0 0 0 ${r} 0 0 0 0 ${g} 0 0 0 0 ${b} ${-.3 * k} ${-.59 * k} ${-.11 * k} ${k} ${c0}`;
+function planche(k, vb, label) {
+  if (IMGS[k]) { const I = IMGS[k], s = "p" + (++numSvg);
+    return `<svg class="pl" data-img="${k}" data-s="${s}" viewBox="${vb}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}"><defs><filter id="t${s}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrice(rgbVar("--plaque"), .95, 0)}"/></filter></defs><g ${I.miroir ? `transform="translate(${I.W} 0) scale(-1 1)"` : ""}><image href="${I.src}" width="${I.W}" height="${I.H}" filter="url(#t${s})"/></g></svg>`; }
+  const s = "p" + (++numSvg);
+  return PREP[k].replace(/id="([^"]+)"/g, `id="$1${s}"`).replace(/url\(#([^)]+)\)/g, `url(#$1${s})`)
+    .replace(/<svg([^>]*?)viewBox="[^"]*"/, `<svg$1 class="pl" data-pl="${k}" data-s="${s}" role="img" aria-label="${label}" preserveAspectRatio="xMidYMid meet" viewBox="${vb}"`);
+}
+
+/* ---------- patients de la démo (inventés) ----------
+   Coordonnées dans les planches. Face : la droite du patient est à gauche de l'écran ; dos : à droite. */
+const PATIENTS = {
+  ines: {
+    nom: "Inès T.", meta: "29 ans · Mâchoire droite (ATM) et douleurs dorsales · bilan du 30/10 · patiente inventée",
+    stats: [["Douleur", "/10", [7, 6, 6, 5]], ["Ouverture", " mm", [24, 27, 30, 32]]], seances: 4, vue: "tete", court: "mâchoire et dos",
+    regions: {
+      tete: { nom: "Tête", vues: [["profil", "0 30 1205 1370", "Profil droit"], ["visage", "40 40 940 1380", "Face"]], cible: [["face", 107, 48, 30, 44]] },
+      dos: { nom: "Dos", vues: [["dos", "50 88 118 200", "Dos"]], cible: [["dos", 109, 180, 48, 86]] },
+    },
+    zones: [
+      { id: "atm", nom: "ATM droite", region: "tete", cat: "pain", depuis: "le bilan du 30/10", pl: "face", x: 81, y: 51, rx: 3.2, ry: 3.2, aussi: [{ pl: "profil", x: 626, y: 672, rx: 22, ry: 22, bx: 690, by: 700 }, { pl: "visage", x: 205, y: 700, rx: 16, ry: 16, bx: 150, by: 700 }] },
+      { id: "masseter", nom: "Masséter droit", region: "tete", cat: "pain", depuis: "le bilan du 30/10", pl: "face", x: 88, y: 67, rx: 5, ry: 8, peint: 1, aussi: [{ pl: "profil", mu: "masseter", tout: "masseterTout", bx: 404, by: 820 }, { pl: "visage", mu: "masseterd", bx: 330, by: 850 }] },
+      { id: "temporal", nom: "Temporal droit (tendu)", region: "tete", cat: "raide", depuis: "le bilan du 30/10", pl: "face", x: 84, y: 32, rx: 5.5, ry: 8.5, peint: 1, aussi: [{ pl: "profil", mu: "temporal", bx: 560, by: 440 }, { pl: "visage", mu: "temporald", bx: 220, by: 470 }] },
+      { id: "nerftempe", nom: "Irradiation vers la tempe", region: "tete", cat: "nerf", depuis: "le bilan du 30/10", pl: "face", x: 79, y: 40, rx: 3, ry: 10, nerf: "M81 51 C79 45 79 38 81 32 C82 27 85 22 89 19", aussi: [{ pl: "profil", nerf: "M626 668 C640 620 646 560 650 500 C656 430 690 360 740 300", bx: 780, by: 300 }, { pl: "visage", nerf: "M205 700 C196 640 190 580 196 520 C200 470 210 430 226 400", bx: 130, by: 420 }] },
+    ],
+    objectifs: [{ t: "Croquer une pomme avec une douleur de 2/10 au plus", src: "bilan" }, { t: "Au plus un réveil par nuit avec la mâchoire serrée", src: "bilan" }],
+    dictees: [
+      { txt: "20/11 : « douleur dorsale depuis lundi, conseils de posture »", ajoute: { id: "dorsale", nom: "Douleur dorsale", region: "dos", cat: "pain", pl: "dos", x: 109, y: 165, rx: 13, ry: 17, peint: 1 }, date: "20/11" },
+      { txt: "24/11 : « moins de douleur dorsale, la mâchoire va mieux, elle ouvre plus grand »", palit: "dorsale", tendance: { Douleur: [-1, "moins de douleur"], Ouverture: [1, "ouvre plus grand"] }, date: "24/11" },
+      { txt: "27/11 : « plus de douleur dorsale »", finit: "dorsale", date: "27/11" },
+      { txt: "27/11 : « nouvel objectif : chanter une heure à la chorale sans douleur »", objectif: "Chanter 1 h à la chorale sans douleur", date: "27/11" },
+    ],
+  },
+  paul: {
+    nom: "Paul R.", meta: "54 ans · Épaule droite, coiffe des rotateurs · bilan du 06/11 · patient inventé",
+    stats: [["Douleur", "/10", [8, 7, 7, 6]], ["Élévation", "°", [90, 100, 110, 120]]], seances: 3, vue: "epaule", court: "épaule",
+    regions: {
+      epaule: { nom: "Épaule droite", vues: [["face", "8 70 112 140", "Face"], ["bras", "0 60 821 900", "Profil droit"], ["dos", "98 70 112 140", "Dos"]], defaut: 1, cible: [["face", 52, 132, 30, 32], ["dos", 160, 132, 30, 32]] },
+    },
+    zones: [
+      { id: "deltpost", nom: "Deltoïde droit, faisceau postérieur", region: "epaule", cat: "pain", depuis: "le bilan du 06/11", pl: "dos", x: 172, y: 134, rx: 7, ry: 14, peint: 1, aussi: [{ pl: "bras", mu: "deltpost", bx: 470, by: 480 }] },
+      { id: "trapsup", nom: "Trapèze supérieur droit", region: "epaule", cat: "raide", depuis: "le bilan du 06/11", pl: "dos", x: 137, y: 104, rx: 13, ry: 5, peint: 1, aussi: [{ pl: "bras", mu: "trapeze", bx: 320, by: 150 }] },
+      { id: "pect", nom: "Grand pectoral droit, chef claviculaire", region: "epaule", cat: "raide", depuis: "le bilan du 06/11", pl: "face", x: 66, y: 126, rx: 12, ry: 6, peint: 1 },
+    ],
+    objectifs: [{ t: "Ranger une assiette en hauteur sans douleur", src: "bilan" }, { t: "Dormir 6 h sur le côté droit sans se réveiller", src: "bilan" }],
+    dictees: [
+      { txt: "20/11 : « douleur sur le faisceau moyen du deltoïde depuis samedi »", ajoute: { id: "deltmoy", nom: "Deltoïde droit, faisceau moyen", region: "epaule", cat: "pain", pl: "face", x: 45, y: 128, rx: 5, ry: 11, peint: 1, aussi: [{ pl: "bras", mu: "deltmoy", bx: 290, by: 480 }] }, date: "20/11" },
+      { txt: "24/11 : « moins de douleur sur le faisceau moyen, douleur 5 sur 10, élévation 130 degrés »", palit: "deltmoy", mesures: { Douleur: 5, "Élévation": 130 }, date: "24/11" },
+      { txt: "27/11 : « plus de douleur sur le faisceau moyen, il lève mieux le bras »", finit: "deltmoy", tendance: { "Élévation": [1, "lève mieux le bras"] }, date: "27/11" },
+      { txt: "27/11 : « nouvel objectif : jouer une heure au tennis en double sans douleur »", objectif: "Jouer 1 h au tennis en double sans douleur", date: "27/11" },
+    ],
+  },
+  lea: {
+    nom: "Léa M.", meta: "34 ans · Traumatisme du visage (chute à vélo), fractures du menton et de la pommette droite · bilan du 10/11 · patiente inventée",
+    stats: [["Douleur", "/10", [6, 5, 4]], ["Ouverture", " mm", [18, 22, 26]]], seances: 2, vue: "visage", court: "fractures du visage",
+    regions: {
+      visage: { nom: "Visage", vues: [["profil", "0 30 1205 1370", "Profil droit"], ["visage", "40 40 940 1380", "Face"], ["profilG", "0 30 1205 1370", "Profil gauche"]], defaut: 1, cible: [["face", 107, 55, 28, 36]] },
+    },
+    zones: [
+      { id: "symphyse", nom: "Fracture du menton (symphyse), mâchoire en deux parties", region: "visage", cat: "frac", depuis: "le bilan du 10/11", pl: "face", x: 106, y: 81, rx: 3, ry: 6, frac: "M104.6 74.6 L106.6 76.8 L105 78.8 L107.4 81 L105.6 83.2 L107.6 85.6 L106.6 87.6", aussi: [{ pl: "visage", frac: "M500 935 L516 958 L498 980 L518 1004 L500 1028 L516 1052 L506 1070", bx: 570, by: 1000 }, { pl: "profil", frac: "M150 985 L172 1006 L150 1028 L174 1050 L156 1074", bx: 230, by: 1030 }, { pl: "profilG", frac: "M150 985 L172 1006 L150 1028 L174 1050 L156 1074", bx: 230, by: 1030 }] },
+      { id: "zygoma", nom: "Fracture de la pommette droite (zygoma)", region: "visage", cat: "frac", depuis: "le bilan du 10/11", pl: "face", x: 91, y: 53.5, rx: 6, ry: 3, frac: "M86.4 51.6 L88.6 54 L90.4 52 L92.6 55 L94.4 53 L96.4 55.6", aussi: [{ pl: "visage", frac: "M228 650 L250 676 L270 652 L292 684 L312 660 L336 690", bx: 280, by: 610 }, { pl: "profil", frac: "M300 590 L326 612 L304 634 L330 656 L310 680", bx: 250, by: 600 }] },
+      { id: "pommette", nom: "Douleur de la pommette droite", region: "visage", cat: "pain", depuis: "le bilan du 10/11", pl: "face", x: 90, y: 58.5, rx: 5, ry: 4, aussi: [{ pl: "visage", x: 290, y: 730, rx: 16, ry: 16, bx: 230, by: 760 }, { pl: "profil", x: 330, y: 650, rx: 18, ry: 18, bx: 380, by: 720 }] },
+      { id: "masseterg", nom: "Masséter gauche (contracté)", region: "visage", cat: "raide", depuis: "le bilan du 10/11", pl: "face", x: 126, y: 67, rx: 5, ry: 8, aussi: [{ pl: "visage", mu: "masseterg", bx: 688, by: 850 }, { pl: "profilG", mu: "masseter", tout: "masseterTout", bx: 404, by: 820 }] },
+    ],
+    objectifs: [{ t: "Ouvrir la bouche à 40 mm", src: "bilan" }, { t: "Mâcher un repas normal avec une douleur de 2/10 au plus", src: "bilan" }],
+    dictees: [
+      { txt: "20/11 : « moins de douleur à la pommette, douleur 3 sur 10, ouverture 30 mm »", palit: "pommette", mesures: { Douleur: 3, Ouverture: 30 }, date: "20/11" },
+      { txt: "27/11 : « plus de douleur à la pommette »", finit: "pommette", date: "27/11" },
+      { txt: "27/11 : « renforcement des élévateurs de la mâchoire, à refaire à la maison »", seance: "Fait en séance : renforcement des élévateurs de la mâchoire. À faire à la maison : le même exercice.", date: "27/11" },
+      { txt: "27/11 : « nouvel objectif : manger un repas normal en moins de 30 minutes »", objectif: "Manger un repas normal en moins de 30 minutes", date: "27/11" },
+    ],
+  },
+};
+let pid = "ines", S;
+function depart() {
+  const P = PATIENTS[pid];
+  S = { vue: P.vue, tend: {}, vueIdx: {}, decal: {}, signales: [], stats: P.stats.map(([e, u, v]) => [e, u, [...v]]), bulle: null, zones: P.zones.map(z => ({ ...z, pale: false })), anciennes: [], objectifs: P.objectifs.map(o => ({ ...o, fait: null })), faites: 0, seances: P.seances, journal: "" };
+}
+function jouer(d) {
+  if (d.mesures) for (const st of S.stats) if (d.mesures[st[0]] != null) { st[2].push(d.mesures[st[0]]); delete S.tend[st[0]]; }
+  if (d.tendance) for (const [e, [dir, txt]] of Object.entries(d.tendance)) S.tend[e] = { dir, txt, date: d.date };
+  if (d.ajoute) { S.zones.push({ ...d.ajoute, depuis: "la séance du " + d.date, apparue: d.date, pale: false }); return `Zone ajoutée : ${d.ajoute.nom} (séance du ${d.date}).`; }
+  if (d.palit) { const z = S.zones.find(z => z.id === d.palit); if (!z) return "Zone déjà enlevée."; z.pale = true; z.attenuee = d.date; return `${z.nom} pâlit : elle va mieux (${d.date}).`; }
+  if (d.finit) {
+    const i = S.zones.findIndex(z => z.id === d.finit); if (i < 0) return "Zone déjà enlevée.";
+    const [z] = S.zones.splice(i, 1); S.anciennes.unshift({ ...z, fin: d.date, pale: false });
+    if (S.vue !== "corps" && !S.zones.some(x => x.region === S.vue)) S.vue = "corps";
+    return `${z.nom} disparaît du dessin et passe dans les anciennes zones douloureuses.`;
+  }
+  if (d.seance) return `Rangé dans la séance du ${d.date}. ${d.seance} Le dessin et les objectifs ne changent pas.`;
+  if (d.objectif) { S.objectifs.push({ t: d.objectif, fait: null, src: "dictée du " + d.date, neuf: true }); return "Objectif ajouté, les anciens sont gardés."; }
+}
+
+/* ---------- dessin ---------- */
+const NS = "http://www.w3.org/2000/svg";
+const dans = (p, z, marge = 1) => ((+p.dataset.x - z.x) / (z.rx * marge)) ** 2 + ((+p.dataset.y - z.y) / (z.ry * marge)) ** 2 < 1;
+const dec = (id, k, mir) => { const d = (S.decal || {})[id + "|" + k] || [0, 0]; return `${mir ? -d[0] : d[0]} ${d[1]}`; };
+function deplacable(z, k) { const f = z.pl === k ? z : (z.aussi || []).find(a => a.pl === k); return f && !f.mu && !(f.peint && !IMGS[k]); }
+let deplacer = null;
+function formes(k) { return S.zones.map((z, i) => { const f = z.pl === k ? z : (z.aussi || []).find(a => a.pl === k); return f ? { ...f, id: z.id, cat: z.cat, pale: z.pale, n: i + 1 } : null; }).filter(Boolean); }
+function peindreImg(svg, zoom) {
+  const k = svg.dataset.img, I = IMGS[k], s = svg.dataset.s, vbw = svg.viewBox.baseVal.width, fs = formes(k);
+  let d = `<filter id="fl${s}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${vbw * .012}"/></filter>`, h = "";
+  for (const c of Object.keys(CAT)) d += `<filter id="f${c}${s}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrice(rgbVar("--" + c), 1.5, .15)}"/></filter>`;
+  for (const f of [...fs].sort((a, b) => !!a.frac - !!b.frac)) {
+    const o = f.pale ? .38 : 1;
+    if (f.mu) {
+      d += `<clipPath id="c${f.mu}${s}"><path d="${I.mu[f.mu]}"/></clipPath>`;
+      h += `<g opacity="${o}" data-dz="${f.id}" data-mir="${I.miroir ? 1 : 0}" transform="translate(${dec(f.id, k, I.miroir)})"><g clip-path="url(#c${f.mu}${s})"><rect width="${I.W}" height="${I.H}" fill="#000" opacity=".55"/><image href="${I.src}" width="${I.W}" height="${I.H}" filter="url(#f${f.cat}${s})"/></g><path d="${I.mu[f.mu]}" fill="none" stroke="var(--${f.cat})" stroke-width="${vbw * .004}" data-o="1" style="filter:drop-shadow(0 0 ${vbw * .008}px var(--${f.cat}))"/>${f.tout ? `<path d="${I.mu[f.tout]}" fill="none" stroke="var(--${f.cat})" stroke-width="${vbw * .004}" stroke-dasharray="${vbw * .016} ${vbw * .011}" opacity=".85" data-o="1"/>` : ""}</g>`;
+    } else if (f.frac) h += `<g opacity="${o}" data-dz="${f.id}" data-mir="${I.miroir ? 1 : 0}" transform="translate(${dec(f.id, k, I.miroir)})"><path d="${f.frac}" fill="none" stroke="var(--frac)" stroke-width="${vbw * .03}" stroke-linejoin="round" opacity=".35" filter="url(#fl${s})"/><path d="${f.frac}" fill="none" stroke="#140a10" stroke-width="${vbw * .016}" stroke-linejoin="round" stroke-linecap="round"/><path d="${f.frac}" fill="none" stroke="var(--frac)" stroke-width="${vbw * .007}" stroke-linejoin="round" stroke-linecap="round"/></g>`;
+    else if (f.nerf) h += `<g opacity="${o}" data-dz="${f.id}" data-mir="${I.miroir ? 1 : 0}" transform="translate(${dec(f.id, k, I.miroir)})"><path d="${f.nerf}" fill="none" stroke="var(--nerf)" stroke-width="${vbw * .03}" opacity=".45" filter="url(#fl${s})"/><path d="${f.nerf}" fill="none" stroke="var(--nerf)" stroke-width="${vbw * .009}" stroke-linecap="round" stroke-dasharray="${vbw * .022} ${vbw * .01}"/></g>`;
+    else h += `<g opacity="${o}" data-dz="${f.id}" data-mir="${I.miroir ? 1 : 0}" transform="translate(${dec(f.id, k, I.miroir)})"><ellipse cx="${f.x}" cy="${f.y}" rx="${f.rx * 2.6}" ry="${f.ry * 2.6}" fill="var(--${f.cat})" opacity=".45" filter="url(#fl${s})"/><circle cx="${f.x}" cy="${f.y}" r="${f.rx * .6}" fill="var(--${f.cat})" stroke="#fff" stroke-width="${vbw * .003}"/></g>`;
+  }
+  if (I.miroir) h = `<g transform="translate(${I.W} 0) scale(-1 1)">${h}</g>`;
+  if (zoom) { const r = vbw * .028, mx = x => I.miroir ? I.W - x : x;
+    for (const f of fs) { const bx = mx(f.bx ?? f.x), by = f.by ?? f.y;
+      h += `<g data-z="${f.id}" data-dz="${f.id}" data-mir="0" transform="translate(${dec(f.id, k)})" opacity="${f.pale ? .55 : 1}"><g ${I.miroir ? `transform="translate(${I.W} 0) scale(-1 1)"` : ""}>${f.mu ? `<path d="${I.mu[f.mu]}" fill="transparent"/>` : f.nerf || f.frac ? `<path d="${f.nerf || f.frac}" fill="none" stroke="transparent" stroke-width="${vbw * .07}"/>` : `<circle cx="${f.x}" cy="${f.y}" r="${r * 1.8}" fill="transparent"/>`}</g>
+        <circle cx="${bx}" cy="${by}" r="${r}" fill="var(--${f.cat})" stroke="#fff" stroke-opacity=".8" stroke-width="${r * .14}"/><text x="${bx}" y="${by + r * .38}" text-anchor="middle" font-size="${r * 1.1}" font-weight="700" fill="#140a10">${f.n}</text></g>`; } }
+  svg.insertAdjacentHTML("beforeend", `<defs>${d}</defs>${h}`);
+}
+function peindre(svg, zoom) {
+  if (svg.dataset.img) return peindreImg(svg, zoom);
+  const k = svg.dataset.pl, s = svg.dataset.s, vbw = svg.viewBox.baseVal.width;
+  const zs = S.zones.filter(z => z.pl === k);
+  for (const p of svg.querySelectorAll("path[data-m]")) {
+    const z = zs.find(z => z.peint && !z.nerf && +p.dataset.w < Math.max(z.rx, z.ry) * 3.2 && dans(p, z));
+    if (z) { const o = (+p.dataset.l > .85 ? .55 : .92) * (z.pale ? .38 : 1); p.style.fill = `var(--${z.cat})`; p.setAttribute("fill-opacity", o); p.classList.add("zf"); p.style.setProperty("--c", `var(--${z.cat})`); }
+  }
+  let h = `<defs>${Object.keys(CAT).map(c => `<radialGradient id="g${c}${s}"><stop offset="0" stop-color="var(--${c})" stop-opacity=".95"/><stop offset=".45" stop-color="var(--${c})" stop-opacity=".5"/><stop offset="1" stop-color="var(--${c})" stop-opacity="0"/></radialGradient>`).join("")}<filter id="fl${s}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${vbw * .01}"/></filter></defs>`;
+  h += `<g style="mix-blend-mode:screen">`;
+  [...zs].sort((a, b) => !!a.frac - !!b.frac).forEach((z, i) => {
+    const o = z.pale ? .35 : 1;
+    if (z.frac) h += `<g opacity="${o}" data-dz="${z.id}" data-mir="0" transform="translate(${dec(z.id, k)})"><path d="${z.frac}" fill="none" stroke="var(--frac)" stroke-width="${vbw * .03}" stroke-linejoin="round" opacity=".35" filter="url(#fl${s})" data-o="1"/><path d="${z.frac}" fill="none" stroke="#140a10" stroke-width="${vbw * .016}" stroke-linejoin="round" stroke-linecap="round" data-o="1"/><path d="${z.frac}" fill="none" stroke="var(--frac)" stroke-width="${vbw * .007}" stroke-linejoin="round" stroke-linecap="round" data-o="1"/></g>`;
+    else if (z.nerf) h += `<g opacity="${o}" data-dz="${z.id}" data-mir="0" transform="translate(${dec(z.id, k)})"><path d="${z.nerf}" fill="none" stroke="var(--nerf)" stroke-width="${vbw * .03}" stroke-linecap="round" opacity=".45" filter="url(#fl${s})" data-o="1"/><path d="${z.nerf}" fill="none" stroke="var(--nerf)" stroke-width="${vbw * .009}" stroke-linecap="round" stroke-dasharray="${vbw * .022} ${vbw * .01}" data-o="1"/></g>`;
+    else { const f = vbw > 150 ? Math.max(1.6, 11 / Math.max(z.rx, z.ry)) : Math.max(1.35, 4 / Math.max(z.rx, z.ry)); h += `<g data-dz="${z.id}" data-mir="0" transform="translate(${dec(z.id, k)})"><ellipse cx="${z.x}" cy="${z.y}" rx="${z.rx * f}" ry="${z.ry * f}" fill="url(#g${z.cat}${s})" opacity="${o}"/>`; if (!z.peint || vbw > 150) h += `<circle cx="${z.x}" cy="${z.y}" r="${vbw > 150 ? 2.6 : z.rx * .35}" fill="var(--${z.cat})" opacity="${o}"/>`; h += `</g>`; }
+  });
+  h += `</g>`;
+  if (zoom) {
+    const r = vbw * .028;
+    S.zones.forEach((z, i) => { if (z.pl !== k) return;
+      const nx = z.nerf ? z.x - z.rx - r * 1.2 : z.frac ? z.x + (z.rx > z.ry ? 0 : z.rx + r * 1.6) : z.x, ny = z.frac && z.rx > z.ry ? z.y - z.ry - r * 1.4 : z.y;
+      h += `<g data-z="${z.id}" data-dz="${z.id}" data-mir="0" transform="translate(${dec(z.id, k)})" opacity="${z.pale ? .55 : 1}">${z.nerf || z.frac ? `<path d="${z.nerf || z.frac}" fill="none" stroke="transparent" stroke-width="${vbw * .07}" data-o="1"/>` : `<ellipse cx="${z.x}" cy="${z.y}" rx="${Math.max(z.rx * 1.2, r * 1.6)}" ry="${Math.max(z.ry * 1.2, r * 1.6)}" fill="transparent"/>`}
+        <circle cx="${nx}" cy="${ny}" r="${r}" fill="var(--${z.cat})" stroke="#fff" stroke-opacity=".8" stroke-width="${r * .14}" data-o="1"/><text x="${nx}" y="${ny + r * .38}" text-anchor="middle" font-size="${r * 1.1}" font-weight="700" fill="#140a10">${i + 1}</text></g>`; });
+  } else {
+    const P = PATIENTS[pid];
+    for (const [nomR, R] of Object.entries(P.regions)) for (const [pk, x, y, rx, ry] of R.cible) if (pk === k && S.zones.some(z => z.region === nomR))
+      h += `<ellipse data-zoom="${nomR}" cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="transparent" stroke="var(--acc2)" stroke-opacity=".75" stroke-width="${vbw * .007}" stroke-dasharray="${vbw * .02} ${vbw * .014}" data-o="1"/>`;
+  }
+  svg.insertAdjacentHTML("beforeend", h);
+}
+function dessiner() {
+  const P = PATIENTS[pid], barre = $("#barre"), vis = $("#vis"), ind = $("#indice"), liste = $("#liste");
+  if (S.vue === "corps") {
+    barre.innerHTML = `<span class="etiq">Zones traitées · corps entier</span>`;
+    vis.innerHTML = `<div class="duo"><div><span class="etiq">Face</span>${planche("face", "0 0 215 561", "Corps vu de face")}</div><div><span class="etiq">Dos</span>${planche("dos", "0 0 218 559", "Corps vu de dos")}</div></div>`;
+    ind.textContent = "Touchez une zone entourée pour l'agrandir.";
+    liste.innerHTML = "";
+    vis.querySelectorAll("svg").forEach(s => peindre(s, false));
+  } else {
+    const R = P.regions[S.vue];
+    const iv = vueCourante(R), [k, vb, nomV] = R.vues[iv];
+    barre.innerHTML = `<button class="retour" id="retour"><span aria-hidden="true">←</span>Corps entier</button>${R.vues.length > 1 ? `<div class="vues" role="group" aria-label="Choisir la vue">${R.vues.map((v, i) => `<button data-v="${i}" aria-pressed="${i === iv}">${v[2]}</button>`).join("")}</div>` : `<span class="etiq">${R.nom} · ${nomV}</span>`}`;
+    vis.innerHTML = `<div class="zoomwrap">${planche(k, vb, R.nom + ", " + nomV)}</div>`;
+    vis.querySelectorAll("svg").forEach(s => peindre(s, true));
+    barre.querySelectorAll("[data-v]").forEach(b => b.onclick = e => { e.stopPropagation(); choisirVue(+b.dataset.v); });
+    liste.innerHTML = S.zones.map((z, i) => { if (z.region !== S.vue) return ""; const ici = vuesAvec(R, z.id); const vu = ici.includes(iv);
+      return `<button ${vu ? `data-z="${z.id}"` : `data-aller="${ici[0]}"`} class="${z.pale ? "pale" : ""} ${vu ? "" : "ailleurs"}"><span class="n" style="background:var(--${z.cat})">${i + 1}</span>${z.nom}${vu ? "" : ` <small>· voir ${(R.vues[ici[0]] || [])[2] || ""}</small>`}</button>`; }).join("");
+    liste.querySelectorAll("[data-aller]").forEach(b => b.onclick = e => { e.stopPropagation(); if (b.dataset.aller !== "undefined") choisirVue(+b.dataset.aller); });
+    ind.textContent = deplacer ? "Mode déplacement : faites glisser le repère avec le doigt." : "Touchez un point pour le corriger · glissez vers la droite pour revenir.";
+    $("#panneau").classList.toggle("en-deplacement", !!deplacer);
+    $("#retour").onclick = retour;
+  }
+  if (S.bulle) {
+    const z = S.zones.find(x => x.id === S.bulle.id);
+    if (z) {
+      const b = document.createElement("div");
+      b.className = "bulle"; b.style.left = S.bulle.x + "px"; b.style.top = S.bulle.y + "px";
+      b.innerHTML = `<b>${z.nom}</b><div class="q">${CAT[z.cat]}${z.pale ? ", va mieux depuis le " + z.attenuee : ""} · depuis ${z.depuis}</div><div class="bts"><button class="x" id="enlever">Enlever</button>${S.bulle.k && deplacable(z, S.bulle.k) ? `<button id="deplacer">Déplacer</button>` : ""}<button id="garder">Garder</button></div><button class="signal" id="signaler">Le dessin est faux ? Me le signaler</button>`;
+      $("#panneau").appendChild(b);
+      $("#enlever").onclick = e => { e.stopPropagation(); enlever(z.id); };
+      if ($("#deplacer")) $("#deplacer").onclick = e => { e.stopPropagation(); deplacer = { id: z.id, k: S.bulle.k }; S.bulle = null; S.journal = "Faites glisser le repère à sa place, puis lâchez."; tout(); };
+      $("#signaler").onclick = e => { e.stopPropagation(); S.signales.push({ zone: z.nom, vue: S.bulle.k, quand: "21/11" }); S.bulle = null; S.journal = `Noté : « ${z.nom} » mal dessiné. Le retour est gardé dans Réglages, « Retours sur les dessins », pour corriger la planche.`; tout(); };
+      $("#garder").onclick = e => { e.stopPropagation(); S.bulle = null; tout(); };
+    }
+  }
+}
+const MIEUX_SI_BAS = { Douleur: true };
+function courbe(v, e, t) {
+  v = v.slice(-20); const W = 132, H = 40, lo = Math.min(...v), hi = Math.max(...v), sp = hi - lo || 1;
+  const pts = v.map((y, i) => [4 + i * (W - 24) / Math.max(1, v.length - 1), H - 12 - (y - lo) / sp * (H - 24)]);
+  const bon = t && (t.dir < 0) === !!MIEUX_SI_BAS[e];
+  let fl = "";
+  if (t) { const [x, y] = pts.at(-1), y2 = Math.max(4, Math.min(H - 4, y + t.dir * -10)), x2 = Math.min(W - 5, x + 15);
+    const c = bon ? "var(--ok)" : "var(--work)";
+    fl = `<path d="M${x} ${y} L${x2} ${y2}" stroke="${c}" stroke-width="2" stroke-dasharray="3 2"/><circle cx="${x2}" cy="${y2}" r="3.6" fill="none" stroke="${c}" stroke-width="2"/>`; }
+  return `<svg class="courbe" viewBox="0 0 ${W} ${H}" aria-hidden="true">${fl}<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linejoin="round" opacity=".7"/>${pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${i === pts.length - 1 ? 4 : v.length > 10 ? 1.8 : 2.6}" fill="${i === pts.length - 1 ? "var(--acc)" : "var(--acc2)"}"/>`).join("")}</svg>`;
+}
+function vuesAvec(R, id) { return R.vues.map((v, i) => [v, i]).filter(([[k]]) => formes(k).some(f => f.id === id) || (!IMGS[k] && S.zones.some(z => z.id === id && z.pl === k))).map(([, i]) => i); }
+function vueCourante(R) {
+  if (S.vueIdx[S.vue] != null) return S.vueIdx[S.vue];
+  try { const m = JSON.parse(localStorage.getItem("demo-vues") || "{}"); if (m[pid + S.vue] != null && R.vues[m[pid + S.vue]]) return m[pid + S.vue]; } catch (e) {}
+  return R.defaut || 0;
+}
+function choisirVue(i) {
+  S.vueIdx[S.vue] = i; S.bulle = null;
+  try { const m = JSON.parse(localStorage.getItem("demo-vues") || "{}"); m[pid + S.vue] = i; localStorage.setItem("demo-vues", JSON.stringify(m)); } catch (e) {}
+  tout();
+}
+function tout() {
+  const P = PATIENTS[pid];
+  document.querySelectorAll(".bulle").forEach(b => b.remove());
+  $("#nom").textContent = P.nom; $("#meta").textContent = P.meta;
+  $("#stats").innerHTML = S.stats.map(([e, u, v]) => `<div class="carte"><div class="etiq">${e}</div><div class="stat"><div class="gros">${v.at(-1)}<small>${u}</small></div>${courbe(v, e, S.tend[e])}</div>${S.tend[e] ? (() => { const t = S.tend[e], bon = (t.dir < 0) === !!MIEUX_SI_BAS[e]; return `<div class="tend ${bon ? "bon" : "moins"}">${t.dir < 0 ? "↘" : "↗"} ${t.txt} <small>· dit le ${t.date}, sans chiffre</small></div>`; })() : ""}</div>`).join("") + `<div class="carte"><div class="etiq">Séances</div><div class="gros">${S.seances}</div></div>`;
+  $("#patients").innerHTML = Object.entries(PATIENTS).map(([k, p]) => `<button data-p="${k}" aria-pressed="${k === pid}">${p.nom} · ${p.court}</button>`).join("");
+  $("#patients").querySelectorAll("button").forEach(b => b.onclick = () => { pid = b.dataset.p; try { localStorage.setItem("demo-patient", pid); } catch (e) {} depart(); tout(); });
+  dessiner();
+  $("#obj").innerHTML = S.objectifs.map((o, i) => `<li><label class="${o.fait ? "fait" : ""}"><input type="checkbox" ${o.fait ? "checked" : ""} data-o="${i}"><span><span class="t">${o.t}</span>${o.neuf ? `<span class="neuf">nouveau</span>` : ""}<small>${o.fait ? "Atteint le " + o.fait : "D'après " + (o.src === "bilan" ? "le bilan" : "la " + o.src)}</small></span></label></li>`).join("");
+  $("#obj").querySelectorAll("input").forEach(c => c.onchange = () => { const o = S.objectifs[+c.dataset.o]; o.fait = c.checked ? "20/11" : null; tout(); });
+  $("#dictees").innerHTML = P.dictees.map((d, i) => `<button data-d="${i}" ${i !== S.faites ? "disabled" : ""}>${i < S.faites ? "✓ " : ""}${d.txt}</button>`).join("") + `<button class="recom" id="recom">Recommencer la démo</button>`;
+  $("#dictees").querySelectorAll("[data-d]").forEach(b => b.onclick = () => { S.journal = jouer(P.dictees[+b.dataset.d]); S.faites++; S.seances++; S.bulle = null; tout(); });
+  $("#recom").onclick = () => { depart(); tout(); };
+  $("#journal").textContent = S.journal;
+  $("#anciennes").innerHTML = S.anciennes.length ? S.anciennes.map((z, i) => `<div class="l"><span><span class="pas" style="background:var(--${z.cat})"></span><b>${z.nom}</b> · apparue ${z.apparue ? "le " + z.apparue : "au bilan"}${z.fin ? ", disparue le " + z.fin : ", enlevée à la main"}</span><button data-r="${i}">Remettre</button></div>`).join("") : `<span style="color:var(--mute)">Aucune pour l'instant. Une zone qui ne fait plus mal, ou enlevée par erreur, arrive ici.</span>`;
+  $("#anciennes").querySelectorAll("[data-r]").forEach(b => b.onclick = () => { const [z] = S.anciennes.splice(+b.dataset.r, 1); delete z.fin; S.zones.push(z); S.journal = z.nom + " remise sur le dessin."; tout(); });
+}
+function enlever(id) {
+  const i = S.zones.findIndex(z => z.id === id); const [z] = S.zones.splice(i, 1);
+  S.anciennes.unshift({ ...z }); S.bulle = null; S.journal = z.nom + " enlevée. « Remettre » dans les anciennes zones si c'était une erreur.";
+  if (S.vue !== "corps" && !S.zones.some(x => x.region === S.vue)) S.vue = "corps";
+  tout();
+}
+function retour() { S.vue = "corps"; S.bulle = null; tout(); }
+
+/* toucher : agrandir une région, ouvrir la bulle d'un point */
+$("#panneau").addEventListener("click", e => {
+  if (e.target.closest(".bulle") || glisse) return;
+  const zr = e.target.closest("[data-zoom]");
+  if (zr && S.vue === "corps") { S.vue = zr.dataset.zoom; S.bulle = null; tout(); return; }
+  if (e.target.closest("[data-v],[data-aller]")) return;
+  const zz = e.target.closest("[data-z]");
+  if (zz && S.vue !== "corps") {
+    const p = $("#panneau").getBoundingClientRect(), w = Math.min(270, p.width * .8);
+    S.bulle = { id: zz.dataset.z, k: (zz.closest("svg") || {}).dataset?.img || (zz.closest("svg") || {}).dataset?.pl || (document.querySelector("#vis svg") || {}).dataset?.img || (document.querySelector("#vis svg") || {}).dataset?.pl, x: Math.max(8, Math.min(e.clientX - p.left + 12, p.width - w - 8)), y: Math.max(50, Math.min(e.clientY - p.top - 20, p.height - 150)) };
+    tout(); return;
+  }
+  if (S.bulle) { S.bulle = null; tout(); }
+});
+/* glisser vers la droite = revenir */
+let x0 = null, y0 = null, glisse = false, prise = null;
+$("#vis").addEventListener("pointerdown", e => {
+  if (!deplacer) return; const svg = e.target.closest("svg"); if (!svg) return;
+  e.preventDefault(); const m = svg.getScreenCTM(); const d = S.decal[deplacer.id + "|" + deplacer.k] || [0, 0];
+  prise = { svg, m, x: e.clientX, y: e.clientY, d0: d }; svg.setPointerCapture(e.pointerId);
+});
+$("#vis").addEventListener("pointermove", e => {
+  if (!prise) return; const dx = (e.clientX - prise.x) / prise.m.a, dy = (e.clientY - prise.y) / prise.m.d;
+  const nd = [prise.d0[0] + dx, prise.d0[1] + dy]; prise.nd = nd;
+  prise.svg.querySelectorAll(`[data-dz="${deplacer.id}"]`).forEach(g => g.setAttribute("transform", `translate(${g.dataset.mir === "1" ? -nd[0] : nd[0]} ${nd[1]})`));
+});
+$("#vis").addEventListener("pointerup", e => {
+  if (!prise) return; if (prise.nd) S.decal[deplacer.id + "|" + deplacer.k] = prise.nd;
+  const z = S.zones.find(x => x.id === deplacer.id); S.journal = `${z ? z.nom : "Repère"} déplacé. Votre placement fait foi pour ce patient.`;
+  prise = null; deplacer = null; glisse = true; setTimeout(() => glisse = false, 50); tout();
+});
+$("#panneau").addEventListener("pointerdown", e => { x0 = e.clientX; y0 = e.clientY; glisse = false; });
+$("#panneau").addEventListener("pointerup", e => {
+  if (x0 === null) return;
+  const dx = e.clientX - x0, dy = Math.abs(e.clientY - y0); x0 = null;
+  if (deplacer || prise) return;
+  if (dx > 70 && dy < 60 && S.vue !== "corps") { glisse = true; retour(); setTimeout(() => glisse = false, 50); }
+});
+
+/* ambiances */
+const AMB = [["couchant", "Néon couchant", "linear-gradient(135deg,#ff4f9a,#ffb23e)"], ["cafe", "Café", "#e7a565"], ["holo", "Hologramme", "#3fdcff"], ["aurore", "Aurore", "#a98bff"], ["amethyste", "Améthyste", "#d27bff"], ["nebuleuse", "Nébuleuse", "linear-gradient(135deg,#7c8cff,#5ee6ff)"], ["abysses", "Abysses", "#4fb3ff"]];
+let amb = "couchant";
+try { amb = localStorage.getItem("demo-amb") || amb; pid = localStorage.getItem("demo-patient") || pid; } catch (e) {}
+if (!PATIENTS[pid]) pid = "ines";
+function ambiance(a) {
+  amb = a; $("#app").dataset.amb = a; document.body.style.background = getComputedStyle($("#app")).getPropertyValue("--bg");
+  try { localStorage.setItem("demo-amb", a); } catch (e) {}
+  $("#amb").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.a === a));
+  if (S) tout();
+}
+$("#amb").insertAdjacentHTML("beforeend", AMB.map(([k, n, c]) => `<button data-a="${k}" title="${n}" aria-label="Ambiance ${n}" style="background:${c}"></button>`).join(""));
+$("#amb").querySelectorAll("button").forEach(b => b.onclick = () => ambiance(b.dataset.a));
+ambiance(amb);
+depart();
+tout();
+</script>
