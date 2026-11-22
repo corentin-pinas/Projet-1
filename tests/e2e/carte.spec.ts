@@ -4,19 +4,22 @@ import { expect, test, type Page } from "@playwright/test";
    bulle « Enlever / Garder », anciennes zones avec « Remettre », objectifs ajoutés par la dictée avec case « Atteint ». */
 
 async function semer(page: Page) {
-  await page.evaluate(async () => {
-    const db = await import("/src/db.ts");
-    const cree = "2026-10-30T09:00:00.000Z";
-    const z = (structure: string, cote: string, cat: string, nom: string) => ({ id: `${structure}|${cote}|${cat}`, structure, cote, cat, nom, depuis: "2026-10-30", source: "bilan", maj: cree });
-    await db.importer({ donnees: {
-      dossiers: [{ id: "paul", label: "Paul R.", rdvs: [{ d: "2026-11-23", h: "", p: "am" }], homonyme: false, cree,
-        zones: [z("deltoide_post", "d", "pain", "Deltoïde droit, faisceau postérieur"), z("trapeze_sup", "d", "raide", "Trapèze supérieur droit")],
-        objectifs_dictes: [{ t: "Ranger une assiette en hauteur sans douleur", date: "2026-11-19" }] }],
-      bilans: [{ id: "b1", dossierId: "paul", fichier: "Bilan - Paul R", fichiers: [], ajoute: cree, valides: [], corrections: [],
-        resume: { region: "Épaule droite", date_bilan: "30/10/2026", age: 54, coup_oeil: "Coiffe.", chiffres: [{ label: "EVA", valeur: "8/10" }], objectifs: ["Jouer 1 h au tennis sans douleur"], sections: [] } }],
-      seances: [{ id: "s1", dossierId: "paul", date: "2026-11-19", cree: "2026-11-19T10:00:00Z", contenu: "Douleur 6/10, élévation 120°." }]
-    }, fichiers: [] });
-  });
+  const cree = "2026-10-30T09:00:00.000Z";
+  const z = (structure: string, cote: string, cat: string, nom: string) => ({ id: `${structure}|${cote}|${cat}`, structure, cote, cat, nom, depuis: "2026-10-30", source: "bilan", maj: cree });
+  const magasins = {
+    dossiers: [{ id: "paul", label: "Paul R.", rdvs: [{ d: "2026-11-23", h: "", p: "am" }], homonyme: false, cree,
+      zones: [z("deltoide_post", "d", "pain", "Deltoïde droit, faisceau postérieur"), z("trapeze_sup", "d", "raide", "Trapèze supérieur droit")],
+      objectifs_dictes: [{ t: "Ranger une assiette en hauteur sans douleur", date: "2026-11-19" }] }],
+    bilans: [{ id: "b1", dossierId: "paul", fichier: "Bilan - Paul R", fichiers: [], ajoute: cree, valides: [], corrections: [],
+      resume: { region: "Épaule droite", date_bilan: "30/10/2026", age: 54, coup_oeil: "Coiffe.", chiffres: [{ label: "EVA", valeur: "8/10" }], objectifs: ["Jouer 1 h au tennis sans douleur"], sections: [], a_verifier: [] } }],
+    seances: [{ id: "s1", dossierId: "paul", date: "2026-11-19", cree: "2026-11-19T10:00:00Z", contenu: "Douleur 6/10, élévation 120°." }]
+  };
+  await page.evaluate(async magasins => {
+    const db: IDBDatabase = await new Promise((ok, ko) => { const r = indexedDB.open("mes-patients"); r.onsuccess = () => ok(r.result); r.onerror = ko; });
+    const tx = db.transaction(Object.keys(magasins), "readwrite");
+    for (const [nom, l] of Object.entries(magasins)) for (const x of l as unknown[]) tx.objectStore(nom).put(x);
+    tx.commit(); await new Promise(ok => tx.oncomplete = ok);
+  }, magasins);
   await page.reload();
 }
 
