@@ -4,7 +4,7 @@
    les mêmes règles, où que le travail soit fait. Elles reprennent à l'identique celles de moteur.ts avant la 1.9.0. */
 import type { AnalyseSeance, SeanceDictee } from "./ia";
 import { zonesDeSeance } from "./corps";
-import { avenirFrom, DEMI_FR, demiDe, demiSeance, empreinteTexte, poserRdvs, rattacher, type Dossier, type Seance } from "./regles";
+import { avenirFrom, DEMI_FR, demiDe, demiSeance, empreinteTexte, memeSource, poserRdvs, rattacher, type Dossier, type Seance } from "./regles";
 
 /* libellé d'un jour dans les messages : « demain », « jeudi » sur l'appareil ; « jeudi 20 novembre » sur le PC (le message
    est lu plus tard) */
@@ -21,6 +21,11 @@ export function patchAnalyse(se: Seance, a: AnalyseSeance, brut: string): Partia
   if (brut && a.resume) { patch.avenir_resume = a.resume; patch.avenir_source = empreinteTexte(brut); }
   if (a.propre) { patch.propre = a.propre; patch.propre_source = empreinteTexte(se.contenu); }
   if (a.bref) { patch.bref = a.bref; patch.bref_source = empreinteTexte(se.contenu); }
+  /* relevé du suivi (2.2.0) : un relevé vérifié ou corrigé par Corentin pour ce même texte n'est jamais écrasé */
+  if (a.releves && !(se.releves_main && memeSource(se.releves_source, se.contenu))) {
+    patch.releves = a.releves; patch.releves_source = empreinteTexte(se.contenu);
+    if (se.releves_main) patch.releves_main = false;
+  }
   return patch;
 }
 

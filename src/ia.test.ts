@@ -47,7 +47,7 @@ describe("analyse d'une séance", () => {
 
   it("renvoie l'analyse et la consommation", async () => {
     const r = await analyserSeance("cle", "2026-10-02", dictee, false, faux({ propre: null, resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdv_date: "2026-10-09", rdv_heure: "08:00" }));
-    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [], objectifs: [], zones: [] });
+    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [], objectifs: [], zones: [], releves: [] });
     expect(r.usage).toEqual({ entree: 1000, sortie: 500 });
   });
 });

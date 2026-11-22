@@ -1,4 +1,4 @@
-// Muninn sur le PC : travail en tâche de fond. VERSION = 3
+// Muninn sur le PC : travail en tâche de fond. VERSION = 4
 // Fichier construit par « npm run pc » depuis src/pc/travail.ts : ne pas le modifier à la main.
 //#region src/regles.ts
 function avenirFrom(txt) {
@@ -30,6 +30,7 @@ function empreinteTexte(t) {
 	}
 	return "#" + t.length.toString(36) + "." + h.toString(36) + h2.toString(36);
 }
+const memeSource = (source, texte) => source === texte || source === empreinteTexte(texte);
 const isoDay = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 const demiDe = (r) => r.p ?? (r.h ? r.h < "13:00" ? "am" : "pm" : null);
 const DEMI_FR = {
@@ -154,6 +155,247 @@ const jourLong = (iso) => {
 		month: "long"
 	});
 };
+
+//#endregion
+//#region src/releves.ts
+const CRITERES = [
+	{
+		cle: "douleur",
+		nom: "Douleur",
+		u: "/10",
+		douleur: true
+	},
+	{
+		cle: "douleur_nuit",
+		nom: "Douleur la nuit",
+		u: "/10",
+		douleur: true
+	},
+	{
+		cle: "douleur_repos",
+		nom: "Douleur au repos",
+		u: "/10",
+		douleur: true
+	},
+	{
+		cle: "douleur_mouvement",
+		nom: "Douleur au mouvement",
+		u: "/10",
+		douleur: true
+	},
+	{
+		cle: "sommeil",
+		nom: "Sommeil"
+	},
+	{
+		cle: "exercices",
+		nom: "Exercices"
+	},
+	{
+		cle: "reprise",
+		nom: "Reprise travail / sport"
+	},
+	{
+		cle: "ressenti",
+		nom: "Ressenti global"
+	},
+	{
+		cle: "elevation",
+		nom: "Élévation",
+		u: "°"
+	},
+	{
+		cle: "abduction",
+		nom: "Abduction",
+		u: "°"
+	},
+	{
+		cle: "rotation_externe",
+		nom: "Rotation externe",
+		u: "°"
+	},
+	{
+		cle: "rotation_interne",
+		nom: "Rotation interne",
+		u: "°"
+	},
+	{
+		cle: "main_dos",
+		nom: "Main-dos"
+	},
+	{
+		cle: "force",
+		nom: "Force"
+	},
+	{
+		cle: "gestes",
+		nom: "Gestes du quotidien"
+	},
+	{
+		cle: "ouverture",
+		nom: "Ouverture de bouche",
+		u: "mm"
+	},
+	{
+		cle: "diduction",
+		nom: "Diduction",
+		u: "mm"
+	},
+	{
+		cle: "propulsion",
+		nom: "Propulsion",
+		u: "mm"
+	},
+	{
+		cle: "bruits",
+		nom: "Bruits articulaires"
+	},
+	{
+		cle: "blocage",
+		nom: "Blocages"
+	},
+	{
+		cle: "mastication",
+		nom: "Douleur à la mastication",
+		u: "/10",
+		douleur: true
+	},
+	{
+		cle: "cephalees",
+		nom: "Maux de tête"
+	},
+	{
+		cle: "serrement",
+		nom: "Serrement des dents"
+	}
+];
+const PAR_CLE = new Map(CRITERES.map((c) => [c.cle, c]));
+const critere = (c) => PAR_CLE.get(c) ?? {
+	cle: c,
+	nom: c.charAt(0).toUpperCase() + c.slice(1)
+};
+const nul = (t) => ({ anyOf: [t, { type: "null" }] });
+const SCHEMA_RELEVES = {
+	type: "array",
+	items: {
+		type: "object",
+		additionalProperties: false,
+		required: [
+			"critere",
+			"valeur",
+			"unite",
+			"mot",
+			"sens",
+			"exercices",
+			"detail",
+			"phrase"
+		],
+		properties: {
+			critere: { type: "string" },
+			valeur: nul({ type: "number" }),
+			unite: nul({ type: "string" }),
+			mot: nul({ type: "string" }),
+			sens: nul({
+				type: "string",
+				enum: [
+					"mieux",
+					"pareil",
+					"moins"
+				]
+			}),
+			exercices: nul({
+				type: "string",
+				enum: [
+					"fait",
+					"partie",
+					"pas"
+				]
+			}),
+			detail: nul({ type: "string" }),
+			phrase: { type: "string" }
+		}
+	}
+};
+const CONSIGNE_RELEVES = "ce que la note dit de l'état et de l'évolution du patient, un critère par item, pour suivre son évolution d'une séance à l'autre. critere : une de ces clés si elle convient (" + CRITERES.map((c) => c.cle).join(", ") + "), sinon un nom court en français, en minuscules. valeur : le nombre seulement s'il est dit dans la note (douleur sur 10, degrés, millimètres…), sinon null ; ne calcule et ne déduis jamais un nombre. unite : « /10 », « ° », « mm », « cm », « kg » ou null. mot : la valeur dite en mots quand il n'y a pas de nombre (« mieux », « se réveille encore la nuit », « reprise du travail »), 6 mots au plus, sinon null. sens : « mieux », « pareil » ou « moins » seulement si la note compare à avant (« moins de douleur », « inchangé », « ça stagne », « plus de douleur »), sinon null. exercices (seulement pour le critère exercices, les exercices à la maison depuis la dernière séance) : « fait », « partie » (en partie, arrêtés en route, irrégulier) ou « pas » ; detail : ce qui est dit de leur réalisation (avec ou sans douleur, ça aggrave, trop fait, sans application, exercices changés), 12 mots au plus, sinon null. phrase : le passage de la note qui le dit, recopié mot pour mot, court. Pas ce qui est prévu, ni les exercices donnés pour la suite, ni ce que le kinésithérapeute a fait en séance (sauf une mesure prise en séance : « 140° en actif »). [] si la note ne dit rien de l'évolution.";
+function exemplesReleves(seances) {
+	return seances.filter((s) => s.releves_corr?.length).sort((a, b) => b.cree.localeCompare(a.cree)).flatMap((s) => s.releves_corr.map((c) => `« ${c.phrase} » : relevé « ${c.avant} », corrigé en « ${c.apres} »`)).slice(0, 8);
+}
+const texteExemples = (ex = []) => ex.length ? "\n\nCorrections faites par le kinésithérapeute sur des relevés précédents (fais de même) :\n" + ex.map((x) => "- " + x.slice(0, 300)).join("\n") : "";
+const sansAccent = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const motsDe = (t) => sansAccent(t).match(/[a-z0-9]+/g) ?? [];
+const EN_LETTRES = [
+	"zero",
+	"un",
+	"deux",
+	"trois",
+	"quatre",
+	"cinq",
+	"six",
+	"sept",
+	"huit",
+	"neuf",
+	"dix",
+	"onze",
+	"douze",
+	"treize",
+	"quatorze",
+	"quinze",
+	"seize",
+	"dix-sept",
+	"dix-huit",
+	"dix-neuf",
+	"vingt"
+];
+function nombreDit(n, texte) {
+	const t = sansAccent(texte);
+	if ((Number.isInteger(n) ? [String(n)] : [String(n), String(n).replace(".", ",")]).some((f) => new RegExp(`(?<![\\d.,])${f.replace(".", "\\.")}(?![\\d]|[.,]\\d)`).test(t))) return true;
+	if (Number.isInteger(n) && n >= 0 && n <= 20) return new RegExp(`(?<![a-z-])${EN_LETTRES[n]}(?![a-z-])`).test(t);
+	if (n % 1 === .5 && n < 20) return new RegExp(`(?<![a-z-])${EN_LETTRES[Math.floor(n)]} et demi`).test(t);
+	return false;
+}
+const court = (v, max) => typeof v === "string" && v.trim() ? v.trim().replace(/\s+/g, " ").slice(0, max) : void 0;
+function lireReleves(x, contenu) {
+	if (!Array.isArray(x) || !contenu.trim()) return [];
+	const dans = new Set(motsDe(contenu)), vus = /* @__PURE__ */ new Set(), out = [];
+	for (const e of x) {
+		const o = e && typeof e === "object" ? e : {};
+		const brut = court(o.critere, 40);
+		const phrase = court(o.phrase, 300);
+		if (!brut || !phrase) continue;
+		const mots = motsDe(phrase);
+		if (!mots.length || mots.filter((m) => dans.has(m)).length < mots.length * .85) continue;
+		const cle = sansAccent(brut).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+		const c = PAR_CLE.has(cle) ? cle : brut.toLowerCase();
+		const def = critere(c);
+		const r = {
+			c,
+			phrase
+		};
+		if (typeof o.valeur === "number" && Number.isFinite(o.valeur) && nombreDit(o.valeur, contenu) && (!def.douleur || o.valeur >= 0 && o.valeur <= 10)) {
+			r.n = Math.round(o.valeur * 10) / 10;
+			const u = def.u ?? court(o.unite, 6);
+			if (u) r.u = u;
+		}
+		const mot = court(o.mot, 60);
+		if (mot && r.n == null) r.mot = mot;
+		if (o.sens === "mieux" || o.sens === "pareil" || o.sens === "moins") r.sens = o.sens;
+		if (c === "exercices") {
+			if (o.exercices !== "fait" && o.exercices !== "partie" && o.exercices !== "pas") continue;
+			r.ex = o.exercices;
+			delete r.n;
+			delete r.u;
+			delete r.mot;
+			const d = court(o.detail, 120);
+			if (d) r.detail = d;
+		}
+		if (r.n == null && !r.mot && !r.sens && !r.ex) continue;
+		if (vus.has(c)) continue;
+		vus.add(c);
+		out.push(r);
+		if (out.length >= 15) break;
+	}
+	return out;
+}
 
 //#endregion
 //#region src/corps.ts
@@ -762,6 +1004,7 @@ const SCHEMA_SEANCE = {
 		"rdv_annules",
 		"objectifs",
 		"zones",
+		"releves",
 		"fin_traitement"
 	],
 	properties: {
@@ -775,12 +1018,13 @@ const SCHEMA_SEANCE = {
 		rdv_annules: RDV_ANNULES,
 		objectifs: OBJECTIFS,
 		zones: ZONES_SEANCE,
+		releves: SCHEMA_RELEVES,
 		fin_traitement: { type: "boolean" }
 	}
 };
-function promptSeance(date, contenu, sansPropre) {
+function promptSeance(date, contenu, sansPropre, exemples = []) {
 	const brut = avenirFrom(contenu);
-	return "Tu aides un kinésithérapeute. Voici sa note, souvent dictée à voix haute, pour la séance du " + date + " (J) avec un patient. Une dictée peut contenir des mots mal reconnus, peu de ponctuation, des hésitations et des répétitions.\n\nCalendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\nRéponds uniquement par un objet JSON avec les champs suivants :\n- \"propre\" : " + (sansPropre ? "null" : "la note remise au propre. Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : « État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ». Si un nom de famille complet apparaît, réduis-le à son initiale suivie d'un point.") + "\n- \"resume\" : " + (brut ? "résumé très court (25 mots maximum, français correct, style télégraphique) de ce qui est prévu pour la prochaine séance, d'après le passage « Prévu » ci-dessous. N'ajoute rien, n'interprète pas, ne retire rien d'important. N'y mets ni la date ni l'heure du rendez-vous. null s'il n'y a rien d'autre que la date." : "null") + "\n- \"bref\" : résumé très court (20 mots maximum, style télégraphique) de la séance : état du patient et ce qui a été fait, avec ses chiffres (douleur, amplitudes). Pas ce qui est prévu pour la suite. N'ajoute rien, n'interprète pas. null si la note est vide.\n- \"rdv_date\" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. " + REGLE_JOUR + " null si ce n'est pas dit ou si c'est ambigu. Ne devine pas.\n- \"rdv_heure\" : l'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n- \"rdv_demi\" : " + CONSIGNE_DEMI + "\n- \"rdv_autres\" : les AUTRES séances à venir annoncées en plus de rdv_date (« lundi, mardi et jeudi prochain » : rdv_date = la première, rdv_autres = les suivantes), chacune {\"date\": AAAA-MM-JJ lue dans le calendrier, \"demi\": « matin », « après-midi » ou null si ce n'est pas dit pour ce jour-là}. [] s'il n'y en a pas. Ne devine pas.\n- \"rdv_annules\" : les dates (AAAA-MM-JJ, lues dans le calendrier) des séances que la note dit annulées ou qui n'ont plus lieu (« finalement plus jeudi », « on annule mardi », « pas de séance lundi »). [] sinon. Ne devine pas.\n- \"objectifs\" : les objectifs du patient que la note énonce (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Seulement des objectifs mesurables (un chiffre, une durée, une douleur notée, une activité précise à reprendre) ; jamais ce qui est à renforcer, assouplir ou travailler, ni ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.\n- \"zones\" : " + CONSIGNE_ZONES_SEANCE + "\n- \"fin_traitement\" : " + CONSIGNE_FIN + "\nExemple : {\"propre\":\"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.\",\"resume\":\"Tester la force en rotation externe.\",\"bref\":\"Douleur 3/10, en baisse. Renforcement des extenseurs.\",\"rdv_date\":\"2026-01-15\",\"rdv_heure\":\"08:00\",\"rdv_demi\":\"matin\",\"rdv_autres\":[],\"rdv_annules\":[],\"objectifs\":[],\"zones\":[],\"fin_traitement\":false}\n\nNote complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4e3) : "");
+	return "Tu aides un kinésithérapeute. Voici sa note, souvent dictée à voix haute, pour la séance du " + date + " (J) avec un patient. Une dictée peut contenir des mots mal reconnus, peu de ponctuation, des hésitations et des répétitions.\n\nCalendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\nRéponds uniquement par un objet JSON avec les champs suivants :\n- \"propre\" : " + (sansPropre ? "null" : "la note remise au propre. Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : « État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ». Si un nom de famille complet apparaît, réduis-le à son initiale suivie d'un point.") + "\n- \"resume\" : " + (brut ? "résumé très court (25 mots maximum, français correct, style télégraphique) de ce qui est prévu pour la prochaine séance, d'après le passage « Prévu » ci-dessous. N'ajoute rien, n'interprète pas, ne retire rien d'important. N'y mets ni la date ni l'heure du rendez-vous. null s'il n'y a rien d'autre que la date." : "null") + "\n- \"bref\" : résumé très court (20 mots maximum, style télégraphique) de la séance : état du patient et ce qui a été fait, avec ses chiffres (douleur, amplitudes). Pas ce qui est prévu pour la suite. N'ajoute rien, n'interprète pas. null si la note est vide.\n- \"rdv_date\" : si la note dit quand aura lieu la prochaine séance (par exemple « dans une semaine », « lundi prochain », « le 12 »), la date correspondante lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. " + REGLE_JOUR + " null si ce n'est pas dit ou si c'est ambigu. Ne devine pas.\n- \"rdv_heure\" : l'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n- \"rdv_demi\" : " + CONSIGNE_DEMI + "\n- \"rdv_autres\" : les AUTRES séances à venir annoncées en plus de rdv_date (« lundi, mardi et jeudi prochain » : rdv_date = la première, rdv_autres = les suivantes), chacune {\"date\": AAAA-MM-JJ lue dans le calendrier, \"demi\": « matin », « après-midi » ou null si ce n'est pas dit pour ce jour-là}. [] s'il n'y en a pas. Ne devine pas.\n- \"rdv_annules\" : les dates (AAAA-MM-JJ, lues dans le calendrier) des séances que la note dit annulées ou qui n'ont plus lieu (« finalement plus jeudi », « on annule mardi », « pas de séance lundi »). [] sinon. Ne devine pas.\n- \"objectifs\" : les objectifs du patient que la note énonce (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Seulement des objectifs mesurables (un chiffre, une durée, une douleur notée, une activité précise à reprendre) ; jamais ce qui est à renforcer, assouplir ou travailler, ni ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.\n- \"zones\" : " + CONSIGNE_ZONES_SEANCE + "\n- \"releves\" : " + CONSIGNE_RELEVES + "\n- \"fin_traitement\" : " + CONSIGNE_FIN + "\nExemple : {\"propre\":\"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.\",\"resume\":\"Tester la force en rotation externe.\",\"bref\":\"Douleur 3/10, en baisse. Renforcement des extenseurs.\",\"rdv_date\":\"2026-01-15\",\"rdv_heure\":\"08:00\",\"rdv_demi\":\"matin\",\"rdv_autres\":[],\"rdv_annules\":[],\"objectifs\":[],\"zones\":[],\"releves\":[{\"critere\":\"douleur\",\"valeur\":3,\"unite\":\"/10\",\"mot\":null,\"sens\":\"mieux\",\"exercices\":null,\"detail\":null,\"phrase\":\"douleur en baisse, 3/10\"}],\"fin_traitement\":false}\n\nNote complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4e3) : "") + texteExemples(exemples);
 }
 const REGLE_JOUR = "Un jour de la semaine (« mardi », « mardi prochain ») désigne le premier jour de ce nom APRÈS J (dit un lundi, « mardi prochain » est le lendemain) ; « mardi en huit » ou « mardi de la semaine prochaine » : le mardi de la semaine qui suit celle de J.";
 const CONSIGNE_FIN = "true seulement si la note dit clairement que le traitement s'arrête : « dernière séance », « fin de traitement », « fin de prise en charge », « fin des soins », « on arrête les séances ». false sinon, et aussi s'il est seulement question d'une pause, d'un arrêt à discuter ou d'un report.";
@@ -819,17 +1063,18 @@ function lireAnalyse(x, contenu, sansPropre) {
 		autres,
 		annules,
 		objectifs: (Array.isArray(o.objectifs) ? o.objectifs : []).filter((x) => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 12),
-		zones: lireZones(o.zones, true)
+		zones: lireZones(o.zones, true),
+		releves: lireReleves(o.releves, contenu)
 	};
 }
-async function analyserSeance(cle, date, contenu, sansPropre, appel) {
+async function analyserSeance(cle, date, contenu, sansPropre, appel, exemples = []) {
 	verifierLongueur(contenu, MAX_SEANCE, "seance");
 	const r = await appel({
 		cle,
 		system: "Tu remets au propre les notes de séance d'un kinésithérapeute, sans rien ajouter ni retirer.",
 		contenu: [{
 			type: "text",
-			text: promptSeance(date, contenu, sansPropre)
+			text: promptSeance(date, contenu, sansPropre, exemples)
 		}],
 		schema: SCHEMA_SEANCE,
 		effort: "medium",
@@ -858,6 +1103,7 @@ const SEANCE_DICTEE = {
 		"rdv_annules",
 		"objectifs",
 		"zones",
+		"releves",
 		"fin_traitement"
 	],
 	properties: {
@@ -874,6 +1120,7 @@ const SEANCE_DICTEE = {
 		rdv_annules: RDV_ANNULES,
 		objectifs: OBJECTIFS,
 		zones: ZONES_SEANCE,
+		releves: SCHEMA_RELEVES,
 		fin_traitement: { type: "boolean" }
 	}
 };
@@ -886,8 +1133,8 @@ const SCHEMA_DICTEE = {
 		items: SEANCE_DICTEE
 	} }
 };
-function promptDictee(date, texte, patients) {
-	return "Tu aides un kinésithérapeute. Voici une dictée groupée : il a dicté à la suite les séances de plusieurs patients, toutes du " + date + " (J). Une dictée peut contenir des mots mal reconnus (les prénoms aussi : « marque » pour « Marc »), peu de ponctuation, des hésitations et des répétitions.\n\nPatients enregistrés dans son appli (prénom et initiale) :\n" + (patients.length ? [...patients].sort((a, b) => Number(b.vuCeJour) - Number(a.vuCeJour)).slice(0, 400).map((p) => "- " + p.label + (p.vuCeJour ? " (rendez-vous ce jour-là)" : "")).join("\n") : "(aucun)") + "\n\nCalendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\nDécoupe la dictée en une entrée par patient, dans l'ordre de la dictée. Il annonce chaque patient par son prénom, parfois suivi d'une initiale (« Avec Marc D. », « ensuite Élisabeth G. », « pour Lucie »). Si le même patient revient plus loin, réunis ses passages dans une seule entrée. Un passage qui ne concerne aucun patient nommé forme une entrée avec nom null. Aucun passage de la dictée ne doit être perdu.\nPour chaque entrée, les champs :\n- \"nom\" : le patient tel qu'il est annoncé. S'il correspond manifestement à un patient de la liste, écris-le exactement comme dans la liste ; sinon le prénom, et l'initiale si elle est dite. Jamais de nom de famille complet. null si aucun patient n'est nommé.\n- \"extrait\" : le texte dicté pour ce patient, mot pour mot, sans l'annonce de son nom (« Avec Marc D., » disparaît). Ne corrige rien, mais réduis tout nom de famille complet à son initiale suivie d'un point.\n- \"absent\" : " + CONSIGNE_ABSENT + "\n- \"propre\" : cet extrait remis au propre. Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : « État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ». Si un nom de famille complet apparaît, réduis-le à son initiale suivie d'un point.\n- \"resume\" : si l'extrait contient ce qui est prévu pour la prochaine séance (après « pour la prochaine séance », « pour la prochaine », « la prochaine fois » ou « à venir : »), un résumé très court (25 mots maximum, style télégraphique) de ce qui est prévu, sans la date ni l'heure du rendez-vous. N'ajoute rien. Sinon null.\n- \"bref\" : résumé très court (20 mots maximum, style télégraphique) de la séance : état du patient et ce qui a été fait, avec ses chiffres (douleur, amplitudes). Pas ce qui est prévu pour la suite. N'ajoute rien, n'interprète pas. null si la note est vide.\n- \"rdv_date\" : si l'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. Un jour de la semaine (« mardi », « mardi prochain ») désigne le premier jour de ce nom APRÈS J (dit un lundi, « mardi prochain » est le lendemain) ; « mardi en huit » ou « mardi de la semaine prochaine » : le mardi de la semaine qui suit celle de J. null si ce n'est pas dit ou si c'est ambigu. Ne devine pas.\n- \"rdv_heure\" : l'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n- \"rdv_demi\" : « matin » ou « après-midi » si la note le dit pour cette prochaine séance (ou si l'heure annoncée le dit : avant 13 h, matin), sinon null.\n- \"rdv_autres\" : les AUTRES séances à venir annoncées en plus de rdv_date (« lundi, mardi et jeudi prochain » : rdv_date = la première, rdv_autres = les suivantes), chacune {\"date\": AAAA-MM-JJ lue dans le calendrier, \"demi\": « matin », « après-midi » ou null si ce n'est pas dit pour ce jour-là}. [] s'il n'y en a pas. Ne devine pas.\n- \"rdv_annules\" : les dates (AAAA-MM-JJ, lues dans le calendrier) des séances que la note dit annulées ou qui n'ont plus lieu (« finalement plus jeudi », « on annule mardi », « pas de séance lundi »). [] sinon. Ne devine pas.\n- \"objectifs\" : les objectifs du patient que la note énonce (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Seulement des objectifs mesurables (un chiffre, une durée, une douleur notée, une activité précise à reprendre) ; jamais ce qui est à renforcer, assouplir ou travailler, ni ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.\n- \"zones\" : " + CONSIGNE_ZONES_SEANCE + "\n- \"fin_traitement\" : true seulement si la note dit clairement que le traitement s'arrête : « dernière séance », « fin de traitement », « fin de prise en charge », « fin des soins », « on arrête les séances ». false sinon, et aussi s'il est seulement question d'une pause, d'un arrêt à discuter ou d'un report.\nExemple : {\"seances\":[{\"nom\":\"Marc D.\",\"extrait\":\"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures\",\"propre\":\"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.\",\"resume\":\"Tester la force.\",\"bref\":\"Douleur 3/10. Renforcement des rotateurs externes.\",\"rdv_date\":\"2026-01-15\",\"rdv_heure\":\"08:00\",\"rdv_demi\":\"matin\",\"rdv_autres\":[],\"rdv_annules\":[],\"objectifs\":[],\"zones\":[],\"fin_traitement\":false,\"absent\":false}]}\n\nDictée :\n" + texte.slice(0, MAX_DICTEE);
+function promptDictee(date, texte, patients, exemples = []) {
+	return "Tu aides un kinésithérapeute. Voici une dictée groupée : il a dicté à la suite les séances de plusieurs patients, toutes du " + date + " (J). Une dictée peut contenir des mots mal reconnus (les prénoms aussi : « marque » pour « Marc »), peu de ponctuation, des hésitations et des répétitions.\n\nPatients enregistrés dans son appli (prénom et initiale) :\n" + (patients.length ? [...patients].sort((a, b) => Number(b.vuCeJour) - Number(a.vuCeJour)).slice(0, 400).map((p) => "- " + p.label + (p.vuCeJour ? " (rendez-vous ce jour-là)" : "")).join("\n") : "(aucun)") + "\n\nCalendrier de repère, à utiliser pour toute date (ne calcule rien toi-même) :\n" + calendrier(date, 0, 70) + "\n\nDécoupe la dictée en une entrée par patient, dans l'ordre de la dictée. Il annonce chaque patient par son prénom, parfois suivi d'une initiale (« Avec Marc D. », « ensuite Élisabeth G. », « pour Lucie »). Si le même patient revient plus loin, réunis ses passages dans une seule entrée. Un passage qui ne concerne aucun patient nommé forme une entrée avec nom null. Aucun passage de la dictée ne doit être perdu.\nPour chaque entrée, les champs :\n- \"nom\" : le patient tel qu'il est annoncé. S'il correspond manifestement à un patient de la liste, écris-le exactement comme dans la liste ; sinon le prénom, et l'initiale si elle est dite. Jamais de nom de famille complet. null si aucun patient n'est nommé.\n- \"extrait\" : le texte dicté pour ce patient, mot pour mot, sans l'annonce de son nom (« Avec Marc D., » disparaît). Ne corrige rien, mais réduis tout nom de famille complet à son initiale suivie d'un point.\n- \"absent\" : " + CONSIGNE_ABSENT + "\n- \"propre\" : cet extrait remis au propre. Corrige l'orthographe, la ponctuation et les mots manifestement mal reconnus par la dictée (termes d'anatomie et de kinésithérapie compris), retire hésitations et répétitions. Range chaque information sous la rubrique qui convient, dans cet ordre, une rubrique par ligne au format « Rubrique : texte », sans les rubriques vides : « État du patient » (ce que le patient rapporte, douleur, évolution depuis la dernière fois), « Fait en séance », « À faire à la maison », « Autres notes » (ce qui ne va nulle part ailleurs), « À venir » (ce qui est prévu pour la suite, y compris le moment de la prochaine séance s'il est dit, avec ses mots à lui). Règles strictes : n'ajoute aucune information, n'interprète pas, ne conclus pas, ne retire aucune information, garde les chiffres et le vocabulaire du kinésithérapeute, phrases courtes. Si un mot reste incompréhensible, garde-le tel quel suivi de « (?) ». Si un nom de famille complet apparaît, réduis-le à son initiale suivie d'un point.\n- \"resume\" : si l'extrait contient ce qui est prévu pour la prochaine séance (après « pour la prochaine séance », « pour la prochaine », « la prochaine fois » ou « à venir : »), un résumé très court (25 mots maximum, style télégraphique) de ce qui est prévu, sans la date ni l'heure du rendez-vous. N'ajoute rien. Sinon null.\n- \"bref\" : résumé très court (20 mots maximum, style télégraphique) de la séance : état du patient et ce qui a été fait, avec ses chiffres (douleur, amplitudes). Pas ce qui est prévu pour la suite. N'ajoute rien, n'interprète pas. null si la note est vide.\n- \"rdv_date\" : si l'extrait dit quand aura lieu la prochaine séance de ce patient, la date lue dans le calendrier, au format AAAA-MM-JJ, comptée à partir de J. Un jour de la semaine (« mardi », « mardi prochain ») désigne le premier jour de ce nom APRÈS J (dit un lundi, « mardi prochain » est le lendemain) ; « mardi en huit » ou « mardi de la semaine prochaine » : le mardi de la semaine qui suit celle de J. null si ce n'est pas dit ou si c'est ambigu. Ne devine pas.\n- \"rdv_heure\" : l'heure annoncée de cette prochaine séance au format HH:MM, sinon null.\n- \"rdv_demi\" : « matin » ou « après-midi » si la note le dit pour cette prochaine séance (ou si l'heure annoncée le dit : avant 13 h, matin), sinon null.\n- \"rdv_autres\" : les AUTRES séances à venir annoncées en plus de rdv_date (« lundi, mardi et jeudi prochain » : rdv_date = la première, rdv_autres = les suivantes), chacune {\"date\": AAAA-MM-JJ lue dans le calendrier, \"demi\": « matin », « après-midi » ou null si ce n'est pas dit pour ce jour-là}. [] s'il n'y en a pas. Ne devine pas.\n- \"rdv_annules\" : les dates (AAAA-MM-JJ, lues dans le calendrier) des séances que la note dit annulées ou qui n'ont plus lieu (« finalement plus jeudi », « on annule mardi », « pas de séance lundi »). [] sinon. Ne devine pas.\n- \"objectifs\" : les objectifs du patient que la note énonce (« nouvel objectif : courir 20 minutes », « objectif : se coiffer sans douleur », « on vise la reprise du tennis en mars »), un par item, avec ses mots. Seulement des objectifs mesurables (un chiffre, une durée, une douleur notée, une activité précise à reprendre) ; jamais ce qui est à renforcer, assouplir ou travailler, ni ce qui est prévu pour la prochaine séance. [] s'il n'y en a pas.\n- \"zones\" : " + CONSIGNE_ZONES_SEANCE + "\n- \"releves\" : " + CONSIGNE_RELEVES + "\n- \"fin_traitement\" : true seulement si la note dit clairement que le traitement s'arrête : « dernière séance », « fin de traitement », « fin de prise en charge », « fin des soins », « on arrête les séances ». false sinon, et aussi s'il est seulement question d'une pause, d'un arrêt à discuter ou d'un report.\nExemple : {\"seances\":[{\"nom\":\"Marc D.\",\"extrait\":\"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures\",\"propre\":\"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.\",\"resume\":\"Tester la force.\",\"bref\":\"Douleur 3/10. Renforcement des rotateurs externes.\",\"rdv_date\":\"2026-01-15\",\"rdv_heure\":\"08:00\",\"rdv_demi\":\"matin\",\"rdv_autres\":[],\"rdv_annules\":[],\"objectifs\":[],\"zones\":[],\"releves\":[{\"critere\":\"douleur\",\"valeur\":3,\"unite\":\"/10\",\"mot\":null,\"sens\":null,\"exercices\":null,\"detail\":null,\"phrase\":\"douleur 3 sur 10\"}],\"fin_traitement\":false,\"absent\":false}]}\n\nDictée :\n" + texte.slice(0, MAX_DICTEE) + texteExemples(exemples);
 }
 const CONSIGNE_ABSENT = "true seulement si le passage dit que le patient n'est pas venu à sa séance ce jour-là (« absent aujourd'hui », « pas venu », « lapin », « a oublié son rendez-vous ») et qu'aucune séance n'a eu lieu ; false sinon (un rendez-vous futur annulé n'est pas une absence).";
 function lireDictee(x, texte) {
@@ -906,14 +1153,14 @@ function lireDictee(x, texte) {
 	if (!seances.length || total < texte.trim().length * .6) throw new ErreurIA("L'IA a laissé de côté une partie de la dictée. Rien n'a été rangé.", "passager");
 	return seances;
 }
-async function decouperDictee(cle, date, texte, patients, appel) {
+async function decouperDictee(cle, date, texte, patients, appel, exemples = []) {
 	verifierLongueur(texte, MAX_DICTEE, "dictee");
 	const r = await appel({
 		cle,
 		system: "Tu ranges la dictée groupée d'un kinésithérapeute, patient par patient, sans rien ajouter ni retirer.",
 		contenu: [{
 			type: "text",
-			text: promptDictee(date, texte, patients)
+			text: promptDictee(date, texte, patients, exemples)
 		}],
 		schema: SCHEMA_DICTEE,
 		effort: "medium",
@@ -968,6 +1215,11 @@ function patchAnalyse(se, a, brut) {
 	if (a.bref) {
 		patch.bref = a.bref;
 		patch.bref_source = empreinteTexte(se.contenu);
+	}
+	if (a.releves && !(se.releves_main && memeSource(se.releves_source, se.contenu))) {
+		patch.releves = a.releves;
+		patch.releves_source = empreinteTexte(se.contenu);
+		if (se.releves_main) patch.releves_main = false;
 	}
 	return patch;
 }
@@ -1125,7 +1377,7 @@ function placerSeance(d, seances, date, m, o) {
 
 //#endregion
 //#region src/pc/travail.ts
-const VERSION = 3;
+const VERSION = 4;
 const CLE = "parametres/travaux";
 const ESSAIS_MAX = 24;
 const delaiEssai = (essais) => [
@@ -1327,7 +1579,7 @@ function creer(env) {
 			label: d.label,
 			vuCeJour: d.rdvs.some((r) => r && r.d === t.date)
 		}));
-		const { donnees: morceaux } = await decouperDictee(code, t.date, t.texte, patients, appel);
+		const { donnees: morceaux } = await decouperDictee(code, t.date, t.texte, patients, appel, exemplesReleves(seances(env)));
 		await env.transaction((l) => {
 			const x = travaux(l).find((y) => y.id === t.id);
 			if (!x || !enCours(x)) return [];
@@ -1384,7 +1636,7 @@ function creer(env) {
 			return finir();
 		}
 		if (t.empreinte && empreinteTexte(s.contenu) !== t.empreinte) return finir();
-		const { donnees: a } = await analyserSeance(code, s.date, s.contenu, !!t.sansPropre, appel);
+		const { donnees: a } = await analyserSeance(code, s.date, s.contenu, !!t.sansPropre, appel, exemplesReleves(seances(env)));
 		await env.transaction((l) => {
 			const x = travaux(l).find((y) => y.id === t.id);
 			const s2 = l.lire("seances/" + s.id);
@@ -1456,7 +1708,7 @@ function creer(env) {
 		return boucleEnCours ?? Promise.resolve();
 	}
 	const etat = () => ({
-		version: 3,
+		version: 4,
 		enCours: travaux(env).filter(enCours).length
 	});
 	return {

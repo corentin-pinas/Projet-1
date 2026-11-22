@@ -4,6 +4,7 @@ import { AMBIANCES, CLASSIQUE, cssAmbiance } from "./ambiances";
 import { cssPalette, PALETTES } from "./palettes";
 import { decorer, saisonDu } from "./saisons";
 import { rattrapage, retours } from "./carte";
+import { rattrapage as rattrapageSuivi } from "./releves-ecran";
 
 /* écritures proposées, toutes hébergées avec l'appli (fonctionnent sans internet) */
 export const POLICES: Record<string, { nom: string; famille: string }> = {
@@ -108,6 +109,7 @@ export function brancher() {
     /* retours sur les dessins de la carte du corps (2.1.0), à transmettre pour corriger les planches */
     retours().then(h => { if (h) zone.insertAdjacentHTML("beforeend", h); }).catch(() => {});
     rattrapage(zone).catch(() => {});
+    rattrapageSuivi(zone).catch(() => {});
     zone.querySelectorAll<HTMLButtonElement>("[data-cle]").forEach(b => b.onclick = () => {
       const cle = b.dataset.cle!;
       /* fond et couleur principale ne valent que pour l'ambiance « Classique » : les choisir y revient */

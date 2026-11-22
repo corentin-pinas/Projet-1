@@ -11,9 +11,10 @@
    les règles de rangement sont celles de l'appli (ia.ts, rangement.ts, regles.ts) : les mêmes, où que le travail soit fait. */
 import { analyserSeance, appelAbonnementVers, decouperDictee, ErreurIA, natureDe, type Appel } from "../ia";
 import { analyseSurDossier, patchAnalyse, rangerMorceaux, rouvrirApres, type Doute, type Range } from "../rangement";
+import { exemplesReleves } from "../releves";
 import { avenirFrom, empreinteTexte, estArchive, indiceVoix, isoDay, jourLong, nettoyerVoix, rdvsDuJour, type DicteeGardee, type Dossier, type Rdv, type Seance } from "../regles";
 
-export const VERSION = 3;   // 3 : carte du corps et objectifs ajoutés seuls (2.1.0)
+export const VERSION = 4;   // 3 : carte du corps et objectifs ajoutés seuls (2.1.0) ; 4 : relevé du suivi (2.2.0)
 
 /* ---------- les travaux ---------- */
 
@@ -200,7 +201,7 @@ export function creer(env: Env) {
 
   async function rangerDictee(t: Travail, code: string, appel: Appel) {
     const patients = dossiers(env).filter(d => !estArchive(d)).map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r && r.d === t.date) }));
-    const { donnees: morceaux } = await decouperDictee(code, t.date, t.texte!, patients, appel);
+    const { donnees: morceaux } = await decouperDictee(code, t.date, t.texte!, patients, appel, exemplesReleves(seances(env)));
     await env.transaction(l => {
       const x = travaux(l).find(y => y.id === t.id);
       if (!x || !enCours(x)) return [];
@@ -227,7 +228,7 @@ export function creer(env: Env) {
       return finir();
     }
     if (t.empreinte && empreinteTexte(s.contenu) !== t.empreinte) return finir();   // modifiée depuis : un autre travail suit
-    const { donnees: a } = await analyserSeance(code, s.date, s.contenu, !!t.sansPropre, appel);
+    const { donnees: a } = await analyserSeance(code, s.date, s.contenu, !!t.sansPropre, appel, exemplesReleves(seances(env)));
     await env.transaction(l => {
       const x = travaux(l).find(y => y.id === t.id);
       const s2 = l.lire("seances/" + s.id) as Seance | null;

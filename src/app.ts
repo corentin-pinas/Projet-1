@@ -1,5 +1,6 @@
 /* Écrans de l'appli : liste des patients et fiche (bilan, rendez-vous, séances).
    Reprise de la version d'essai ; l'IA (résumés, mise au propre) arrive à l'étape 3. */
+import * as releves from "./releves-ecran";
 import * as db from "./db";
 import {
   ABSENCES_SUITE, absencesDe, DEBUT_ABSENCES, jourCourt, texteAbsences,
@@ -208,7 +209,8 @@ export function renderMain() {
   /* suivi chiffré (2.0.0) : douleur et une mesure lues dans le bilan et les séances, avec leur évolution */
   const su = suiviDe(D.id, donnees.bilans, donnees.seances), nbS = seancesDe(D).length;
   const vir = (n: number) => String(n).replace(".", ",");
-  if (su.douleur.length || su.mesure?.points.length) html += `<div class="suivi" aria-label="Suivi">${su.douleur.length ? `<div><div class="e">Douleur</div><div class="l"><div class="g">${vir(su.douleur.at(-1)!.v)}<small>/10</small></div>${courbe(su.douleur, { l: 110, h: 36, tend: su.tendance ? 1 : undefined })}</div>${su.tendance ? `<div class="tend">↘ ${esc(su.tendance.texte)} <small>· dit le ${esc(frDate(su.tendance.date).slice(0, 5))}, sans chiffre</small></div>` : ""}</div>` : ""}${su.mesure?.points.length ? `<div><div class="e">${esc(su.mesure.label)}</div><div class="l"><div class="g">${vir(su.mesure.points.at(-1)!.v)}<small>${su.mesure.unite === "°" ? "°" : "&nbsp;" + esc(su.mesure.unite)}</small></div>${courbe(su.mesure.points, { l: 110, h: 36 })}</div></div>` : ""}<div><div class="e">Séances</div><div class="g">${nbS}</div></div></div>`;
+  const exo = releves.exercices(D.id, donnees.seances), tend = su.tendance ? (su.tendance.sens === "moins" ? -1 : su.tendance.sens === "pareil" ? undefined : 1) : undefined;
+  if (su.douleur.length || su.mesure?.points.length || exo) html += `<div class="suivi" aria-label="Suivi">${su.douleur.length ? `<div><div class="e">Douleur</div><div class="l"><div class="g">${vir(su.douleur.at(-1)!.v)}<small>/10</small></div>${courbe(su.douleur, { l: 110, h: 36, tend })}</div>${su.tendance ? `<div class="tend">${su.tendance.sens === "moins" ? "↗" : su.tendance.sens === "pareil" ? "→" : "↘"} ${esc(su.tendance.texte)} <small>· dit le ${esc(frDate(su.tendance.date).slice(0, 5))}, sans chiffre</small></div>` : ""}</div>` : ""}${su.mesure?.points.length ? `<div><div class="e">${esc(su.mesure.label)}</div><div class="l"><div class="g">${vir(su.mesure.points.at(-1)!.v)}<small>${su.mesure.unite === "°" ? "°" : "&nbsp;" + esc(su.mesure.unite)}</small></div>${courbe(su.mesure.points, { l: 110, h: 36 })}</div></div>` : ""}${exo}<div><div class="e">Séances</div><div class="g">${nbS}</div></div></div>`;
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
@@ -252,6 +254,7 @@ export function renderMain() {
   carte.brancher($("#main"), D, renderMain);
 
   wireSeances(D);
+  releves.brancher($("#main"));
   manquantes.brancher($("#main"), () => renderMain());
   wireRdv(D);
   prochain.brancher($("#main"));
@@ -416,7 +419,7 @@ function seancesHtml(D: Dossier) {
   return `<div class="seances"><h3>Séances (${list.length})${!form ? `<button class="primary" id="sadd">Ajouter une séance</button>` : ""}</h3>${form}${parPC}
     ${list.length || elements.length ? list.map((s, k) => {
       const ok = propreOk(s), orig = s.brut || s.contenu;
-      return avant(s.date, k ? list[k - 1].date : null) + `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre!) : esc(s.contenu)}</div>
+      return avant(s.date, k ? list[k - 1].date : null) + `<div class="seance"><div class="sd">Séance ${list.length - k}, le ${esc(frDate(s.date))}</div><div class="sc">${ok ? fmtSeance(s.propre!) : esc(s.contenu)}</div>${releves.ligne(s)}
       ${moteur.occupe(s.id) ? `<div class="note">Mise au propre en cours…</div>` : travailPC.surSeance(s.id) ? `<div class="note">Mise au propre en cours sur le PC…</div>` : ""}
       ${ok && orig !== s.propre ? `<details class="orig"><summary>Texte d'origine</summary><div class="sc">${esc(orig)}</div></details>` : ""}
       <div class="sa"><button data-edit="${esc(s.id)}">Modifier</button>${!ok && aCle && !moteur.occupe(s.id) ? `<button data-clean="${esc(s.id)}">Mettre au propre</button>` : ""}<button data-sdel="${esc(s.id)}">Supprimer</button></div></div>`;

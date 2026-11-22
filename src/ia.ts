@@ -4,7 +4,8 @@
    Les règles de prompt et les garde-fous de la séance sont repris de la version d'essai. */
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaContentBlockParam, BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { avenirFrom, isoDay, type Demi, type Resume } from "./regles";
+import { avenirFrom, isoDay, type Demi, type Releve, type Resume } from "./regles";
+import { CONSIGNE_RELEVES, lireReleves, SCHEMA_RELEVES, texteExemples } from "./releves";
 import { listePourIA, STRUCTURES, type ZoneDite } from "./corps";
 
 /* Deux niveaux d'IA, choisis par Corentin : la plus puissante pour les bilans (lecture du manuscrit) et la dictée groupée,
@@ -379,11 +380,11 @@ const CONSIGNE_ANNULES = "les dates (AAAA-MM-JJ, lues dans le calendrier) des s�
 export const SCHEMA_SEANCE = {
   type: "object",
   additionalProperties: false,
-  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "zones", "fin_traitement"],
-  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, zones: ZONES_SEANCE, fin_traitement: { type: "boolean" } }
+  required: ["propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "zones", "releves", "fin_traitement"],
+  properties: { propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, zones: ZONES_SEANCE, releves: SCHEMA_RELEVES, fin_traitement: { type: "boolean" } }
 };
 
-export function promptSeance(date: string, contenu: string, sansPropre: boolean): string {
+export function promptSeance(date: string, contenu: string, sansPropre: boolean, exemples: string[] = []): string {
   const brut = avenirFrom(contenu);
   return "Tu aides un kinésithérapeute. Voici sa note, souvent dictée à voix haute, pour la séance du " + date + " (J) avec un patient. " +
     "Une dictée peut contenir des mots mal reconnus, peu de ponctuation, des hésitations et des répétitions.\n\n" +
@@ -399,9 +400,10 @@ export function promptSeance(date: string, contenu: string, sansPropre: boolean)
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
     '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
     '- "zones" : ' + CONSIGNE_ZONES_SEANCE + "\n" +
+    '- "releves" : ' + CONSIGNE_RELEVES + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"zones":[],"fin_traitement":false}\n\n' +
-    "Note complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "");
+    'Exemple : {"propre":"État du patient : douleur en baisse, 3/10.\\nFait en séance : renforcement des extenseurs.\\nÀ venir : tester la force en rotation externe, dans une semaine à 8 h.","resume":"Tester la force en rotation externe.","bref":"Douleur 3/10, en baisse. Renforcement des extenseurs.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"zones":[],"releves":[{"critere":"douleur","valeur":3,"unite":"/10","mot":null,"sens":"mieux","exercices":null,"detail":null,"phrase":"douleur en baisse, 3/10"}],"fin_traitement":false}\n\n' +
+    "Note complète :\n" + contenu.slice(0, MAX_SEANCE) + (brut ? "\n\nPrévu :\n" + brut.slice(0, 4000) : "") + texteExemples(exemples);
 }
 
 /* « mardi prochain » (choix de Corentin, 5 novembre 2026) */
@@ -421,7 +423,7 @@ const okHeure = (v: unknown) => {
 };
 
 export type AnalyseSeance = { propre: string; resume: string; bref: string; rdvDate: string; rdvHeure: string; rdvDemi: Demi | ""; fin?: boolean;
-  autres?: { d: string; demi: Demi | "" }[]; annules?: string[]; objectifs?: string[]; zones?: ZoneDite[] };
+  autres?: { d: string; demi: Demi | "" }[]; annules?: string[]; objectifs?: string[]; zones?: ZoneDite[]; releves?: Releve[] };
 
 /* Lecture de la réponse avec les garde-fous de la version d'essai :
    une mise au propre beaucoup plus courte que la dictée a sans doute perdu des informations, on ne la retient pas. */
@@ -447,15 +449,16 @@ export function lireAnalyse(x: unknown, contenu: string, sansPropre: boolean): A
     fin: o.fin_traitement === true && !rdvDate && !autres.length,   // un prochain rendez-vous dit en même temps : ce n'est pas la fin
     autres, annules,
     objectifs: (Array.isArray(o.objectifs) ? o.objectifs : []).filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(Boolean).slice(0, 12),
-    zones: lireZones(o.zones, true)
+    zones: lireZones(o.zones, true),
+    releves: lireReleves(o.releves, contenu)
   };
 }
 
-export async function analyserSeance(cle: string, date: string, contenu: string, sansPropre: boolean, appel: Appel): Promise<Reponse<AnalyseSeance>> {
+export async function analyserSeance(cle: string, date: string, contenu: string, sansPropre: boolean, appel: Appel, exemples: string[] = []): Promise<Reponse<AnalyseSeance>> {
   verifierLongueur(contenu, MAX_SEANCE, "seance");
   const r = await appel({
     cle, system: "Tu remets au propre les notes de séance d'un kinésithérapeute, sans rien ajouter ni retirer.",
-    contenu: [{ type: "text", text: promptSeance(date, contenu, sansPropre) }],
+    contenu: [{ type: "text", text: promptSeance(date, contenu, sansPropre, exemples) }],
     schema: SCHEMA_SEANCE, effort: "medium", maxTokens: 16000, niveau: "leger"
   });
   return { donnees: lireAnalyse(r.donnees, contenu, sansPropre), usage: r.usage };
@@ -465,8 +468,8 @@ export async function analyserSeance(cle: string, date: string, contenu: string,
 
 const SEANCE_DICTEE = {
   type: "object", additionalProperties: false,
-  required: ["nom", "extrait", "absent", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "zones", "fin_traitement"],
-  properties: { nom: texteOuNul, extrait: { type: "string" }, absent: { type: "boolean" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, zones: ZONES_SEANCE, fin_traitement: { type: "boolean" } }
+  required: ["nom", "extrait", "absent", "propre", "resume", "bref", "rdv_date", "rdv_heure", "rdv_demi", "rdv_autres", "rdv_annules", "objectifs", "zones", "releves", "fin_traitement"],
+  properties: { nom: texteOuNul, extrait: { type: "string" }, absent: { type: "boolean" }, propre: texteOuNul, resume: texteOuNul, bref: texteOuNul, rdv_date: texteOuNul, rdv_heure: texteOuNul, rdv_demi: texteOuNul, rdv_autres: RDV_AUTRES, rdv_annules: RDV_ANNULES, objectifs: OBJECTIFS, zones: ZONES_SEANCE, releves: SCHEMA_RELEVES, fin_traitement: { type: "boolean" } }
 };
 export const SCHEMA_DICTEE = {
   type: "object", additionalProperties: false, required: ["seances"],
@@ -474,7 +477,7 @@ export const SCHEMA_DICTEE = {
 };
 
 /* patients : libellés de l'appli (« Marc D. »), avec vuCeJour si un rendez-vous est noté à la date des séances */
-export function promptDictee(date: string, texte: string, patients: { label: string; vuCeJour: boolean }[]): string {
+export function promptDictee(date: string, texte: string, patients: { label: string; vuCeJour: boolean }[], exemples: string[] = []): string {
   return "Tu aides un kinésithérapeute. Voici une dictée groupée : il a dicté à la suite les séances de plusieurs patients, toutes du " + date + " (J). " +
     "Une dictée peut contenir des mots mal reconnus (les prénoms aussi : « marque » pour « Marc »), peu de ponctuation, des hésitations et des répétitions.\n\n" +
     "Patients enregistrés dans son appli (prénom et initiale) :\n" +
@@ -496,9 +499,10 @@ export function promptDictee(date: string, texte: string, patients: { label: str
     '- "rdv_annules" : ' + CONSIGNE_ANNULES + "\n" +
     '- "objectifs" : ' + CONSIGNE_OBJECTIFS + "\n" +
     '- "zones" : ' + CONSIGNE_ZONES_SEANCE + "\n" +
+    '- "releves" : ' + CONSIGNE_RELEVES + "\n" +
     '- "fin_traitement" : ' + CONSIGNE_FIN + "\n" +
-    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"zones":[],"fin_traitement":false,"absent":false}]}\n\n' +
-    "Dictée :\n" + texte.slice(0, MAX_DICTEE);
+    'Exemple : {"seances":[{"nom":"Marc D.","extrait":"douleur 3 sur 10 on a fait du renforcement des rotateurs externes pour la prochaine séance tester la force dans une semaine à 8 heures","propre":"État du patient : douleur 3/10.\\nFait en séance : renforcement des rotateurs externes.\\nÀ venir : tester la force, dans une semaine à 8 h.","resume":"Tester la force.","bref":"Douleur 3/10. Renforcement des rotateurs externes.","rdv_date":"2026-01-15","rdv_heure":"08:00","rdv_demi":"matin","rdv_autres":[],"rdv_annules":[],"objectifs":[],"zones":[],"releves":[{"critere":"douleur","valeur":3,"unite":"/10","mot":null,"sens":null,"exercices":null,"detail":null,"phrase":"douleur 3 sur 10"}],"fin_traitement":false,"absent":false}]}\n\n' +
+    "Dictée :\n" + texte.slice(0, MAX_DICTEE) + texteExemples(exemples);
 }
 
 export type SeanceDictee = AnalyseSeance & { nom: string | null; contenu: string; absent?: boolean };
@@ -521,11 +525,11 @@ export function lireDictee(x: unknown, texte: string): SeanceDictee[] {
   return seances;
 }
 
-export async function decouperDictee(cle: string, date: string, texte: string, patients: { label: string; vuCeJour: boolean }[], appel: Appel): Promise<Reponse<SeanceDictee[]>> {
+export async function decouperDictee(cle: string, date: string, texte: string, patients: { label: string; vuCeJour: boolean }[], appel: Appel, exemples: string[] = []): Promise<Reponse<SeanceDictee[]>> {
   verifierLongueur(texte, MAX_DICTEE, "dictee");
   const r = await appel({
     cle, system: "Tu ranges la dictée groupée d'un kinésithérapeute, patient par patient, sans rien ajouter ni retirer.",
-    contenu: [{ type: "text", text: promptDictee(date, texte, patients) }],
+    contenu: [{ type: "text", text: promptDictee(date, texte, patients, exemples) }],
     schema: SCHEMA_DICTEE, effort: "medium", maxTokens: 32000, niveau: "puissant"
   });
   return { donnees: lireDictee(r.donnees, texte), usage: r.usage };
@@ -551,4 +555,24 @@ export async function zonesDuDossier(cle: string, resume: string, seances: { dat
   const date = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
   const zones = brut.flatMap(e => { const z = lireZones([e], false)[0]; if (!z) return []; const it = e as Record<string, unknown>; return [{ ...z, depuis: date(it.depuis) ?? dateBilan, fin: date(it.fin), mieux: date(it.mieux) }]; }).slice(0, 24);
   return { donnees: zones, usage: r.usage };
+}
+
+/* ---------- rattrapage du suivi (2.2.0, demandé par Corentin le 22 novembre 2026) ----------
+   Une seule fois par séance : pour les séances du dernier mois notées avant le relevé, une demande légère par patient
+   rend les relevés de chaque séance, avec les mêmes garde-fous qu'une séance analysée. */
+const RELEVES_RATTRAPAGE = { type: "object", additionalProperties: false, required: ["seances"], properties: { seances: { type: "array", items: {
+  type: "object", additionalProperties: false, required: ["id", "releves"], properties: { id: { type: "string" }, releves: SCHEMA_RELEVES } } } } };
+export async function relevesDesSeances(cle: string, seances: { id: string; date: string; texte: string }[], appel: Appel, exemples: string[] = []): Promise<Reponse<Record<string, Releve[]>>> {
+  const texte = "Tu aides un kinésithérapeute à suivre l'évolution d'un patient. Voici ses notes de séance, de la plus ancienne à la plus récente, chacune avec son identifiant.\n\n" +
+    "Rends un objet JSON {\"seances\": [{\"id\": …, \"releves\": [...]}]}, une entrée par séance. releves : " + CONSIGNE_RELEVES + texteExemples(exemples) + "\n\n" +
+    seances.map(x => "Séance " + x.id + " (" + x.date + ") :\n" + x.texte.slice(0, 4000)).join("\n\n");
+  const r = await appel({ cle, system: "Tu relèves ce que des notes de séance de kinésithérapie disent de l'évolution du patient, sans rien inventer.", contenu: [{ type: "text", text: texte }], schema: RELEVES_RATTRAPAGE, effort: "low", maxTokens: 12000, niveau: "leger" });
+  const o = (r.donnees && typeof r.donnees === "object" ? r.donnees : {}) as Record<string, unknown>;
+  const out: Record<string, Releve[]> = {};
+  for (const e of Array.isArray(o.seances) ? o.seances : []) {
+    const it = (e && typeof e === "object" ? e : {}) as Record<string, unknown>;
+    const se = seances.find(x => x.id === it.id);
+    if (se) out[se.id] = lireReleves(it.releves, se.texte);
+  }
+  return { donnees: out, usage: r.usage };
 }

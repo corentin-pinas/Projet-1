@@ -1,8 +1,9 @@
 /* Travail de l'IA en arrière-plan : résumé automatique des bilans déposés,
    analyse des séances enregistrées. Rien n'est envoyé sans clé, ni sans connexion. */
 import * as db from "./db";
-import { natureDe, zonesDuDossier, analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
+import { natureDe, zonesDuDossier, relevesDesSeances, analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
+import { aDesReleves, exemplesReleves } from "./releves";
 import { cleZone, zonesDuBilan } from "./corps";
 import * as travailPC from "./travail-pc";
 import { analyseSurDossier, messageAbsence, patchAnalyse, type Doute, type Range } from "./rangement";
@@ -299,14 +300,14 @@ async function analyserSeul(se: Seance, manuel: boolean, sansPropre: boolean, es
   if (enCours.has(se.id)) return;
   relancesSeances.get(se.id)?.annuler(); relancesSeances.delete(se.id);
   const brut = avenirFrom(se.contenu);
-  if (sansPropre && !brut && !parleRdv(se.contenu)) return;
+  if (sansPropre && !brut && !parleRdv(se.contenu) && aDesReleves(se)) return;   // texte corrigé à la main : relevé refait s'il ne vaut plus
   if (!manuel && essai === 1 && await versPC(se, sansPropre)) return;
   const ia = await configIA();
   if (!ia) { if (manuel) messages(PAS_REGLE); return; }
   if (!navigator.onLine) { if (manuel) messages("Pas de connexion : réessayez une fois en ligne."); return; }
   enCours.add(se.id); prevenir();
   try {
-    const { donnees: a, usage } = await analyserSeance(ia.secret, se.date, se.contenu, sansPropre, ia.appel);
+    const { donnees: a, usage } = await analyserSeance(ia.secret, se.date, se.contenu, sansPropre, ia.appel, exemplesReleves((await db.tout()).seances));
     await db.ajouterConso("seances", usage);
     const { seances } = await db.tout();
     const actuelle = seances.find(x => x.id === se.id);
@@ -349,7 +350,7 @@ export async function rangerDictee(date: string, texte: string): Promise<{ range
   if (!navigator.onLine) throw new ErreurIA("Pas de connexion à internet.", "reseau");
   const { dossiers } = await db.tout();
   const patients = dossiers.filter(d => !estArchive(d)).map(d => ({ label: d.label, vuCeJour: d.rdvs.some(r => r.d === date) }));   // les archivés ne sont pas proposés à l'IA
-  const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel);
+  const { donnees: morceaux, usage } = await decouperDictee(ia.secret, date, texte, patients, ia.appel, exemplesReleves((await db.tout()).seances));
   await db.ajouterConso("seances", usage);
   const ranges: Range[] = [], doutes: Doute[] = [], rdvs: string[] = [], absents: { dossierId: string; date: string }[] = [];
   for (const m of morceaux) {
@@ -433,6 +434,51 @@ export async function remplirCartes(avance: (r: Rattrapage) => void): Promise<Ra
         if (!rep.donnees.length) r.sansZone++;
         const faits = (await db.lireParametre<{ ids: string[] }>("cartes_remplies"))?.ids ?? [];
         await db.ecrireParametre("cartes_remplies", { ids: [...new Set([...faits, id])] });
+        r.faits++;
+      } catch (e) {
+        r.erreurs++;
+        if (natureDe(e) === "definitif") break;
+      }
+      avance({ ...r });
+    }
+  });
+  return r;
+}
+
+/* ---------- rattrapage du suivi (2.2.0, demandé par Corentin le 22 novembre 2026) ----------
+   Les séances du dernier mois notées avant le relevé (patients en soins) : une demande légère par patient. Une séance
+   faite garde son relevé (même vide) : relancer ne refait que ce qui manque. */
+export async function aRemplirSuivi(): Promise<Seance[]> {
+  const { dossiers, seances } = await db.tout();
+  const enSoins = new Set(dossiers.filter(d => !estArchive(d)).map(d => d.id));
+  const depuis = isoDay(new Date(Date.now() - 31 * 864e5));
+  return seances.filter(s => enSoins.has(s.dossierId) && s.date >= depuis && s.contenu.trim() && !aDesReleves(s));
+}
+export async function remplirSuivi(avance: (r: Rattrapage) => void): Promise<Rattrapage | null> {
+  const ia = await configIA();
+  if (!ia) { messages(PAS_REGLE); return null; }
+  const parDossier = new Map<string, Seance[]>();
+  for (const s of await aRemplirSuivi()) parDossier.set(s.dossierId, [...(parDossier.get(s.dossierId) ?? []), s]);
+  const r: Rattrapage = { faits: 0, total: parDossier.size, sansZone: 0, erreurs: 0 };
+  avance(r);
+  await seul("suivi", async () => {
+    for (const liste of parDossier.values()) {
+      if (!navigator.onLine) { r.erreurs++; continue; }
+      try {
+        const ses = liste.sort((a, b) => a.date.localeCompare(b.date));
+        const exemples = exemplesReleves((await db.tout()).seances);
+        for (let k = 0; k < ses.length; k += 12) {   // 12 séances par demande au plus
+          const lot = ses.slice(k, k + 12);
+          const rep = await relevesDesSeances(ia.secret, lot.map(x => ({ id: x.id, date: x.date, texte: x.contenu })), ia.appel, exemples);
+          await db.ajouterConso("seances", rep.usage);
+          for (const se of lot) {
+            const actuelle = (await db.tout()).seances.find(x => x.id === se.id);
+            if (!actuelle || actuelle.contenu !== se.contenu || aDesReleves(actuelle)) continue;   // modifiée ou déjà relevée entre-temps
+            const rel = rep.donnees[se.id] ?? [];
+            if (!rel.length) r.sansZone++;
+            await db.majSeance(se.id, { releves: rel, releves_source: empreinteTexte(se.contenu) });
+          }
+        }
         r.faits++;
       } catch (e) {
         r.erreurs++;

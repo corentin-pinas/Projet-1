@@ -50,7 +50,7 @@ flowchart TB
 | `app.ts`, `agenda.ts` | redessinent l'écran | non |
 | `synchro.ts` | envoie au PC 2 s plus tard | seulement ce qu'il reçoit du PC, en se signalant (`applique`) pour ne pas se relancer lui-même |
 | `travail-pc.ts` | le PC fait le travail en tâche de fond (1.9.0) : confier une dictée, une séance dite à la voix ou une mise au propre au PC ; travaux partagés et leur état | db, ia, synchro, ui ; pc/travail (règle `elaguer`) |
-| `rangement.ts` | règles pures du rangement du résultat de l'IA (séance, dossier, passages d'une dictée), communes à l'appareil et au PC | ia (types), regles |
+| `rangement.ts` | règles pures du rangement du résultat de l'IA (séance et son relevé, dossier, passages d'une dictée), communes à l'appareil et au PC | ia (types), regles |
 | `moteur.ts` | est lancé par une action (séance enregistrée, bilan ajouté), pas par la cloche | oui, le résultat de l'IA : la cloche sonne, l'écran se redessine, le partage l'envoie |
 
 Il n'y a donc **pas de boucle** : rien de ce qui écoute la cloche ne la fait sonner de nouveau sans fin.
@@ -62,7 +62,7 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | Module | Rôle | Dépend de |
 |---|---|---|
 | `main.ts` | démarrage : ouvre la base, branche le partage, propose les mises à jour | alerte-code, app, export-dossier, fenetres, copies, db, mascotte, moteur, partage, reglages, reglages-ia, synchro, travail-pc, ui, verifications |
-| `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, objectifs, pdf, prochain-rdv, regles, seances-manquantes, travail-pc, ui, voix-seance |
+| `app.ts` | liste des patients, fiche (bilans, séances, rendez-vous, homonymes), visionneuse | agenda, db, dictee, journee, moteur, objectifs, pdf, prochain-rdv, regles, releves-ecran, seances-manquantes, travail-pc, ui, voix-seance |
 | `journee.ts` | « Ma journée », avec l'alerte « sans rendez-vous » (30 jours ; archivage proposé à 3 mois) | db, regles, ui |
 | `agenda.ts` | agenda de la semaine en demi-journées | db, regles, transmissions, ui |
 | `transmissions.ts`, `transmissions-pdf.ts` | transmissions pour un remplaçant et leur PDF (sans IA) | db, regles, ui |
@@ -78,9 +78,11 @@ Les flèches vont toujours dans le même sens : du démarrage vers les écrans, 
 | `reglages-ia.ts` | réglages de l'IA (abonnement, clé de secours) | db, ia, moteur, regles, ui |
 | `seances-manquantes.ts` | jour de rendez-vous passé sans séance (fiche et récapitulatif de la dictée) : retrouver le patient dans la dictée gardée, ou noter l'absence | db, ia, moteur, regles, ui |
 | `prochain-rdv.ts` | question « Prochain rendez-vous ? » (date + matin / après-midi, ou fin de traitement), sur la fiche et après la dictée groupée | db, regles, ui |
+| `releves-ecran.ts` | relevé du suivi (2.2.0) : ligne « Relevé dans cette séance », vérification et correction au toucher, pastilles des exercices, « Remplir le suivi » dans les Réglages | db, moteur, regles, releves, ui |
+| `releves.ts` | règles pures du relevé : critères suivis, consigne et garde-fous (phrase tirée de la note, chiffre dit), exercices et observance, correction à la main | regles |
 | `objectifs.ts` | objectifs du patient : encadré de la fiche (lus dans le bilan, « Modifier »), objectifs dits dans une dictée proposés (« Remplacer », « Ajouter », « Ignorer ») | db, regles, ui |
-| `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées ; un travail par fenêtre (`navigator.locks`) ; confie au PC quand il est prêt | db, ia, pdf, rangement, regles, relance, travail-pc |
-| `ia.ts` | consignes données à l'IA, garde-fous, appels | regles |
+| `moteur.ts` | file d'attente de l'IA : résumés de bilans, mises au propre, rangement des dictées, rattrapages (cartes, suivi) ; un travail par fenêtre (`navigator.locks`) ; confie au PC quand il est prêt | db, ia, pdf, rangement, regles, relance, releves, travail-pc |
+| `ia.ts` | consignes données à l'IA, garde-fous, appels | regles, releves, corps |
 | `synchro.ts`, `fusion.ts` | échanges avec le PC ; fusion de deux changements faits sur deux appareils | db, fusion, regles |
 | `transcription.ts` | voix : Whisper du PC d'abord (en direct, par morceaux coupés aux pauses), Railway en secours | db, ia, regles, synchro |
 | `db.ts` | la base IndexedDB `mes-patients` (version 4) et sa cloche | regles |

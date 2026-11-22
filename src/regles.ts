@@ -94,7 +94,17 @@ export type Seance = {
   bref_source?: string;                               // texte dont « bref » est issu
   ia_ok?: boolean;
   origine?: string;                                   // appareil où la séance a été notée (c'est lui qui la fait analyser)
+  /* relevé (2.2.0, Muninn Suivi) : ce que la note dit de l'évolution du patient ; valable si releves_source = son texte */
+  releves?: Releve[];
+  releves_source?: string;
+  releves_main?: boolean;                             // vérifié ou corrigé par Corentin : une nouvelle analyse du même texte ne l'écrase pas
+  releves_corr?: { phrase: string; avant: string; apres: string }[];   // corrections, rappelées à l'IA en exemple
 };
+
+/* un critère suivi dans une séance : un nombre (n, u), ou des mots, et le sens par rapport à avant ; exercices : ex */
+export type Exo = "fait" | "partie" | "pas";
+export type Sens = "mieux" | "pareil" | "moins";
+export type Releve = { c: string; n?: number; u?: string; mot?: string; sens?: Sens; ex?: Exo; detail?: string; phrase: string; ok?: boolean };
 
 /* ---------- nom du patient tiré du nom du fichier ---------- */
 
@@ -688,7 +698,7 @@ export type Point = { date: string; v: number };
 export type Suivi = {
   douleur: Point[];
   mesure: { label: string; unite: string; points: Point[] } | null;
-  tendance: { date: string; texte: string } | null;   // « moins de douleur » dit sans chiffre à la dernière séance
+  tendance: { date: string; texte: string; sens?: Sens } | null;   // « moins de douleur » dit sans chiffre à la dernière séance (sens : relevé, 2.2.0)
 };
 
 const nombre = (t: string) => Number(t.replace(",", "."));
@@ -727,12 +737,29 @@ export function suiviDe(dossierId: string, bilans: Bilan[], seances: Seance[]): 
   const unite = mesure?.unite ? "\\s*" + mesure.unite.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
   const reMesure = mot ? new RegExp(`\\b${mot}\\w*[^.\\n\\d]{0,30}?(\\d+(?:[.,]\\d+)?)${unite}`, "i") : null;
   let tendance: Suivi["tendance"] = null;
+  /* 2.2.0 : le relevé de la séance d'abord (chiffres et mots dits, vérifiés), la lecture des chiffres du texte en secours */
+  const relDe = (s: Seance) => s.releves && memeSource(s.releves_source, s.contenu) ? s.releves : null;
+  const motRel = (c: string) => sansAccent(c).replace(/_/g, " ");
   for (const s of ses) {
-    const brut = texteDe(s), t = sansAccent(brut);
-    const v = douleurDans(brut);
+    const brut = texteDe(s), t = sansAccent(brut), rel = relDe(s);
+    const rd = rel?.find(r => r.c === "douleur");
+    const v = rd?.n ?? douleurDans(brut);
     if (v != null) { douleur.push({ date: s.date, v }); tendance = null; }
+    else if (rd?.sens) tendance = { date: s.date, texte: rd.sens === "mieux" ? "moins de douleur" : rd.sens === "pareil" ? "douleur inchangée" : "douleur en hausse", sens: rd.sens };
     else if (/moins (?:de )?(?:douleur|mal)\b|douleurs? (?:en baisse|diminue)/.test(t)) tendance = { date: s.date, texte: "moins de douleur" };
-    if (reMesure && mesure) { const m = t.match(reMesure); if (m) mesure.points.push({ date: s.date, v: nombre(m[1]) }); }
+    if (mesure && mot) {
+      const rm = rel?.find(r => r.n != null && motRel(r.c).includes(mot.slice(0, 6)));
+      if (rm) mesure.points.push({ date: s.date, v: rm.n! });
+      else if (reMesure) { const m = t.match(reMesure); if (m) mesure.points.push({ date: s.date, v: nombre(m[1]) }); }
+    }
+  }
+  /* pas de mesure dans le bilan : la première mesure chiffrée des relevés (hors douleur) devient celle du patient */
+  if (!mesure) {
+    const premiere = ses.flatMap(s => relDe(s) ?? []).find(r => r.n != null && !/douleur|mastication/.test(r.c) && r.u !== "/10");
+    if (premiere) {
+      const nom = premiere.c.replace(/_/g, " ");
+      mesure = { label: nom.charAt(0).toUpperCase() + nom.slice(1), unite: premiere.u ?? "", points: ses.flatMap(s => { const r = relDe(s)?.find(x => x.c === premiere.c && x.n != null); return r ? [{ date: s.date, v: r.n! }] : []; }) };
+    }
   }
   return { douleur: douleur.slice(-20), mesure: mesure && { ...mesure, points: mesure.points.slice(-20) }, tendance };
 }

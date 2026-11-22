@@ -567,7 +567,7 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
 .tend small{font-weight:400;color:var(--soft)}
 
 /* ---------- Suivi sur la fiche (2.0.0) : douleur et mesure avec leur évolution, nombre de séances ---------- */
-.suivi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.suivi{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0}
 .suivi>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;min-width:0}
 .suivi .e{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--soft)}
 .suivi .l{display:flex;align-items:flex-end;justify-content:space-between;gap:6px;flex-wrap:wrap}
@@ -708,3 +708,32 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
   .jnote{display:none}
 }
 .jcarte.avec-corps>.jmini{overflow:hidden}
+
+/* ---------- relevé du suivi (2.2.0) : ligne sous la séance, pastilles des exercices, fenêtre de vérification ----------
+   Pastilles : forme et couleur selon la réalisation seulement (choix de Corentin du 22 novembre 2026). */
+:root{--p-fait:#0E6E75;--p-partie:#A8591B;--p-pas:#A3283A;--p-vide:var(--panel)}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--p-fait:#5EE0C8;--p-partie:#FFB547;--p-pas:#F07A84} }
+:root[data-theme="dark"],:root[data-ambiance]{--p-fait:#5EE0C8;--p-partie:#FFB547;--p-pas:#F07A84}
+.pas{position:relative;display:inline-block;width:20px;height:20px;border-radius:50%;border:3px solid currentColor;vertical-align:middle;flex:none}
+.pas.p-fait{color:var(--p-fait);background:currentColor}
+.pas.p-partie{color:var(--p-partie);background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
+.pas.p-pas{color:var(--p-pas);background:transparent}
+.pas .pdet{position:absolute;right:-6px;top:-6px;width:10px;height:10px;border-radius:50%;background:var(--ink);border:2px solid var(--panel)}
+.releves{margin:2px 0 8px;padding:8px 0 0;border-top:1px dashed var(--line)}
+.relt{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:.85rem;font-weight:700;color:var(--soft)}
+.relt small{font-weight:400}
+.rell{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+button.rel{min-height:40px;padding:6px 12px;border-radius:999px;font-size:.92rem;gap:6px;background:color-mix(in srgb,var(--panel) 70%,var(--bg));border-color:var(--line)}
+button.rel b{font-weight:700}
+button.rel .rs{color:var(--soft)}
+button.rel.ok{border-color:var(--accent)}
+.relok{color:var(--accent);font-weight:700}
+.suiviexo .l{align-items:center;justify-content:flex-start;gap:4px;margin:6px 0 2px}
+.suiviexo small{color:var(--soft)}
+button.pasbtn{min-height:40px;min-width:32px;padding:4px;border:0;background:transparent}
+dialog.reldlg{max-width:min(560px,92vw);border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);padding:20px 22px}
+dialog.reldlg h3{margin:0 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+dialog.reldlg blockquote{margin:6px 0 12px;padding:10px 14px;border-radius:12px;background:color-mix(in srgb,var(--panel) 60%,var(--bg))}
+dialog.reldlg .relcorr input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;width:100%;min-height:44px}
+dialog.reldlg .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+dialog.reldlg::backdrop{background:rgba(0,0,0,.55)}
