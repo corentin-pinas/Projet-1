@@ -16,6 +16,8 @@ const rel = (o: Record<string, unknown>) => ({ critere: "douleur", valeur: null,
 async function nouvellePage(browser: Browser, largeur = 1280, hauteur = 800): Promise<Page> {
   const page = await (await browser.newContext({ viewport: { width: largeur, height: hauteur }, ...(CAPTURES ? { deviceScaleFactor: 2 } : {}) })).newPage();
   await page.addInitScript(() => localStorage.setItem("liste-patients", "ouverte"));
+  /* les captures : dans l'ambiance de Corentin (Or d'Odin) */
+  if (CAPTURES) await page.addInitScript(() => localStorage.setItem("reglages-affichage", JSON.stringify({ ambiance: "odin" })));
   await page.goto("/");
   return page;
 }
@@ -73,7 +75,9 @@ test("relevé : sous la séance mise au propre, vérifié et corrigé au toucher
   }));
   await semer(page, {
     parametres: [{ cle: "appareil", valeur: "tablette-test" }],
-    dossiers: [{ id: "p", label: "Stéphanie V.", rdvs: [{ d: iso(3), h: "", p: "pm" }], homonyme: false, cree: "" }],
+    dossiers: [{ id: "p", label: "Stéphanie V.", rdvs: [{ d: iso(3), h: "", p: "pm" }], homonyme: false, cree: "",
+      /* une carte du corps, comme chez les vrais patients : la fiche passe en deux colonnes */
+      zones: [{ id: "deltoide_post|d|pain", structure: "deltoide_post", cote: "d", cat: "pain", nom: "Deltoïde droit, faisceau postérieur", depuis: iso(-20), source: "bilan", maj: iso(-20) + "T10:00:00Z" }] }],
     bilans: [{ id: "b", dossierId: "p", fichier: "Bilan Stéphanie V", fichiers: [], ajoute: iso(-20) + "T10:00:00Z", valides: [], corrections: [],
       resume: { region: "Épaule D", date_bilan: iso(-20).split("-").reverse().join("/"), age: 52, coup_oeil: "Tendinopathie de la coiffe, épaule droite.", chiffres: [{ label: "EVA", valeur: "7/10" }, { label: "Élévation active", valeur: "100°" }], sections: [], a_verifier: [] } }],
     seances: anciennes.map(s => ({ id: s.id, dossierId: "p", date: s.date, cree: s.date + "T10:00:00Z", contenu: s.contenu, ia_ok: true, releves: s.rel, releves_source: s.contenu }))
