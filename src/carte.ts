@@ -77,7 +77,7 @@ async function planche(v: Vue, zones: Zone[], o: Opt = {}): Promise<string> {
   if (P.image) {
     const src = "/planches/" + P.fichier, retour = P.miroir ? ` transform="translate(${P.l} 0) scale(-1 1)"` : "";
     defs += `<filter id="t${s}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrice(couleur("--plaque"), .95, 0)}"/></filter>`;
-    for (const c of Object.keys(CATEGORIES)) defs += `<filter id="f${c}${s}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrice(couleur("--" + c), 1.5, .15)}"/></filter>`;
+    for (const c of Object.keys(CATEGORIES)) defs += `<filter id="f${c}${s}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${matrice(couleur("--" + c), c === "raide" ? 1.8 : 1.5, c === "raide" ? .3 : .15)}"/></filter>`;
     fond = `<g${retour}><image href="${src}" width="${P.l}" height="${P.h}" filter="url(#t${s})"/></g>`;
     formes.forEach(({ z, f }, i) => {
       if (!f.d || f.trait || z.cat === "frac") return;
@@ -92,7 +92,7 @@ async function planche(v: Vue, zones: Zone[], o: Opt = {}): Promise<string> {
     for (const p of tmp.querySelectorAll<SVGPathElement>("path[data-m]")) {
       const px = +p.dataset.x!, py = +p.dataset.y!, w = +p.dataset.w!;
       const t = peintes.find(({ f }) => w < Math.max(f.rx, f.ry) * 3.2 && ((px - f.x) / f.rx) ** 2 + ((py - f.y) / f.ry) ** 2 < 1);
-      if (t) { p.setAttribute("style", `fill:var(--${t.z.cat})`); p.setAttribute("fill-opacity", String((+p.dataset.l! > .85 ? .55 : .92) * (t.z.mieux ? .4 : 1))); }
+      if (t) { p.setAttribute("style", `fill:var(--${t.z.cat})`); p.setAttribute("fill-opacity", String((+p.dataset.l! > .85 ? (t.z.cat === "raide" ? .75 : .55) : .95) * (t.z.mieux ? .4 : 1))); }
     }
     fond = tmp.innerHTML;
   }

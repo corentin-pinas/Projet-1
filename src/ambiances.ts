@@ -25,7 +25,8 @@ export const AMBIANCES: Record<string, Ambiance> = {
   odin: { nom: "Or d'Odin", bg: "#0B0805", panel: "#221810", line: "#4A3818", ink: "#F6EAD0", soft: "#C2AB84",
     accent: "#E2B45C", accent2: "#FFD98A", accentInk: "#1A1206", accentBg: "#3A2A12", warn: "#F07A84", warnBg: "#3A1C20",
     degrade: "linear-gradient(180deg,#FFE3A0,#E2B45C 50%,#B07A2C)",
-    fond: "radial-gradient(900px 520px at 50% -8%,rgba(255,206,120,.30),transparent 65%),radial-gradient(500px 400px at 100% 100%,rgba(180,120,40,.16),transparent 70%),repeating-conic-gradient(from 0deg at 50% -8%,rgba(255,210,130,.045) 0 3deg,transparent 3deg 9deg),#0B0805",
+    /* dégradé doré discret, sans rayons (choix de Corentin du 22 novembre 2026) */
+    fond: "linear-gradient(160deg,#2A1D0C 0%,#140E07 45%,#0B0805 70%,#1E1508 100%)",
     titre: '"Cinzel",serif', pastille: "linear-gradient(180deg,#FFE3A0,#B07A2C)" },
   cafe: { nom: "Café", bg: "#110E0C", panel: "#231C17", line: "#3F3229", ink: "#F4ECE4", soft: "#B7A596",
     accent: "#E7A565", accent2: "#F3C48D", accentInk: "#1B120B", accentBg: "#3A281A", warn: "#F07A84", warnBg: "#3A1C20",

@@ -37,4 +37,9 @@ describe("suivi chiffré lu dans le bilan et les séances", () => {
     const D = { rdvs: [{ d: "2026-11-30", h: "" }, { d: "2026-11-23", h: "" }, { d: "2026-11-26", h: "" }] } as Dossier;
     expect(rdvApres(D, "2026-11-23")?.d).toBe("2026-11-26");
   });
+  it("« EVN pire » est une douleur ; l'âge n'est pas une mesure", () => {
+    const s = suiviDe("d", [bilan([{ label: "Âge", valeur: "49" }, { label: "EVN pire", valeur: "8" }, { label: "Flexion", valeur: "120°" }])], []);
+    expect(s.douleur.map(p => p.v)).toEqual([8]);
+    expect(s.mesure?.label).toBe("Flexion");
+  });
 });
