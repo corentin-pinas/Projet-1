@@ -37,7 +37,8 @@ export const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.qu
 export function courbe(points: { date: string; v: number }[], o: { l?: number; h?: number; tend?: -1 | 1 } = {}): string {
   if (points.length < 2 && !o.tend) return "";
   const W = o.l ?? 90, H = o.h ?? 30, bout = o.tend ? 14 : 4;
-  const jours = points.map(p => Date.parse(p.date) / 864e5), j0 = Math.min(...jours), dj = (Math.max(...jours) - j0) || 1;
+  const dates = points.map(p => Date.parse(p.date) / 864e5), memeJour = Math.max(...dates) - Math.min(...dates) < 1;
+  const jours = memeJour ? points.map((_, i) => i) : dates, j0 = Math.min(...jours), dj = (Math.max(...jours) - j0) || 1;   // tous le même jour : à intervalles réguliers
   const vs = points.map(p => p.v), lo = Math.min(...vs), hi = Math.max(...vs), sp = (hi - lo) || 1;
   const pts = points.map((p, i) => [4 + (points.length > 1 ? (jours[i] - j0) / dj : 1) * (W - 4 - bout), H - 6 - (p.v - lo) / sp * (H - 12)]);
   const der = pts[pts.length - 1];

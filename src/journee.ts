@@ -133,6 +133,8 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   el.innerHTML = html;
 
   el.querySelectorAll<HTMLElement>("[data-patient]").forEach(b => b.onclick = () => surPatient(b.dataset.patient!));
+  /* 2.1.2 : deux rangées de fiches tiennent dans l'écran, jusqu'au bas arrondi, quelle que soit sa hauteur (PC, tablette) */
+  ajusterHauteur(el);
   /* petits corps (2.1.0) : dessinés une fois l'écran affiché (les planches se chargent à part) */
   el.querySelectorAll<HTMLElement>("[data-mini]").forEach(m => { const D = d.dossiers.find(x => x.id === m.dataset.mini); if (D) corpsCarte.mini(m, D); });
   el.querySelectorAll<HTMLElement>("[data-sr]").forEach(z => {
@@ -176,3 +178,18 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
 
 /* au retour sur l'appli un autre jour ou l'après-midi venu, l'appli choisit de nouveau la demi-journée */
 export const revenirAujourdhui = () => { choix = null; };
+
+/* hauteur des petites fiches : ce qui reste sous les titres, partagé en deux rangées (au moins 190 px) */
+let surRedim: (() => void) | null = null;
+export function ajusterHauteur(el: HTMLElement) {
+  const regler = () => {
+    const g = el.querySelector<HTMLElement>(".jcartes");
+    if (!g || matchMedia("(max-width:820px)").matches) { el.style.removeProperty("--jh"); return; }
+    const haut = g.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+    const reste = el.clientHeight - haut - 26 - 12;   // marge du bas du panneau et écart entre les rangées
+    el.style.setProperty("--jh", Math.max(190, Math.floor(reste / 2)) + "px");
+  };
+  regler();
+  if (surRedim) removeEventListener("resize", surRedim);
+  surRedim = regler; addEventListener("resize", regler);
+}

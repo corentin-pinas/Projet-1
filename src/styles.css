@@ -697,3 +697,14 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
   .jmes .g{font-size:1.2rem}
   .jcarte{min-height:calc((100dvh - 200px) / 2)}
 }
+/* hauteur calculée par journee.ts (--jh) : les deux rangées tiennent dans l'écran, sans être coupées */
+@media (min-width:821px){
+  .jcarte{min-height:0;height:var(--jh,auto);overflow:hidden}
+  .jcarte.avec-corps>.jmini svg{max-height:calc(var(--jh,300px) - 34px)}
+  .jcartes{gap:12px}
+}
+@media (min-width:821px) and (max-height:1050px){
+  .jsaut,.jdemi{margin:2px 0}
+  .jnote{display:none}
+}
+.jcarte.avec-corps>.jmini{overflow:hidden}

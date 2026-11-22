@@ -715,7 +715,7 @@ export function suiviDe(dossierId: string, bilans: Bilan[], seances: Seance[]): 
   for (const b of siens) for (const c of b.resume!.chiffres ?? []) {
     const lib = sansAccent(c.label);
     /* « EVA », « EVN pire », « EN », « ENS » : la douleur (2.1.2) ; l'âge, le poids, la taille ne sont pas des mesures à suivre */
-    if (/^(?:age|poids|taille|imc|date)\b/.test(lib)) continue;
+    if (/^(?:age|poids|taille|imc|date|anciennete|duree|depuis|nombre|nb)\b/.test(lib)) continue;
     if (/\beva\b|\bevn\b|\bens?\b|douleur/.test(lib)) { const v = douleurDans("EVA " + c.valeur.replace(/\s*(?:\/|sur)\s*10.*/, "")); if (v != null) douleur.push({ date: dateBilan(b), v }); continue; }
     const m = c.valeur.match(/(-?\d+(?:[.,]\d+)?)\s*(°|mm|cm|min|kg|%|m)?/);
     if (!m) continue;
