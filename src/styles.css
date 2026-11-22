@@ -657,3 +657,7 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
   .cbarre{min-height:0;gap:6px}
   .cduo svg{height:auto;max-height:58vh}
 }
+/* téléphone : fondu sous la barre du haut (heure, batterie) au lieu d'un bord net (demande de Corentin du 22 novembre 2026) */
+@media (max-width:820px){
+  :root[data-ambiance] body::after{content:"";position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);height:28px;background:linear-gradient(var(--bg),color-mix(in srgb,var(--bg) 60%,transparent) 45%,transparent);pointer-events:none;z-index:19}
+}

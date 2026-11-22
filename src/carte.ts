@@ -2,6 +2,7 @@
    l'ambiance ; toucher une région l'agrandit, la flèche ou un glissé vers la droite ramène au corps entier ; toucher une
    zone ouvre une bulle « Enlever / Déplacer / Garder » et « Le dessin est faux ? Me le signaler ». Règles dans corps.ts. */
 import * as db from "./db";
+import * as moteur from "./moteur";
 import {
   CATEGORIES, formeSur, meilleureVue, NOMS_REGIONS, nomCote, PLANCHES, regionsDe, STRUCTURES, vueParDefaut, vuesRegion,
   zonesActives, zonesAnciennes, type Forme, type Vue, type Zone
@@ -284,4 +285,26 @@ export async function brancher(racine: HTMLElement, D: Dossier, redessiner: () =
 export async function retours(): Promise<string> {
   const l = (await db.lireParametre<{ liste: { structure: string; cote: string; planche: string; nom: string; quand: string }[] }>("retours_dessins"))?.liste ?? [];
   return l.length ? `<fieldset class="regligne"><legend>Retours sur les dessins</legend><ul>${l.slice(-20).reverse().map(r => `<li>${esc(r.nom)} · ${esc(PLANCHES[r.planche]?.nom ?? r.planche)} · le ${fr(r.quand.slice(0, 10))}</li>`).join("")}</ul><p class="note">Lisez-les à Claude pour corriger les planches : la correction vaudra pour tous les patients.</p></fieldset>` : "";
+}
+
+/* ---------- Réglages : remplir une fois les cartes des patients déjà suivis (2.1.0) ---------- */
+let rattrapageEnCours = "";
+export async function rattrapage(zone: HTMLElement) {
+  if (rattrapageEnCours) { zone.insertAdjacentHTML("afterbegin", `<fieldset class="regligne"><legend>Carte du corps</legend><p class="note" aria-live="polite">${esc(rattrapageEnCours)}</p></fieldset>`); return; }
+  const n = (await moteur.aRemplir()).length;
+  if (!n) return;
+  zone.insertAdjacentHTML("afterbegin", `<fieldset class="regligne" id="rattrapage"><legend>Carte du corps</legend>
+    <p class="note">${n === 1 ? "Un patient en soins n'a pas encore de zones sur sa carte." : n + " patients en soins n'ont pas encore de zones sur leur carte."} Muninn peut les remplir d'un coup : une demande légère par patient (résumé du bilan et séances du dernier mois ; vos marques au stylet ne sont pas relues). Cela utilise un peu de votre abonnement Claude.</p>
+    <div class="row"><button class="primary" id="rattrapagego">Remplir les cartes du corps</button></div><p class="note" id="rattrapageetat" aria-live="polite"></p></fieldset>`);
+  const go = zone.querySelector<HTMLButtonElement>("#rattrapagego")!, etat = zone.querySelector<HTMLElement>("#rattrapageetat")!;
+  go.onclick = async () => {
+    go.disabled = true;
+    rattrapageEnCours = "Remplissage des cartes en cours…";
+    const r = await moteur.remplirCartes(x => { rattrapageEnCours = etat.textContent = `En cours : ${x.faits} sur ${x.total}…${x.erreurs ? ` (${x.erreurs} à reprendre)` : ""} Vous pouvez continuer à utiliser l'appli ; gardez-la ouverte.`; });
+    rattrapageEnCours = "";
+    if (!r) { go.disabled = false; etat.textContent = "L'IA n'est pas réglée : voyez « État de l'appli »."; return; }
+    etat.textContent = `Terminé : ${r.faits} carte${r.faits > 1 ? "s" : ""} remplie${r.faits > 1 ? "s" : ""}${r.sansZone ? ` (dont ${r.sansZone} sans zone repérée)` : ""}.${r.erreurs ? ` ${r.erreurs} n'ont pas abouti : touchez de nouveau le bouton pour les reprendre.` : ""}`;
+    go.disabled = !r.erreurs;
+    toast("Cartes du corps remplies.");
+  };
 }

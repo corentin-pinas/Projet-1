@@ -925,6 +925,33 @@ async function decouperDictee(cle, date, texte, patients, appel) {
 		usage: r.usage
 	};
 }
+const ZONES_RATTRAPAGE = {
+	type: "object",
+	additionalProperties: false,
+	required: ["zones"],
+	properties: { zones: {
+		type: "array",
+		items: {
+			type: "object",
+			additionalProperties: false,
+			required: [
+				"structure",
+				"cote",
+				"etat",
+				"nom",
+				"depuis",
+				"fin",
+				"mieux"
+			],
+			properties: {
+				...ZONE_PROPS,
+				depuis: { type: "string" },
+				fin: texteOuNul,
+				mieux: texteOuNul
+			}
+		}
+	} }
+};
 
 //#endregion
 //#region src/rangement.ts

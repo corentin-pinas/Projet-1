@@ -1,4 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
+
+const message = (json: unknown) => ({
+  id: "msg_test", type: "message", role: "assistant", model: "claude-opus-5-5",
+  content: [{ type: "text", text: JSON.stringify(json) }], stop_reason: "end_turn", stop_sequence: null,
+  usage: { input_tokens: 100, output_tokens: 50 }
+});
+
 
 /* 2.1.0 (choix de Corentin du 20 au 22 novembre 2026) : carte du corps sur planches réalistes, zones touchées,
    bulle « Enlever / Garder », anciennes zones avec « Remettre », objectifs ajoutés par la dictée avec case « Atteint ». */
@@ -61,4 +68,41 @@ test("carte du corps : l'épaule agrandie, toucher une zone, l'enlever, la remet
   // Ma journée : l'objectif atteint n'y est plus, le suivant le remplace
   await page.getByRole("button", { name: "Ma journée" }).click();
   await expect(page.locator(".jcarte").first()).toContainText("Ranger une assiette en hauteur sans douleur");
+});
+
+test("rattrapage : « Remplir les cartes du corps » une fois, pour les patients déjà suivis", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-23T09:10:00"));
+  await page.goto("/");
+  await page.route("https://api.anthropic.com/**", async (route: Route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { id: "claude-opus-5-5", type: "model", display_name: "Claude Opus 5.5" } });
+    return route.fulfill({ json: message({ zones: [{ structure: "genou", cote: "g", etat: "pain", nom: "Genou gauche", depuis: "2026-10-05", fin: null, mieux: null }] }) });
+  });
+  await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((ok, ko) => { const r = indexedDB.open("mes-patients"); r.onsuccess = () => ok(r.result); r.onerror = ko; });
+    const tx = db.transaction(["dossiers", "bilans"], "readwrite");
+    tx.objectStore("dossiers").put({ id: "lea", label: "Léa M.", rdvs: [{ d: "2026-11-23", h: "", p: "am" }], homonyme: false, cree: "2026-10-05T09:00:00Z" });
+    tx.objectStore("bilans").put({ id: "b2", dossierId: "lea", fichier: "Bilan Léa M", fichiers: [], ajoute: "2026-10-05T09:00:00Z", valides: [], corrections: [],
+      resume: { region: "Genou G", date_bilan: "05/10/2026", age: 30, coup_oeil: "Syndrome rotulien gauche.", chiffres: [], sections: [], objectifs: [], a_verifier: [] } });
+    tx.commit(); await new Promise(ok => tx.oncomplete = ok);
+  });
+  await page.reload();
+  // la clé API de secours (les tests ne font aucune vraie demande)
+  await page.locator("#regbtn").click(); await page.locator("#etatbtn").click();
+  await page.getByText("Secours : clé API").click();
+  await page.getByLabel("Autoriser l'usage d'une clé API").check();
+  await page.getByLabel("Utiliser la clé API").check();
+  await page.locator("#iacle").fill("sk-ant-api03-cle-de-test-pour-les-essais-0000");
+  await page.getByRole("button", { name: "Enregistrer la clé" }).click();
+  await expect(page.getByRole("status")).toContainText("Clé vérifiée");
+  await page.locator("#etatclose").click();
+  await page.locator("#regbtn").click();
+  await expect(page.locator("#rattrapage")).toContainText("Un patient en soins n'a pas encore de zones sur sa carte");
+  await page.getByRole("button", { name: "Remplir les cartes du corps" }).click();
+  await expect(page.locator("#rattrapageetat")).toContainText("Terminé : 1 carte remplie");
+  await page.locator("#regfermer").click();
+  await page.locator(".jcarte", { hasText: "Léa M." }).click();
+  await expect(page.locator("#carte .clist")).toContainText("Genou gauche");
+  // une fois fait, le bouton ne revient plus
+  await page.locator("#regbtn").click();
+  await expect(page.locator("#rattrapage")).toHaveCount(0);
 });

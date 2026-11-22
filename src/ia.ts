@@ -530,3 +530,25 @@ export async function decouperDictee(cle: string, date: string, texte: string, p
   });
   return { donnees: lireDictee(r.donnees, texte), usage: r.usage };
 }
+
+
+/* ---------- rattrapage de la carte du corps (2.1.0, demandé par Corentin le 22 novembre 2026) ----------
+   Une seule fois, pour les patients déjà suivis : l'IA légère lit le résumé du bilan et les séances du dernier mois
+   (texte seulement : elle ne voit pas les marques du schéma) et rend les zones, avec leur date d'apparition et, si
+   une séance dit qu'elles ont disparu, de disparition. */
+const ZONES_RATTRAPAGE = { type: "object", additionalProperties: false, required: ["zones"], properties: { zones: { type: "array", items: {
+  type: "object", additionalProperties: false, required: ["structure", "cote", "etat", "nom", "depuis", "fin", "mieux"],
+  properties: { ...ZONE_PROPS, depuis: { type: "string" }, fin: texteOuNul, mieux: texteOuNul } } } } };
+export type ZoneRattrapee = ZoneDite & { depuis: string; fin: string | null; mieux: string | null };
+export async function zonesDuDossier(cle: string, resume: string, seances: { date: string; texte: string }[], dateBilan: string, appel: Appel): Promise<Reponse<ZoneRattrapee[]>> {
+  const texte = "Tu aides un kinésithérapeute à remplir la carte du corps d'un patient déjà suivi. Voici le résumé de son bilan (du " + dateBilan + ") puis ses séances récentes, de la plus ancienne à la plus récente.\n\n" +
+    "Rends un objet JSON {\"zones\": [...]} : chaque zone touchée, une par item. " + REGLES_ZONES +
+    " depuis : la date (AAAA-MM-JJ) où elle apparaît (le bilan : " + dateBilan + ", ou la séance qui en parle la première) ; mieux : la date de la séance qui dit qu'elle va mieux sans avoir disparu, sinon null ; fin : la date de la séance qui dit qu'elle a disparu (« plus de douleur dorsale »), sinon null. [] s'il n'y a aucune zone.\n\n" +
+    "Résumé du bilan :\n" + resume.slice(0, 12000) + "\n\nSéances :\n" + (seances.length ? seances.map(x => x.date + " : " + x.texte.slice(0, 2000)).join("\n") : "(aucune)");
+  const r = await appel({ cle, system: "Tu relèves les zones touchées d'un patient de kinésithérapie, sans rien inventer.", contenu: [{ type: "text", text: texte }], schema: ZONES_RATTRAPAGE, effort: "low", maxTokens: 6000, niveau: "leger" });
+  const o = (r.donnees && typeof r.donnees === "object" ? r.donnees : {}) as Record<string, unknown>;
+  const brut = Array.isArray(o.zones) ? o.zones : [];
+  const date = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  const zones = brut.flatMap(e => { const z = lireZones([e], false)[0]; if (!z) return []; const it = e as Record<string, unknown>; return [{ ...z, depuis: date(it.depuis) ?? dateBilan, fin: date(it.fin), mieux: date(it.mieux) }]; }).slice(0, 24);
+  return { donnees: zones, usage: r.usage };
+}
