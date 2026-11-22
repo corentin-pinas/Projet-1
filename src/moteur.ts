@@ -3,6 +3,7 @@
 import * as db from "./db";
 import { analyserSeance, appelerAbonnement, appelerClaude, chercherDansDictee, corrigerResume, decouperDictee, ErreurIA, resumerBilan, parleRdv, type AnalyseSeance, type Appel, type Correction, type PieceBilan, type SeanceDictee } from "./ia";
 import { Relanceur } from "./relance";
+import { zonesDuBilan } from "./corps";
 import * as travailPC from "./travail-pc";
 import { analyseSurDossier, messageAbsence, patchAnalyse, type Doute, type Range } from "./rangement";
 import { avenirFrom, empreinteTexte, estArchive, isoDay, jourLabel, rattacher, type Bilan, type Seance } from "./regles";
@@ -138,6 +139,11 @@ async function resumerSeul(bilanId: string, manuel: boolean) {
     const confirmees = parDate.flatMap(x => x.valides);   // points « à vérifier » validés par « C'est juste »
     const r = await resumerBilan(ia.secret, await piecesDe(b), corrections, ia.appel, confirmees);
     await db.majBilan(b.id, { resume: r.donnees, resume_erreur: undefined });
+    /* carte du corps (2.1.0) : les zones du bilan rejoignent le dossier ; celles que vous avez enlevées restent enlevées */
+    if (r.donnees.zones?.length) {
+      const m = r.donnees.date_bilan?.match(/(\d{2})\/(\d{2})\/(\d{4})/), date = m ? `${m[3]}-${m[2]}-${m[1]}` : isoDay(new Date());
+      try { await db.modifierDossier(b.dossierId, d => ({ ...d, zones: zonesDuBilan(d.zones, r.donnees.zones!, date, new Date().toISOString()) })); } catch { /* dossier supprimé entre-temps */ }
+    }
     await db.ajouterConso("bilans", r.usage);
     if (manuel) messages("Bilan résumé.");
   } catch (e) {

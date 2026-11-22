@@ -47,7 +47,7 @@ describe("analyse d'une séance", () => {
 
   it("renvoie l'analyse et la consommation", async () => {
     const r = await analyserSeance("cle", "2026-10-02", dictee, false, faux({ propre: null, resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdv_date: "2026-10-09", rdv_heure: "08:00" }));
-    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [], objectifs: [] });
+    expect(r.donnees).toEqual({ propre: "", resume: "Tester RE.", bref: "Douleur 3/10. Pendulaires.", rdvDate: "2026-10-09", rdvHeure: "08:00", rdvDemi: "am", fin: false, autres: [], annules: [], objectifs: [], zones: [] });
     expect(r.usage).toEqual({ entree: 1000, sortie: 500 });
   });
 });
@@ -87,7 +87,7 @@ describe("résumé d'un bilan", () => {
 
   it("nettoie une réponse imparfaite", () => {
     const r = normaliserResume({ region: " Épaule D ", date_bilan: "2026-09-18", age: 52.4, coup_oeil: "Douleur.", chiffres: [{ label: "EVA", valeur: "5/10" }, { label: "", valeur: "x" }], sections: [{ titre: "Examen", items: ["Jobe +", ""] }, { titre: "Vide", items: [] }], a_verifier: "pas une liste" });
-    expect(r).toEqual({ region: "Épaule D", date_bilan: "", age: 52, coup_oeil: "Douleur.", chiffres: [{ label: "EVA", valeur: "5/10" }], sections: [{ titre: "Examen", items: ["Jobe +"] }], objectifs: [], a_verifier: [] });
+    expect(r).toEqual({ region: "Épaule D", date_bilan: "", age: 52, coup_oeil: "Douleur.", chiffres: [{ label: "EVA", valeur: "5/10" }], sections: [{ titre: "Examen", items: ["Jobe +"] }], objectifs: [], zones: [], a_verifier: [] });
   });
 
   it("refuse un résumé vide", async () => {

@@ -26,7 +26,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ["**/*.{js,mjs,css,html,svg,png,webp,woff2}"],
+        globPatterns: ["**/*.{js,mjs,css,html,svg,png,webp,woff2,jpg}"],
         globIgnores: ["pc/**"],                       // programme du PC : téléchargé par le PC seulement
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: "index.html",

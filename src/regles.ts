@@ -14,12 +14,29 @@ export type Resume = {
   chiffres?: { label: string; valeur: string }[];
   sections?: { titre: string; items: string[] }[];
   objectifs?: string[];                               // objectifs du patient lus dans le bilan (SMART ou ailleurs), depuis 1.8.0
+  zones?: { structure: string; cote: "d" | "g" | "c"; cat: "pain" | "raide" | "nerf" | "frac"; nom: string }[];   // carte du corps (2.1.0)
   a_verifier?: string[];
 };
 
 /* Objectifs du patient (1.8.0, choix de Corentin du 12 novembre 2026) : lus dans le bilan au départ, puis modifiés à la
    main ou proposés par une dictée (jamais changés sans son accord). La version la plus récente compte, l'historique est gardé. */
 export type Objectifs = { liste: string[]; maj: string; source: "bilan" | "main" | "dictee" };
+
+/* zone de la carte du corps (2.1.0) ; règles dans corps.ts */
+export type Categorie = "pain" | "raide" | "nerf" | "frac";
+export type Cote = "d" | "g" | "c";        // droite, gauche, au centre (rachis, menton)
+export type Zone = {
+  id: string;                                         // structure|côté|catégorie : une même zone n'existe qu'une fois
+  structure: string; cote: Cote; cat: Categorie;
+  nom: string;                                        // tel que dit ou écrit (« faisceau postérieur du deltoïde droit »)
+  depuis: string;                                     // AAAA-MM-JJ : bilan ou séance où elle apparaît
+  source: "bilan" | "dictee" | "main";
+  mieux?: string;                                     // « moins de douleur » ce jour-là : la zone pâlit
+  fin?: string;                                       // « plus de douleur » ce jour-là : passe dans les anciennes zones
+  enlevee?: string;                                   // enlevée à la main ce jour-là (jamais redonnée par un bilan)
+  decal?: Record<string, [number, number]>;           // déplacée à la main, par planche
+  maj: string;                                        // ISO : dernière modification (fusion entre appareils)
+};
 
 export type Dossier = {
   id: string;
@@ -37,6 +54,10 @@ export type Dossier = {
   sans_bilan?: boolean;                               // « Pas de bilan » : ce patient n'en aura pas, plus d'alerte (1.10.0)
   bilan_plus_tard?: string;                           // « Plus tard » : alerte « bilan pas encore ajouté » tue jusqu'à ce jour (AAAA-MM-JJ)
   absences_vu?: number;                               // « Vu » sur l'alerte des absences : nombre d'absences à ce moment (1.11.0)
+  zones?: Zone[];                                     // carte du corps (2.1.0) : zones actives et anciennes (voir corps.ts)
+  vues?: Record<string, number>;                      // vue choisie par Corentin pour chaque région (2.1.0)
+  objectifs_dictes?: { t: string; date: string }[];   // objectifs dits dans une dictée, ajoutés tout seuls (2.1.0)
+  objectifs_atteints?: { t: string; quand: string }[];   // objectifs cochés « Atteint » (2.1.0)
 };
 
 /* dictée groupée gardée telle que dictée (30 dernières), pour retrouver un patient oublié par l'IA */
@@ -716,3 +737,20 @@ export function suiviDe(dossierId: string, bilans: Bilan[], seances: Seance[]): 
 
 /* prochain rendez-vous après ce jour (pour les petites fiches) */
 export const rdvApres = (D: Dossier, iso: string) => D.rdvs.filter(r => r.d > iso).sort((a, b) => a.d.localeCompare(b.d))[0] ?? null;
+
+/* Objectifs affichés (2.1.0) : ceux du bilan ou modifiés à la main, puis ceux dits dans les dictées (ajoutés tout seuls),
+   chacun avec sa case « Atteint le … ». Un même objectif n'apparaît qu'une fois. */
+export type ObjectifVu = { t: string; source: "bilan" | "main" | "dictee"; date?: string; atteint?: string };
+export function objectifsVus(D: Dossier, bilans: Bilan[]): ObjectifVu[] {
+  const base = objectifsDe(D, bilans), vus = new Set<string>(), l: ObjectifVu[] = [];
+  const atteint = (t: string) => (D.objectifs_atteints ?? []).find(a => a.t.toLowerCase() === t.toLowerCase())?.quand;
+  const ajouter = (o: ObjectifVu) => { const k = o.t.trim().toLowerCase(); if (!k || vus.has(k)) return; vus.add(k); const a = atteint(o.t); l.push(a ? { ...o, atteint: a } : o); };
+  for (const t of base?.liste ?? []) ajouter({ t, source: base!.source === "dictee" ? "dictee" : base!.source });
+  for (const o of D.objectifs_dictes ?? []) ajouter({ t: o.t, source: "dictee", date: o.date });
+  return l;
+}
+export const objectifsEnCours = (D: Dossier, bilans: Bilan[]) => objectifsVus(D, bilans).filter(o => !o.atteint);
+export function cocherObjectif(D: Dossier, t: string, quand: string | null): Dossier {
+  const autres = (D.objectifs_atteints ?? []).filter(a => a.t.toLowerCase() !== t.toLowerCase());
+  return { ...D, objectifs_atteints: quand ? [...autres, { t, quand }] : autres };
+}

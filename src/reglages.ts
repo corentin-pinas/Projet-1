@@ -3,6 +3,7 @@
 import { AMBIANCES, CLASSIQUE, cssAmbiance } from "./ambiances";
 import { cssPalette, PALETTES } from "./palettes";
 import { decorer, saisonDu } from "./saisons";
+import { retours } from "./carte";
 
 /* écritures proposées, toutes hébergées avec l'appli (fonctionnent sans internet) */
 export const POLICES: Record<string, { nom: string; famille: string }> = {
@@ -104,6 +105,8 @@ export function brancher() {
     zone.innerHTML = CHOIX.map(c => `<fieldset class="regligne"><legend>${c.titre}</legend><div class="pastilles">${c.options.map(([v, l]) =>
       `<button type="button" data-cle="${c.cle}" data-val='${JSON.stringify(v)}' aria-pressed="${r[c.cle] === v}"${c.cle === "ambiance" && AMBIANCES[v as string] ? ` class="teinte amb" style="--t:${AMBIANCES[v as string].pastille};--t2:${AMBIANCES[v as string].pastille}"` : c.cle === "couleur" ? ` class="teinte" style="--t:${PALETTES[v as string].clair.accent};--t2:${PALETTES[v as string].sombre.accent}"` : c.cle === "police" ? ` style="font-family:${POLICES[v as string].famille}"` : ""}>${l}</button>`).join("")}</div></fieldset>`).join("") +
       `<p class="note">${saisonDu(new Date()) ? "Une décoration de saison est en cours." : "Décorations de l'année : anniversaire (10 au 16 mars), Pâques, Halloween (la semaine d'avant), Noël (tout décembre, de plus en plus)."} Ces réglages restent dans cette tablette.</p>`;
+    /* retours sur les dessins de la carte du corps (2.1.0), à transmettre pour corriger les planches */
+    retours().then(h => { if (h) zone.insertAdjacentHTML("beforeend", h); }).catch(() => {});
     zone.querySelectorAll<HTMLButtonElement>("[data-cle]").forEach(b => b.onclick = () => {
       const cle = b.dataset.cle!;
       /* fond et couleur principale ne valent que pour l'ambiance « Classique » : les choisir y revient */
@@ -112,6 +115,7 @@ export function brancher() {
     });
   };
   document.querySelector<HTMLElement>("#regbtn")!.onclick = () => { afficher(); dlg.showModal(); };
+
   dlg.querySelector<HTMLElement>("#regfermer")!.onclick = () => dlg.close();
   dlg.querySelector<HTMLElement>("#regdefaut")!.onclick = () => { enregistrer({ ...DEFAUT }); afficher(); };
 }

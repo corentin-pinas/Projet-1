@@ -4,8 +4,9 @@
    Aucune demande à l'IA ici : tout vient de ce qui est déjà enregistré. */
 import * as db from "./db";
 import type { Donnees } from "./db";
-import { brefDe, decalerJours, objectifsDe, rdvApres, suiviDe, jourCourt, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, souventAbsents, texteAbsences, type Carte, type SansBilan, type SansRdv } from "./regles";
+import { brefDe, decalerJours, objectifsEnCours, rdvApres, suiviDe, jourCourt, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, souventAbsents, texteAbsences, type Carte, type SansBilan, type SansRdv } from "./regles";
 import { courbe, esc, toast } from "./ui";
+import * as corpsCarte from "./carte";
 
 /* ce qui est affiché : une demi-journée d'aujourd'hui, ou toute la journée de demain ; null = choisi par l'appli */
 type Vue = "am" | "pm" | "demain";
@@ -23,7 +24,7 @@ function carte(c: Carte, d: Donnees): string {
     corps = `<p class="jfait"><span class="l"><span class="ok" aria-hidden="true">✓</span> Séance notée${c.faite.contenu ? " : " + esc(brefDe(c.faite)) : ""}</span></p>`;
   } else {
     /* 2.0.0 : objectif en cours, prévu, nombre de séances, prochain rendez-vous, douleur et une mesure (plus de « Séance du … ») */
-    const obj = objectifsDe(c.dossier, d.bilans)?.liste[0];
+    const obj = objectifsEnCours(c.dossier, d.bilans)[0]?.t;   // les objectifs atteints ne sont plus montrés ici (2.1.0)
     if (obj) corps += `<p class="jobj"><span class="e">🎯 Objectif</span><span class="l">${esc(obj)}</span></p>`;
     if (c.avenir) corps += `<p class="jprevu"><span class="l"><b>Prévu :</b> ${esc(c.avenir.texte)}</span></p>`;
     else if (!c.avant && r?.coup_oeil) corps += `<p class="javant"><span class="l"><b>Bilan :</b> ${esc(r.coup_oeil)}</span></p>`;
@@ -33,7 +34,8 @@ function carte(c: Carte, d: Donnees): string {
   if (nb || apres) corps += `<span class="jpuces">${nb ? `<span>${pluriel(nb, "séance")}</span>` : ""}${apres ? `<span>Prochain : ${esc(jourCourt(apres.d))}</span>` : ""}</span>`;
   const su = suiviDe(c.dossier.id, d.bilans, d.seances), dl = su.douleur.at(-1), me = su.mesure?.points.at(-1);
   if (dl || me) corps += `<span class="jmes">${dl ? `<span><span class="e">Douleur</span><span class="g">${fr(dl.v)}<small>/10</small></span></span>${courbe(su.douleur, { tend: su.tendance ? 1 : undefined })}` : ""}${me ? `<span class="v"><span class="e">${esc(su.mesure!.label)}</span><span class="g">${fr(me.v)}<small>${su.mesure!.unite === "°" ? "°" : "&nbsp;" + esc(su.mesure!.unite)}</small></span></span>` : ""}</span>`;
-  return `<button class="jcarte${c.faite ? " faite" : ""}" data-patient="${esc(c.dossier.id)}">
+  const corpsMini = corpsCarte.aUneCarte(c.dossier);
+  return `<button class="jcarte${c.faite ? " faite" : ""}${corpsMini ? " avec-corps" : ""}" data-patient="${esc(c.dossier.id)}">${corpsMini ? `<span class="jmini" data-mini="${esc(c.dossier.id)}" aria-hidden="true"></span>` : ""}
     <span class="jtete"><span class="jnom">${esc(c.dossier.label)}</span><span class="jtype${bilan ? " bilan" : ""}">${quoi}</span></span>
     ${r?.region ? `<span class="jregion">${esc(r.region)}</span>` : ""}
     ${corps}</button>`;
@@ -131,6 +133,8 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   el.innerHTML = html;
 
   el.querySelectorAll<HTMLElement>("[data-patient]").forEach(b => b.onclick = () => surPatient(b.dataset.patient!));
+  /* petits corps (2.1.0) : dessinés une fois l'écran affiché (les planches se chargent à part) */
+  el.querySelectorAll<HTMLElement>("[data-mini]").forEach(m => { const D = d.dossiers.find(x => x.id === m.dataset.mini); if (D) corpsCarte.mini(m, D); });
   el.querySelectorAll<HTMLElement>("[data-sr]").forEach(z => {
     const id = z.dataset.sr!, depuis = z.dataset.depuis!;
     const on = (sel: string, f: () => Promise<void> | void) => { const b = z.querySelector<HTMLElement>(sel); if (b) b.onclick = async () => { try { await f(); } catch { toast("L'enregistrement a échoué. Réessayez."); } }; };

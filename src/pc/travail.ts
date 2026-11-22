@@ -13,7 +13,7 @@ import { analyserSeance, appelAbonnementVers, decouperDictee, ErreurIA, natureDe
 import { analyseSurDossier, patchAnalyse, rangerMorceaux, rouvrirApres, type Doute, type Range } from "../rangement";
 import { avenirFrom, empreinteTexte, estArchive, indiceVoix, isoDay, jourLong, nettoyerVoix, rdvsDuJour, type DicteeGardee, type Dossier, type Rdv, type Seance } from "../regles";
 
-export const VERSION = 2;
+export const VERSION = 3;   // 3 : carte du corps et objectifs ajoutés seuls (2.1.0)
 
 /* ---------- les travaux ---------- */
 

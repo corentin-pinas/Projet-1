@@ -15,6 +15,7 @@ import * as moteur from "./moteur";
 import * as prochain from "./prochain-rdv";
 import * as manquantes from "./seances-manquantes";
 import * as objectifs from "./objectifs";
+import * as carte from "./carte";
 import * as voixSeance from "./voix-seance";
 import * as travailPC from "./travail-pc";
 import { $, confirmer, courbe, esc, toast } from "./ui";
@@ -198,7 +199,11 @@ export function renderMain() {
   const derniere = qrdv ? seancesDe(D).find(s => s.date === qrdv) : undefined;
   if (qrdv && derniere && !moteur.occupe(derniere.id) && (derniere.ia_ok || !aCle)) html += prochain.question(D, qrdv);
   html += prochain.retraits(D);   // rendez-vous dits annulés : à confirmer
+  /* carte du corps (2.1.0) : à droite sur tablette ; sur téléphone, juste après les objectifs (choix de Corentin) */
+  const debutGauche = html.length;
   html += objectifs.proposition(D) + objectifs.encadre(D, donnees.bilans);   // objectifs du patient (1.8.0)
+  const telephone = matchMedia("(max-width:820px)").matches, laCarte = carte.panneau(D);
+  if (telephone) html += laCarte;
 
   /* suivi chiffré (2.0.0) : douleur et une mesure lues dans le bilan et les séances, avec leur évolution */
   const su = suiviDe(D.id, donnees.bilans, donnees.seances), nbS = seancesDe(D).length;
@@ -242,7 +247,9 @@ export function renderMain() {
     <p class="note" style="margin-top:14px">Fichier : ${esc(b.fichier)}</p>`
     : `<div class="actions"><button id="delpat">Supprimer ce patient</button></div>`;
   html += seancesHtml(D);
+  if (laCarte && !telephone) html = html.slice(0, debutGauche) + `<div class="fiche2"><div class="fgauche">${html.slice(debutGauche)}</div><aside class="fcorps">${laCarte}</aside></div>`;
   $("#main").innerHTML = html;
+  carte.brancher($("#main"), D, renderMain);
 
   wireSeances(D);
   manquantes.brancher($("#main"), () => renderMain());
