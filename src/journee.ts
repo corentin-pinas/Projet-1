@@ -4,26 +4,35 @@
    Aucune demande à l'IA ici : tout vient de ce qui est déjà enregistré. */
 import * as db from "./db";
 import type { Donnees } from "./db";
-import { brefDe, decalerJours, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, souventAbsents, texteAbsences, type Carte, type SansBilan, type SansRdv } from "./regles";
-import { esc, toast } from "./ui";
+import { brefDe, decalerJours, objectifsDe, rdvApres, suiviDe, jourCourt, demiDe, frDate, isoDay, journee, jourLabel, jourLong, pluriel, prochaineJournee, sansBilan, sansRendezVous, souventAbsents, texteAbsences, type Carte, type SansBilan, type SansRdv } from "./regles";
+import { courbe, esc, toast } from "./ui";
 
 /* ce qui est affiché : une demi-journée d'aujourd'hui, ou toute la journée de demain ; null = choisi par l'appli */
 type Vue = "am" | "pm" | "demain";
 let choix: Vue | null = null;
 
 
-function carte(c: Carte): string {
+/* nombre écrit sans zéro inutile (« 4,5 », « 120 ») */
+const fr = (n: number) => String(n).replace(".", ",");
+
+function carte(c: Carte, d: Donnees): string {
   const r = c.bilan?.resume, bilan = c.rdv.t === "bilan";
   const quoi = bilan ? (c.bilan ? "Bilan" : "Premier bilan") : "Séance";
   let corps = "";
   if (c.faite) {
     corps = `<p class="jfait"><span class="l"><span class="ok" aria-hidden="true">✓</span> Séance notée${c.faite.contenu ? " : " + esc(brefDe(c.faite)) : ""}</span></p>`;
   } else {
+    /* 2.0.0 : objectif en cours, prévu, nombre de séances, prochain rendez-vous, douleur et une mesure (plus de « Séance du … ») */
+    const obj = objectifsDe(c.dossier, d.bilans)?.liste[0];
+    if (obj) corps += `<p class="jobj"><span class="e">🎯 Objectif</span><span class="l">${esc(obj)}</span></p>`;
     if (c.avenir) corps += `<p class="jprevu"><span class="l"><b>Prévu :</b> ${esc(c.avenir.texte)}</span></p>`;
-    if (c.avant) corps += `<p class="javant"><span class="l"><b>Séance du ${esc(frDate(c.avant.date).slice(0, 5))} :</b> ${esc(brefDe(c.avant))}</span></p>`;
-    else if (r?.coup_oeil) corps += `<p class="javant"><span class="l"><b>Bilan :</b> ${esc(r.coup_oeil)}</span></p>`;
+    else if (!c.avant && r?.coup_oeil) corps += `<p class="javant"><span class="l"><b>Bilan :</b> ${esc(r.coup_oeil)}</span></p>`;
     else if (!c.bilan) corps += `<p class="javant">Bilan à venir.</p>`;
   }
+  const nb = d.seances.filter(s => s.dossierId === c.dossier.id).length, apres = rdvApres(c.dossier, c.rdv.d);
+  if (nb || apres) corps += `<span class="jpuces">${nb ? `<span>${pluriel(nb, "séance")}</span>` : ""}${apres ? `<span>Prochain : ${esc(jourCourt(apres.d))}</span>` : ""}</span>`;
+  const su = suiviDe(c.dossier.id, d.bilans, d.seances), dl = su.douleur.at(-1), me = su.mesure?.points.at(-1);
+  if (dl || me) corps += `<span class="jmes">${dl ? `<span><span class="e">Douleur</span><span class="g">${fr(dl.v)}<small>/10</small></span></span>${courbe(su.douleur, { tend: su.tendance ? 1 : undefined })}` : ""}${me ? `<span class="v"><span class="e">${esc(su.mesure!.label)}</span><span class="g">${fr(me.v)}<small>${esc(su.mesure!.unite)}</small></span></span>` : ""}</span>`;
   return `<button class="jcarte${c.faite ? " faite" : ""}" data-patient="${esc(c.dossier.id)}">
     <span class="jtete"><span class="jnom">${esc(c.dossier.label)}</span><span class="jtype${bilan ? " bilan" : ""}">${quoi}</span></span>
     ${r?.region ? `<span class="jregion">${esc(r.region)}</span>` : ""}
@@ -105,14 +114,14 @@ export function afficher(el: HTMLElement, d: Donnees, surPatient: (id: string) =
   const absents = souventAbsents(d.dossiers, d.seances);
   if (!absents.length) listeAbsentsOuverte = false;
   const puceAbs = absents.length ? `<button class="puce" id="abpuce" aria-haspopup="dialog">⚠ ${absents.length === 1 ? "1 patient souvent absent" : absents.length + " patients souvent absents"}</button>` : "";
-  let html = blocSansRdv(sans) + (manquants.length ? fenetreSansBilan(manquants) : "") + (absents.length ? fenetreAbsents(absents) : "") + `<div class="head"><div><h2>Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
+  let html = blocSansRdv(sans) + (manquants.length ? fenetreSansBilan(manquants) : "") + (absents.length ? fenetreAbsents(absents) : "") + `<div class="head"><div><h2 class="jtitre">Ma journée</h2>${saut ? `<div class="jsaut">${cartesAuj.length && soir ? "Journée terminée" : "Pas de rendez-vous aujourd'hui"} : voici ${esc(suite === demain ? "demain" : nomSuite.toLowerCase())}.</div>` : ""}<div class="meta">${esc(jourLong(jour).replace(/^./, x => x.toUpperCase()))}${quand ? " · " + quand : ""}${cartes.length ? " · " + pluriel(cartes.length, "patient") + (bilans ? ` (dont ${pluriel(bilans, "bilan")})` : "") : ""}${cartes.length && vue !== "demain" ? " · " + notees + (notees > 1 ? " séances notées" : " séance notée") : ""}</div></div>
     <div class="jdroite">${puce || puceAbs ? `<div class="puces">${puce}${puceAbs}</div>` : ""}<div class="bils jchoix" role="group" aria-label="Moment affiché">${([["am", "Matin", dans("am").length], ["pm", "Après-midi", dans("pm").length], ["demain", nomSuite, cartesDemain.length]] as const)
       .map(([v, t, n]) => `<button data-vue="${v}" aria-pressed="${vue === v}">${t} <small>${n}</small></button>`).join("")}</div></div></div>`;
   if (cartes.length) {
     if (vue === "demain") {
       const groupes: [string, Carte[]][] = [["Matin", cartes.filter(c => (demiDe(c.rdv) ?? "am") === "am")], ["Après-midi", cartes.filter(c => demiDe(c.rdv) === "pm")]];
-      html += groupes.filter(([, l]) => l.length).map(([titre, l]) => `<h3 class="jdemi">${titre} <small>${pluriel(l.length, "patient")}</small></h3><div class="jcartes">${l.map(carte).join("")}</div>`).join("");
-    } else html += `<div class="jcartes">${cartes.map(carte).join("")}</div>`;
+      html += groupes.filter(([, l]) => l.length).map(([titre, l]) => `<h3 class="jdemi">${titre} <small>${pluriel(l.length, "patient")}</small></h3><div class="jcartes">${l.map(x => carte(x, d)).join("")}</div>`).join("");
+    } else html += `<div class="jcartes">${cartes.map(x => carte(x, d)).join("")}</div>`;
   } else {
     const autre = vue === "am" && dans("pm").length ? "pm" : vue !== "demain" && cartesDemain.length ? "demain" : null;
     const proch = prochaineJournee(d.dossiers, decalerJours(jour, 1));

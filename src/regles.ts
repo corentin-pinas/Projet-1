@@ -658,3 +658,61 @@ export const rubriquesTransmission = (r: Resume) => (r.sections ?? []).filter(s 
 /* la dernière séance, sans ce qui est prévu pour la suite (montré à part, avec les objectifs) */
 export const seanceTransmission = (s: Seance) =>
   texteDe(s).split("\n").map(l => l.trim()).filter(l => l && !/^(à|a) venir\s*:/i.test(l)).join("\n");
+
+/* ---------- suivi chiffré (2.0.0, choix de Corentin du 22 novembre 2026) ----------
+   Douleur et une mesure propre au patient (élévation, ouverture, flexion…), lues sans IA dans ce qui est écrit :
+   les chiffres du bilan, puis chaque séance (« douleur 4/10 », « EVA 3 », « élévation 120° »). Un point seulement quand
+   la valeur est écrite ; rien n'est deviné. « Moins de douleur » sans chiffre : tendance, sans valeur inventée. */
+export type Point = { date: string; v: number };
+export type Suivi = {
+  douleur: Point[];
+  mesure: { label: string; unite: string; points: Point[] } | null;
+  tendance: { date: string; texte: string } | null;   // « moins de douleur » dit sans chiffre à la dernière séance
+};
+
+const nombre = (t: string) => Number(t.replace(",", "."));
+/* « EVA 4 », « EN : 4 », ou « douleur … 4/10 », « mal … 4 sur 10 » (le « sur 10 » évite « mal depuis 3 jours ») */
+const EVA = /\bEVA\s*(?:à|a|=|:|de)?\s*(\d{1,2}(?:[.,]\d)?)\b/i, EN = /\bEN\s*[:=]\s*(\d{1,2}(?:[.,]\d)?)\b/;
+const DOULEUR = /\b(?:douleurs?|mal)\b[^.\n\d]{0,25}?(\d{1,2}(?:[.,]\d)?)\s*(?:\/|sur)\s*10\b/i;
+const sansAccent = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function douleurDans(t: string): number | null {
+  const m = t.match(EVA) ?? t.match(EN) ?? t.match(DOULEUR);
+  if (!m) return null;
+  const v = nombre(m[1]);
+  return v >= 0 && v <= 10 ? v : null;
+}
+
+/* date du bilan : celle écrite dessus (JJ/MM/AAAA), sinon le jour du dépôt */
+const dateBilan = (b: Bilan) => { const m = b.resume?.date_bilan?.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : b.ajoute.slice(0, 10); };
+
+export function suiviDe(dossierId: string, bilans: Bilan[], seances: Seance[]): Suivi {
+  const siens = trierBilans(bilans.filter(b => b.dossierId === dossierId && b.resume)).reverse();   // du plus ancien au plus récent
+  const ses = seances.filter(s => s.dossierId === dossierId).sort((a, b) => a.date.localeCompare(b.date) || a.cree.localeCompare(b.cree));
+  const douleur: Point[] = [];
+  let mesure: Suivi["mesure"] = null;
+  for (const b of siens) for (const c of b.resume!.chiffres ?? []) {
+    const lib = sansAccent(c.label);
+    if (/\beva\b|douleur|^en\b/.test(lib)) { const v = douleurDans("EVA " + c.valeur.replace(/\s*(?:\/|sur)\s*10.*/, "")); if (v != null) douleur.push({ date: dateBilan(b), v }); continue; }
+    const m = c.valeur.match(/(-?\d+(?:[.,]\d+)?)\s*(°|mm|cm|min|kg|%|m)?/);
+    if (!m) continue;
+    if (!mesure) mesure = { label: c.label, unite: m[2] ?? "", points: [] };
+    if (sansAccent(mesure.label) === lib) mesure.points.push({ date: dateBilan(b), v: nombre(m[1]) });
+  }
+  /* la mesure dans les séances : son premier mot (« élévation », « ouverture »), suivi d'un nombre dans la phrase */
+  const mot = mesure ? sansAccent(mesure.label).split(/[^a-z]+/).find(x => x.length >= 4) : null;
+  const unite = mesure?.unite ? "\\s*" + mesure.unite.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
+  const reMesure = mot ? new RegExp(`\\b${mot}\\w*[^.\\n\\d]{0,30}?(\\d+(?:[.,]\\d+)?)${unite}`, "i") : null;
+  let tendance: Suivi["tendance"] = null;
+  for (const s of ses) {
+    const brut = texteDe(s), t = sansAccent(brut);
+    const v = douleurDans(brut);
+    if (v != null) { douleur.push({ date: s.date, v }); tendance = null; }
+    else if (/moins (?:de )?(?:douleur|mal)\b|douleurs? (?:en baisse|diminue)/.test(t)) tendance = { date: s.date, texte: "moins de douleur" };
+    if (reMesure && mesure) { const m = t.match(reMesure); if (m) mesure.points.push({ date: s.date, v: nombre(m[1]) }); }
+  }
+  return { douleur: douleur.slice(-20), mesure: mesure && { ...mesure, points: mesure.points.slice(-20) }, tendance };
+}
+
+/* prochain rendez-vous après ce jour (pour les petites fiches) */
+export const rdvApres = (D: Dossier, iso: string) => D.rdvs.filter(r => r.d > iso).sort((a, b) => a.d.localeCompare(b.d))[0] ?? null;

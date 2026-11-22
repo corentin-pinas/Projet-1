@@ -6,7 +6,7 @@ import {
   ageOf, avecRdv, patientFrom, avenirDe, avenirFrom, DEMI_FR, frDate, isoDay, jourLabel, lignesListe, nomAffiche,
   prochainRdv, propreOk, questionHomonyme, questionRdv, seancesManquantes, rdvsAVenir, texteDe, trierBilans, trierSeances,
   type Bilan, type Demi, type Dossier, type Seance,
-  empreinteTexte
+  empreinteTexte, suiviDe
 } from "./regles";
 import * as agenda from "./agenda";
 import * as dictee from "./dictee";
@@ -17,7 +17,7 @@ import * as manquantes from "./seances-manquantes";
 import * as objectifs from "./objectifs";
 import * as voixSeance from "./voix-seance";
 import * as travailPC from "./travail-pc";
-import { $, confirmer, esc, toast } from "./ui";
+import { $, confirmer, courbe, esc, toast } from "./ui";
 
 
 let donnees: db.Donnees = { dossiers: [], bilans: [], seances: [] };
@@ -199,6 +199,11 @@ export function renderMain() {
   if (qrdv && derniere && !moteur.occupe(derniere.id) && (derniere.ia_ok || !aCle)) html += prochain.question(D, qrdv);
   html += prochain.retraits(D);   // rendez-vous dits annulés : à confirmer
   html += objectifs.proposition(D) + objectifs.encadre(D, donnees.bilans);   // objectifs du patient (1.8.0)
+
+  /* suivi chiffré (2.0.0) : douleur et une mesure lues dans le bilan et les séances, avec leur évolution */
+  const su = suiviDe(D.id, donnees.bilans, donnees.seances), nbS = seancesDe(D).length;
+  const vir = (n: number) => String(n).replace(".", ",");
+  if (su.douleur.length || su.mesure?.points.length) html += `<div class="suivi" aria-label="Suivi">${su.douleur.length ? `<div><div class="e">Douleur</div><div class="l"><div class="g">${vir(su.douleur.at(-1)!.v)}<small>/10</small></div>${courbe(su.douleur, { l: 110, h: 36, tend: su.tendance ? 1 : undefined })}</div>${su.tendance ? `<div class="tend">↘ ${esc(su.tendance.texte)} <small>· dit le ${esc(frDate(su.tendance.date).slice(0, 5))}, sans chiffre</small></div>` : ""}</div>` : ""}${su.mesure?.points.length ? `<div><div class="e">${esc(su.mesure.label)}</div><div class="l"><div class="g">${vir(su.mesure.points.at(-1)!.v)}<small>${esc(su.mesure.unite)}</small></div>${courbe(su.mesure.points, { l: 110, h: 36 })}</div></div>` : ""}<div><div class="e">Séances</div><div class="g">${nbS}</div></div></div>`;
 
   const av = avenirDe(seancesDe(D));
   if (av) html += `<div class="avenir"><b>À venir :</b> <span class="${av.resume ? "" : "clamp"}">${esc(av.texte)}</span>
