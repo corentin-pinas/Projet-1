@@ -32,7 +32,7 @@ function carte(c: Carte, d: Donnees): string {
   const nb = d.seances.filter(s => s.dossierId === c.dossier.id).length, apres = rdvApres(c.dossier, c.rdv.d);
   if (nb || apres) corps += `<span class="jpuces">${nb ? `<span>${pluriel(nb, "séance")}</span>` : ""}${apres ? `<span>Prochain : ${esc(jourCourt(apres.d))}</span>` : ""}</span>`;
   const su = suiviDe(c.dossier.id, d.bilans, d.seances), dl = su.douleur.at(-1), me = su.mesure?.points.at(-1);
-  if (dl || me) corps += `<span class="jmes">${dl ? `<span><span class="e">Douleur</span><span class="g">${fr(dl.v)}<small>/10</small></span></span>${courbe(su.douleur, { tend: su.tendance ? 1 : undefined })}` : ""}${me ? `<span class="v"><span class="e">${esc(su.mesure!.label)}</span><span class="g">${fr(me.v)}<small>${esc(su.mesure!.unite)}</small></span></span>` : ""}</span>`;
+  if (dl || me) corps += `<span class="jmes">${dl ? `<span><span class="e">Douleur</span><span class="g">${fr(dl.v)}<small>/10</small></span></span>${courbe(su.douleur, { tend: su.tendance ? 1 : undefined })}` : ""}${me ? `<span class="v"><span class="e">${esc(su.mesure!.label)}</span><span class="g">${fr(me.v)}<small>${su.mesure!.unite === "°" ? "°" : "&nbsp;" + esc(su.mesure!.unite)}</small></span></span>` : ""}</span>`;
   return `<button class="jcarte${c.faite ? " faite" : ""}" data-patient="${esc(c.dossier.id)}">
     <span class="jtete"><span class="jnom">${esc(c.dossier.label)}</span><span class="jtype${bilan ? " bilan" : ""}">${quoi}</span></span>
     ${r?.region ? `<span class="jregion">${esc(r.region)}</span>` : ""}
