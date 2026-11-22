@@ -649,3 +649,11 @@ button.retour{background:none;border:0;padding:2px 0;min-height:36px;font-size:.
   .jmini svg{max-height:220px;min-height:180px}
   .cvues button{padding:6px 10px;font-size:.88rem}
 }
+/* téléphone : le dessin en entier sous les objectifs, sans vide autour (demande de Corentin du 22 novembre 2026) */
+@media (max-width:820px){
+  .carte-corps{gap:6px;padding:10px 12px}
+  .carte-corps:not(.fcorps *) .cvis{height:auto;min-height:0}
+  .carte-corps .cvis>svg{height:auto;max-height:62vh}
+  .cbarre{min-height:0;gap:6px}
+  .cduo svg{height:auto;max-height:58vh}
+}
