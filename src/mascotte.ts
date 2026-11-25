@@ -33,6 +33,12 @@ const CORBEAU = `<svg viewBox="0 0 100 100" aria-hidden="true">
       </g>
       <path d="M43 51Q50 47 57 51Q55 58 50 62Q45 58 43 51z" class="c-bec-haut"/>
       <path d="M44.5 55Q50 57 55.5 55Q53.5 59.5 50 62Q46.5 59.5 44.5 55z" class="c-bec-bas"/>
+      <g class="c-lunettes">
+        <circle cx="35" cy="44" r="13.6" class="l-verre"/><circle cx="65" cy="44" r="13.6" class="l-verre"/>
+        <path d="M27 37.5q3-3.5 7-4.3M57 37.5q3-3.5 7-4.3" class="l-reflet"/>
+        <circle cx="35" cy="44" r="13.6" class="l-monture"/><circle cx="65" cy="44" r="13.6" class="l-monture"/>
+        <path d="M48.5 42.5q1.5-2.4 3 0M21.4 42.6L15.6 39.6M78.6 42.6L84.4 39.6" class="l-monture"/>
+      </g>
       <g transform="translate(50 24) scale(1.25) translate(-32 -13)">
         <g class="chapeau h-sorciere"><path d="M14 13q18-6 36 0l-3 3q-15-4-30 0z" fill="#3B2A4A"/><path d="M21 13q4-15 18-22-2 9 4 21q-11-2-22 1z" fill="#3B2A4A"/><path d="M21.5 11.5q10-2.5 21-.5l-.4 3q-10-2-20 .3z" fill="var(--accent)"/></g>
         <g class="chapeau h-bonnet"><path d="M14 14q4-14 20-16q12 0 16 14z" fill="#D32F2F"/><path d="M34-2q12-2 16 10" fill="none" stroke="#D32F2F" stroke-width="7" stroke-linecap="round"/><circle cx="52" cy="13" r="4.5" fill="#FFFFFF"/><rect x="12" y="11" width="40" height="7" rx="3.5" fill="#FFFFFF"/></g>

@@ -343,6 +343,10 @@ dialog.placer input[type=search]{font:inherit;color:var(--ink);background:var(--
 .corbeau .c-joue{fill:#F49C9C;opacity:.6}
 .corbeau .c-bec-haut{fill:#F5BC4A}
 .corbeau .c-bec-bas{fill:#E08A2E;transform-origin:50px 55px}
+/* ses petites lunettes rondes (fine monture dorée, verres à peine teintés) */
+.corbeau .l-verre{fill:rgb(255 255 255 / .1)}
+.corbeau .l-reflet{fill:none;stroke:rgb(255 255 255 / .55);stroke-width:1.4;stroke-linecap:round}
+.corbeau .l-monture{fill:none;stroke:#D9B35A;stroke-width:1.9;stroke-linecap:round}
 .corbeau .c-yeux{transform-origin:50px 45px;animation:cligne 5.3s infinite}
 .corbeau .c-corps{transform-origin:50px 92px;animation:respire 3.2s ease-in-out infinite}
 .corbeau .c-tete{transform-origin:50px 80px}
