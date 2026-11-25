@@ -8,7 +8,8 @@
    peu après), sautiller, faire un pas sur le perchoir, remuer la queue, s'étirer, battre des ailes, croasser.
    Le soir (à partir de 20 h) et parfois dans la journée, il s'endort un moment : yeux fermés, tête qui tombe,
    lunettes qui glissent, « Z » qui s'envolent. Touché, il se réveille, puis croasse, bat des ailes ou sautille.
-   Tout est animé par Web Animations sur des groupes du dessin ; couleurs dans styles.css. */
+   Tout est animé par Web Animations sur des groupes du dessin ; couleurs dans styles.css. Le corps rond, la queue
+   et les ailes sont dans le même groupe « c-tete » : quand il se penche, tout l'oiseau suit (queue comprise). */
 
 const PERCHOIR = `<svg class="perchoir" viewBox="0 0 100 118" aria-hidden="true">
   <path d="M47 95h6v17h-6z" class="p-bois-fonce"/>
@@ -27,10 +28,10 @@ const CORBEAU = `<svg viewBox="0 0 100 100" aria-hidden="true">
   <g class="c-pos">
     <path d="M40 85v7M60 85v7M36 93l4-2 4 2M56 93l4-2 4 2" class="c-patte"/>
     <g class="c-corps"><g class="c-souffle">
-      <path d="M24 74 L6 80 L9 84 L5 88 L12 89 L11 93 L27 84z" class="c-plume c-queue"/>
-      <path d="M18 46 Q8 62 14 82 Q24 80 28 66z" class="c-plume c-aile g"/>
-      <path d="M82 46 Q92 62 86 82 Q76 80 72 66z" class="c-plume c-aile d"/>
       <g class="c-tete">
+        <path d="M24 74 L6 80 L9 84 L5 88 L12 89 L11 93 L27 84z" class="c-plume c-queue"/>
+        <path d="M18 46 Q8 62 14 82 Q24 80 28 66z" class="c-plume c-aile g"/>
+        <path d="M82 46 Q92 62 86 82 Q76 80 72 66z" class="c-plume c-aile d"/>
         <path d="M50 15C72 15 86 32 85 54C84 76 70 88 50 88C30 88 16 76 15 54C14 32 28 15 50 15Z" class="c-corps-plume"/>
         <path d="M42 18q-1-10 6-6q2-9 8-2q5-4 5 4q-9-2-19 4z" class="c-corps-plume c-houppe"/>
         <path d="M30 70Q50 58 70 70Q66 86 50 87Q34 86 30 70z" class="c-ventre"/>
